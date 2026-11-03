@@ -582,6 +582,7 @@
 - Migration trên DB mới + seed 2 lần: idempotent; 2 tenant, 3 chi nhánh, 10 nhân sự (gồm platform admin), 10 khách, 6 đơn, 4 phòng, 6 lịch hẹn, 12 ảnh, 22 settings, 168 role permission, 8 transaction, 1 payroll, 4 task, 2 document, 2 campaign; `sessions`/`login_attempts`/`notifications`/`contact_requests` = 0 sau reset; 2 activity log seed.
 - Role matrix server-side: 3 test tích hợp cho permission matrix, mutation bị từ chối, tenant isolation/branch scope; E2E xác nhận platform admin vào `/platform` và bị 403 ở dữ liệu tenant.
 - Security: 4 test cho CSRF origin guard, SSRF khi parse link Drive, path traversal storage, XSS escaping; booking đồng thời, webhook lặp, payroll lock và đối soát báo cáo đã có test từ Phase 3–5.
+- GitHub Actions run `41601698630`: CI pass (lint/typecheck/120 test/build/E2E) và CD push Docker image lên GHCR thành công.
 - Grep `TODO`/`Coming soon`/`Not implemented`/`onClick={() => {}}`/`Lorem ipsum`: không còn trong `src`, `e2e`, `tests`, `scripts`.
 - `npm audit --omit=dev`: 0 lỗ hổng production.
 - Git/commit/push/deploy: đã commit/push GitHub; chưa deploy production.
@@ -603,3 +604,4 @@
 | 03/11/2026 | 5 | Sổ quỹ, hóa đơn/VietQR/webhook, commission/payroll/HR, báo cáo, tasks/docs/campaigns/inbox, settings/audit, seed và test | lint/typecheck/build pass; 106/106 test pass; Chrome UI pass |
 | 03/11/2026 | 6 | Marketing landing 14 section, public pages, onboarding, reset password, demo read-only, SEO, screenshot thật, test | lint/typecheck/build pass; 110/110 test pass; Chrome UI pass |
 | 03/11/2026 | 7 | E2E chính thức, platform admin `/platform`, role/tenant/branch QA, security test, acceptance 25 kịch bản, reset DB, docs bàn giao | lint/typecheck/build pass; 120/120 test + 7/7 E2E pass; audit 0 |
+| 03/11/2026 | 7 | GitHub Actions CI/CD, Dockerfile/GHCR; sửa range tháng theo Asia/Ho_Chi_Minh cho runner UTC, thêm test hồi quy | CI + CD pass; 120/120 test; Docker image pushed |

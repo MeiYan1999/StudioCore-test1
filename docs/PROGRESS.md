@@ -17,6 +17,7 @@
 | Lint/typecheck/build | Pass (0 error, 0 warning) |
 | UI Chrome thật | Pass; route chính desktop/tablet/mobile |
 | Production audit | 0 lỗ hổng production |
+| CI/CD | GitHub Actions CI + Docker GHCR pass (run `41601698630`) |
 | Git/commit/push/deploy | Đã commit/push GitHub; chưa deploy production |
 
 ## 2. Đã hoàn thành trong Phase 7
@@ -46,6 +47,7 @@
 - `npm run test:e2e`: **7/7 pass** trên Chrome hệ thống.
 - `npm run db:migrate` trên DB mới + `npm run db:seed` hai lần: pass, idempotent.
 - `npm audit --omit=dev`: 0 lỗ hổng production.
+- GitHub Actions: CI (lint/typecheck/test/build/E2E) và CD (Docker image GHCR) pass; CI Linux/UTC phát hiện và sửa bug range tháng theo timezone.
 - Acceptance 25 kịch bản SPEC: 23 PASS, 2 PARTIAL (FS Access copy folder cần thao tác tay; production private storage mới ở mức thiết kế/tài liệu).
 - Landing A.7: đã kiểm tra 1–13, 15–17; mục 14 Lighthouse chưa đo; mục 18 demo mutation chặn server-side.
 

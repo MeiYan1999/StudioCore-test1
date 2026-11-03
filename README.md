@@ -1,5 +1,7 @@
 # StudioCore
 
+[![CI/CD](https://github.com/MeiYan1999/StudioCore-test1/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/MeiYan1999/StudioCore-test1/actions/workflows/ci-cd.yml)
+
 Nền tảng SaaS quản lý studio chụp ảnh. **Phase 0–7 đã hoàn tất**: auth, tenant, chi nhánh, RBAC, app shell, CRM, catalog, đơn hàng, thanh toán, hợp đồng/phiếu thu, calendar chống trùng, check-in/out, wardrobe QR, thiết bị, album/upload, PhotoShare, lọc ảnh theo mã khách chọn, Drive adapter, AI Hub local, sổ quỹ, hóa đơn/VietQR/webhook, commission/payroll/HR, báo cáo, tasks/docs/campaigns/inbox, settings/audit, landing marketing, public pages, onboarding, reset password, demo read-only, platform admin và QA/E2E bàn giao.
 
 ## Chạy local

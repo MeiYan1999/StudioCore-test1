@@ -204,5 +204,6 @@ Tenant phụ: `owner@studiobinhminh.demo` / `BM-OWNER` / PIN `999999` / `Demo@12
 - `.github/workflows/ci-cd.yml` chạy CI trên push/PR `main`: npm ci, migrate + seed, lint, typecheck, Vitest, build, Playwright Chromium E2E.
 - CI Linux/UTC đã phát hiện lỗi range tháng phụ thuộc timezone; code dùng mốc UTC+7 cố định (`getVietnamMonthRange`) cho payroll/commission/budget/report.
 - Sau khi CI pass trên `main`: build Docker image và push GHCR (`latest` + tag SHA). Chưa tự deploy lên server.
+- GitHub Actions run `41601698630` đã pass cả job CI và job build/push image.
 - `Dockerfile` chạy migration trước `next start`, không tự seed; cần mount `/app/data`, `/app/public/uploads` và truyền `AUTH_SECRET`/`TOKEN_ENCRYPTION_KEY`.
 - Live deploy vẫn cần target (VPS/cloud) và secrets tương ứng.
