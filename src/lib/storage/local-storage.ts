@@ -3,7 +3,9 @@ import path from "node:path";
 import crypto from "node:crypto";
 import sharp from "sharp";
 
-export const UPLOAD_ROOT = path.join(process.cwd(), "public", "uploads");
+export const UPLOAD_ROOT = process.env.UPLOAD_ROOT
+  ? path.resolve(process.env.UPLOAD_ROOT)
+  : path.join(process.cwd(), "public", "uploads");
 export const DEMO_DRIVE_ROOT = path.join(process.cwd(), "demo-data", "drive");
 export const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
 const ALLOWED_FORMATS = new Set(["jpeg", "png", "webp"]);
