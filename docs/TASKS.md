@@ -17,7 +17,7 @@
 | Ứng dụng đã khởi tạo | Có — Next.js App Router, TypeScript strict, Tailwind, SQLite WAL |
 | Dependency đã cài | Có; `npm audit --omit=dev` = 0 lỗ hổng production |
 | Migration/seed đã chạy | Có; migrate 0000–0007, seed 2 lần idempotent |
-| Git/commit/push/deploy | Chưa thực hiện |
+| Git/commit/push/deploy | Đã commit/push GitHub; chưa deploy production |
 | Phase 0 | Hoàn tất |
 | Phase 1 | Hoàn tất |
 | Phase 2 | Hoàn tất |
@@ -583,7 +583,7 @@
 - Security: 4 test cho CSRF origin guard, SSRF khi parse link Drive, path traversal storage, XSS escaping; booking đồng thời, webhook lặp, payroll lock và đối soát báo cáo đã có test từ Phase 3–5.
 - Grep `TODO`/`Coming soon`/`Not implemented`/`onClick={() => {}}`/`Lorem ipsum`: không còn trong `src`, `e2e`, `tests`, `scripts`.
 - `npm audit --omit=dev`: 0 lỗ hổng production.
-- Git/commit/push/deploy: chưa thực hiện.
+- Git/commit/push/deploy: đã commit/push GitHub; chưa deploy production.
 - Chưa kiểm chứng live (cần credentials): Google Drive OAuth/scan, NAS/desktop helper, S3/R2, email/Zalo/SMS, Fanpage/Zalo connector, Meta/TikTok Ads, payment production, AI provider live.
 - Chưa đo Lighthouse mobile; chưa test PostgreSQL runtime; File System Access directory picker kiểm tra thủ công, fallback ZIP đã E2E.
 

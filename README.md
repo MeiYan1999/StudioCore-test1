@@ -38,6 +38,26 @@ Mock payment webhook chỉ hoạt động ở development. Chạy `npm run dev` 
 
 PhotoShare demo (sau khi seed): http://localhost:3000/share/demo-share-album-01 — album 12 ảnh synthetic có nhãn demo, quota 5 ảnh, phí ảnh thêm 150.000đ/ảnh khi bật.
 
+## CI/CD
+
+Workflow `.github/workflows/ci-cd.yml` chạy trên push/PR vào `main` và chạy tay:
+
+- **CI**: `npm ci`, migrate + seed DB, lint, typecheck, Vitest, production build, Playwright E2E (Chromium trong CI, Chrome khi chạy local). Artifact Playwright được upload khi fail.
+- **CD**: sau khi CI pass trên `main`, build Docker image và push lên GHCR với tag `latest` và tag SHA. Chưa tự deploy lên server vì chưa có target/credentials.
+
+Image có thể chạy bằng Docker; container tự chạy migration trước `next start`, không tự seed dữ liệu demo:
+
+```bash
+docker run -d --name studiocore -p 3000:3000 \
+  -e AUTH_SECRET="<chuoi-ngau-nhien-32-byte>" \
+  -e TOKEN_ENCRYPTION_KEY="<chuoi-ngau-nhien-32-byte>" \
+  -v studiocore-data:/app/data \
+  -v studiocore-uploads:/app/public/uploads \
+  ghcr.io/meiyan1999/studiocore-test1:latest
+```
+
+GHCR package mặc định có thể để private; đăng nhập `ghcr.io` trước khi pull nếu cần. Để deploy thật lên VPS/cloud, cần bổ sung bước deploy và secrets tương ứng.
+
 ## Chức năng đã có
 
 - Đăng nhập email + mật khẩu hoặc mã nhân viên + PIN.

@@ -17,7 +17,7 @@
 | Lint/typecheck/build | Pass (0 error, 0 warning) |
 | UI Chrome thật | Pass; route chính desktop/tablet/mobile |
 | Production audit | 0 lỗ hổng production |
-| Git/commit/push/deploy | Chưa thực hiện |
+| Git/commit/push/deploy | Đã commit/push GitHub; chưa deploy production |
 
 ## 2. Đã hoàn thành trong Phase 7
 
@@ -76,4 +76,4 @@
 
 1. User nghiệm thu bản bàn giao Phase 7.
 2. Khi có môi trường/credentials thật: cấu hình `.env.local`, bổ sung adapter live, chạy Lighthouse/PostgreSQL, kiểm tra FS Access thủ công.
-3. Chưa commit/push/deploy cho đến khi có chỉ đạo.
+3. Chưa deploy production cho đến khi có target/credentials.

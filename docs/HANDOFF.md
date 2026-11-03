@@ -2,7 +2,7 @@
 
 > Cập nhật: 03/11/2026 (Phase 7 — bàn giao cuối, đã nghiệm thu)
 > Phase hiện tại: **PHASE 7 — QA VÀ BÀN GIAO: HOÀN TẤT**
-> Trạng thái bàn giao: **user đã nghiệm thu ngày 03/11/2026** (chưa commit/push/deploy)
+> Trạng thái bàn giao: **user đã nghiệm thu ngày 03/11/2026** (đã commit/push GitHub; chưa deploy production)
 > Kiến trúc: đã được user duyệt; toàn bộ Phase 0–7 hoàn tất theo phạm vi SPEC.
 
 ---
@@ -22,7 +22,7 @@
 | Test | **117/117 Vitest pass** (26 file) + **7/7 Playwright E2E pass** |
 | UI Chrome thật | Pass; route chính desktop/tablet/mobile |
 | `npm audit --omit=dev` | 0 lỗ hổng production |
-| Git/commit/push/deploy | Chưa thực hiện |
+| Git/commit/push/deploy | Đã commit `597c6fa` + push `main`; chưa deploy production |
 
 ---
 
@@ -149,7 +149,7 @@ Tenant phụ: `owner@studiobinhminh.demo` / `BM-OWNER` / PIN `999999` / `Demo@12
 - PDF dùng print-to-PDF trình duyệt; task attachment nâng cao chưa làm.
 - Contact request chưa có màn hình admin xử lý.
 - Pricing/testimonials/số liệu marketing là demo có nhãn.
-- Chưa commit/push/deploy.
+- Đã commit/push GitHub; chưa deploy production.
 
 ---
 
@@ -196,3 +196,12 @@ Tenant phụ: `owner@studiobinhminh.demo` / `BM-OWNER` / PIN `999999` / `Demo@12
 1. Phase 7 đã được user nghiệm thu ngày 03/11/2026.
 2. Khi triển khai thật: bổ sung `.env.local`, credentials adapter live, private storage, PostgreSQL, Lighthouse/FS Access manual.
 3. Không commit/push/deploy cho đến khi có chỉ đạo.
+
+---
+
+## 11. CI/CD
+
+- `.github/workflows/ci-cd.yml` chạy CI trên push/PR `main`: npm ci, migrate + seed, lint, typecheck, Vitest, build, Playwright Chromium E2E.
+- Sau khi CI pass trên `main`: build Docker image và push GHCR (`latest` + tag SHA). Chưa tự deploy lên server.
+- `Dockerfile` chạy migration trước `next start`, không tự seed; cần mount `/app/data`, `/app/public/uploads` và truyền `AUTH_SECRET`/`TOKEN_ENCRYPTION_KEY`.
+- Live deploy vẫn cần target (VPS/cloud) và secrets tương ứng.
