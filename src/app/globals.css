@@ -1,0 +1,152 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --app-font-sans: "Be Vietnam Pro", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --background: hsl(220 20% 96%);
+  --surface: #ffffff;
+  --surface-muted: hsl(220 14% 96%);
+  --foreground: #333333;
+  --muted-foreground: hsl(215 16% 47%);
+  --border: hsl(220 13% 91%);
+  --input-border: #64748b;
+  --primary: hsl(211 100% 35%);
+  --primary-hover: hsl(211 100% 30%);
+  --primary-foreground: #ffffff;
+  --secondary: hsl(210 100% 65%);
+  --accent: hsl(210 100% 95%);
+  --accent-foreground: hsl(211 100% 35%);
+  --focus: hsl(211 100% 35%);
+  --danger: #b91c1c;
+  --success: #166534;
+  --warning: #92400e;
+  --info: #1d4ed8;
+}
+
+.dark {
+  --background: hsl(220 20% 7%);
+  --surface: hsl(220 20% 10%);
+  --surface-muted: hsl(215 28% 17%);
+  --foreground: hsl(213 31% 91%);
+  --muted-foreground: hsl(215 20% 65%);
+  --border: hsl(215 28% 17%);
+  --input-border: #94a3b8;
+  --primary: hsl(210 100% 50%);
+  --primary-hover: hsl(210 100% 45%);
+  --primary-foreground: #0b1220;
+  --secondary: hsl(215 28% 17%);
+  --accent: hsl(215 28% 17%);
+  --accent-foreground: hsl(213 31% 91%);
+  --focus: hsl(210 100% 50%);
+  --danger: #fca5a5;
+  --success: #86efac;
+  --warning: #fcd34d;
+  --info: #93c5fd;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-foreground: var(--foreground);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input-border: var(--input-border);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-focus: var(--focus);
+  --color-danger: var(--danger);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
+  --font-sans: var(--app-font-sans);
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  html {
+    color-scheme: light;
+  }
+
+  html.dark {
+    color-scheme: dark;
+  }
+
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--app-font-sans);
+    font-size: 14px;
+    line-height: 22px;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+
+  ::selection {
+    background: var(--accent);
+    color: var(--accent-foreground);
+  }
+
+  :focus-visible {
+    outline: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    background: #ffffff !important;
+    color: #111111 !important;
+  }
+
+  @page {
+    size: A4;
+    margin: 14mm;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

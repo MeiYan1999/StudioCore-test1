@@ -1,0 +1,62 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1793677960884,
+      "tag": "0000_bored_kinsey_walden",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1793679956988,
+      "tag": "0001_purple_outlaw_kid",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1793682203317,
+      "tag": "0002_romantic_shaman",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1793682836323,
+      "tag": "0003_stormy_master_chief",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1793684215347,
+      "tag": "0004_oval_richard_fisk",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1793684301027,
+      "tag": "0005_closed_cobalt_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1793687947718,
+      "tag": "0006_swift_jocasta",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1793690692091,
+      "tag": "0007_wandering_electro",
+      "breakpoints": true
+    }
+  ]
+}
