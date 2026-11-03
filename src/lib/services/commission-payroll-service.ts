@@ -17,6 +17,7 @@ import { assertBranchAccess, assertPermission } from "../auth/permissions";
 import { NotFoundError, ValidationError } from "../errors";
 import { writeAudit } from "../audit";
 import { parseVietnamDateTimeLocal } from "../utils";
+import { getVietnamMonthRange } from "../scheduling/time";
 
 export type CommissionRuleView = {
   id: string;
@@ -275,19 +276,10 @@ export function listCommissions(
   if (filters.status) conditions.push(eq(commissions.status, filters.status));
   if (filters.staffId) conditions.push(eq(commissions.staffId, filters.staffId));
   if (filters.period && /^\d{4}-\d{2}$/.test(filters.period)) {
-    const start = new Date(`${filters.period}-01T00:00:00+07:00`);
-    const end = new Date(
-      start.getFullYear(),
-      start.getMonth() + 1,
-      0,
-      23,
-      59,
-      59,
-      999,
-    );
+    const range = getVietnamMonthRange(filters.period);
     conditions.push(
-      gte(commissions.createdAt, start),
-      lte(commissions.createdAt, end),
+      gte(commissions.createdAt, range.start),
+      lte(commissions.createdAt, range.end),
     );
   }
   return db
@@ -469,12 +461,11 @@ function payrollPeriodRange(period: string): { start: Date; end: Date } {
   if (!/^\d{4}-\d{2}$/.test(period)) {
     throw new ValidationError("Kỳ lương phải có dạng YYYY-MM.");
   }
-  const start = new Date(`${period}-01T00:00:00+07:00`);
-  if (Number.isNaN(start.getTime())) {
+  const month = Number(period.slice(5, 7));
+  if (month < 1 || month > 12) {
     throw new ValidationError("Kỳ lương không hợp lệ.");
   }
-  const end = new Date(start.getFullYear(), start.getMonth() + 1, 0, 23, 59, 59, 999);
-  return { start, end };
+  return getVietnamMonthRange(period);
 }
 
 export function generatePayrolls(

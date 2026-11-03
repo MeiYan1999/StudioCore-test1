@@ -71,6 +71,25 @@ export function addMonthsToKey(dateKey: string, months: number): string {
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-01`;
 }
 
+const VIETNAM_OFFSET_MS = 7 * 60 * 60 * 1000;
+
+export function getVietnamMonthRange(monthKey: string): { start: Date; end: Date } {
+  if (!/^\d{4}-\d{2}$/.test(monthKey)) {
+    throw new Error("Tháng phải có dạng YYYY-MM.");
+  }
+  const yearValue = Number(monthKey.slice(0, 4));
+  const monthValue = Number(monthKey.slice(5, 7));
+  if (monthValue < 1 || monthValue > 12) {
+    throw new Error("Tháng không hợp lệ.");
+  }
+  return {
+    start: new Date(Date.UTC(yearValue, monthValue - 1, 1) - VIETNAM_OFFSET_MS),
+    end: new Date(
+      Date.UTC(yearValue, monthValue, 0, 23, 59, 59, 999) - VIETNAM_OFFSET_MS,
+    ),
+  };
+}
+
 export function getDayRange(dateKey: string): { start: Date; end: Date } {
   return {
     start: parseDateKey(dateKey),

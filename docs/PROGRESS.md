@@ -13,7 +13,7 @@
 | Phase 7 | Hoàn tất — QA, E2E, acceptance, reset DB, docs |
 | Ứng dụng | Next.js 16.4.4, React 19, TypeScript strict, Tailwind 4, SQLite WAL |
 | Database | Migration 0000–0007; seed sạch, idempotent; 0 session/login attempt/notification/contact request |
-| Test | **117/117 Vitest pass** (26 file) + **7/7 Playwright E2E pass** |
+| Test | **120/120 Vitest pass** (27 file) + **7/7 Playwright E2E pass** |
 | Lint/typecheck/build | Pass (0 error, 0 warning) |
 | UI Chrome thật | Pass; route chính desktop/tablet/mobile |
 | Production audit | 0 lỗ hổng production |
@@ -42,7 +42,7 @@
 - `npm run typecheck`: pass.
 - `npm run build`: pass — Next.js 16.4.4.
 - `npm start` production smoke: public pages 200; `/platform` 307 khi chưa đăng nhập; mock webhook POST 404.
-- `npm run test`: **117/117 pass**, 26 file.
+- `npm run test`: **120/120 pass**, 27 file (pass cả `TZ=UTC`).
 - `npm run test:e2e`: **7/7 pass** trên Chrome hệ thống.
 - `npm run db:migrate` trên DB mới + `npm run db:seed` hai lần: pass, idempotent.
 - `npm audit --omit=dev`: 0 lỗ hổng production.

@@ -13,7 +13,7 @@
 | Module/tính năng | E2E chính thức, QA route/RBAC/tenant/branch, acceptance 25 kịch bản, security, docs bàn giao |
 | File đã hoàn thành | Toàn bộ `src/`, `e2e/`, `tests/`, migrations 0000–0007, `docs/*`, screenshot marketing |
 | Việc còn lại | Không — dự án hoàn tất theo phạm vi SPEC; live credentials cần bổ sung khi production |
-| Kết quả kiểm tra | `lint` pass, `typecheck` pass, `build` pass (Next 16.4.4), **117/117 test pass**, **7/7 E2E pass** |
+| Kết quả kiểm tra | `lint` pass, `typecheck` pass, `build` pass (Next 16.4.4), **120/120 test pass**, **7/7 E2E pass** |
 | Ứng dụng đã khởi tạo | Có — Next.js App Router, TypeScript strict, Tailwind, SQLite WAL |
 | Dependency đã cài | Có; `npm audit --omit=dev` = 0 lỗ hổng production |
 | Migration/seed đã chạy | Có; migrate 0000–0007, seed 2 lần idempotent |
@@ -576,7 +576,8 @@
 - `npm run typecheck`: pass.
 - `npm run build`: pass — Next.js 16.4.4 (Turbopack); toàn bộ route public/auth/manage/API/print/platform build thành công.
 - `npm start` production smoke: `/`, `/login`, `/sitemap.xml`, `/robots.txt` trả 200; `/platform` 307 về `/login` khi chưa đăng nhập; `POST /api/mock/webhook/payment` trả 404 ở production.
-- `npm run test`: 26 file, **117/117 test pass** (unit + integration).
+- `npm run test`: 27 file, **120/120 test pass** (unit + integration).
+- CI Linux/UTC phát hiện bug kỳ lương phụ thuộc timezone runner; đã sửa range tháng theo UTC+7 thống nhất cho payroll/commission/budget/report, thêm test hồi quy; suite pass cả `TZ=UTC`.
 - `npm run test:e2e`: **7/7 E2E pass** trên Chrome hệ thống — owner route chính, smoke 49 route, PhotoShare public, demo read-only, platform admin, landing responsive/tabs/FAQ/pricing, mobile menu/public pages, SEO/JSON-LD/sitemap/robots.
 - Migration trên DB mới + seed 2 lần: idempotent; 2 tenant, 3 chi nhánh, 10 nhân sự (gồm platform admin), 10 khách, 6 đơn, 4 phòng, 6 lịch hẹn, 12 ảnh, 22 settings, 168 role permission, 8 transaction, 1 payroll, 4 task, 2 document, 2 campaign; `sessions`/`login_attempts`/`notifications`/`contact_requests` = 0 sau reset; 2 activity log seed.
 - Role matrix server-side: 3 test tích hợp cho permission matrix, mutation bị từ chối, tenant isolation/branch scope; E2E xác nhận platform admin vào `/platform` và bị 403 ở dữ liệu tenant.
@@ -601,4 +602,4 @@
 | 03/11/2026 | 4 | Storage/upload, album, PhotoShare, ZIP/manifest, lọc mã khách chọn, Drive/NAS adapter, AI Hub, seed và test | lint/typecheck/build pass; 84/84 test pass; Chrome UI pass |
 | 03/11/2026 | 5 | Sổ quỹ, hóa đơn/VietQR/webhook, commission/payroll/HR, báo cáo, tasks/docs/campaigns/inbox, settings/audit, seed và test | lint/typecheck/build pass; 106/106 test pass; Chrome UI pass |
 | 03/11/2026 | 6 | Marketing landing 14 section, public pages, onboarding, reset password, demo read-only, SEO, screenshot thật, test | lint/typecheck/build pass; 110/110 test pass; Chrome UI pass |
-| 03/11/2026 | 7 | E2E chính thức, platform admin `/platform`, role/tenant/branch QA, security test, acceptance 25 kịch bản, reset DB, docs bàn giao | lint/typecheck/build pass; 117/117 test + 7/7 E2E pass; audit 0 |
+| 03/11/2026 | 7 | E2E chính thức, platform admin `/platform`, role/tenant/branch QA, security test, acceptance 25 kịch bản, reset DB, docs bàn giao | lint/typecheck/build pass; 120/120 test + 7/7 E2E pass; audit 0 |

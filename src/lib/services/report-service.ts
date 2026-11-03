@@ -16,6 +16,7 @@ import {
 import type { ActorContext } from "../auth/types";
 import { assertPermission, getBranchScope, hasPermission } from "../auth/permissions";
 import { listDebtors } from "../services/finance-service";
+import { addMonthsToKey, getVietnamMonthRange } from "../scheduling/time";
 
 export type ReportFilters = {
   from?: string;
@@ -93,9 +94,9 @@ function formatMonthKey(date: Date): string {
 }
 
 function reportRange(filters: ReportFilters): { start: Date; end: Date; from: string; to: string } {
-  const now = new Date();
-  const from = filters.from || formatDateKey(new Date(now.getFullYear(), now.getMonth(), 1));
-  const to = filters.to || formatDateKey(now);
+  const todayKey = formatDateKey(new Date());
+  const from = filters.from || `${todayKey.slice(0, 7)}-01`;
+  const to = filters.to || todayKey;
   const start = new Date(`${from}T00:00:00+07:00`);
   const end = new Date(`${to}T23:59:59.999+07:00`);
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) {
@@ -630,8 +631,10 @@ export function getDashboardOverview(
     .filter((row) => row.type === "income")
     .reduce((sum, row) => sum + row.amount, 0);
 
-  const previousMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const previousMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+  const previousMonthKey = addMonthsToKey(`${todayKey.slice(0, 7)}-01`, -1).slice(0, 7);
+  const previousMonthRange = getVietnamMonthRange(previousMonthKey);
+  const previousMonthStart = previousMonthRange.start;
+  const previousMonthEnd = previousMonthRange.end;
   const previousRows = db
     .select({ type: transactions.type, amount: transactions.amount })
     .from(transactions)
@@ -672,7 +675,7 @@ export function getDashboardOverview(
     .from(customers)
     .where(and(...customerConditions))
     .all();
-  const currentMonth = `${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const currentMonth = todayKey.slice(5, 7);
   const sourceMap = new Map<string, number>();
   for (const row of customerRows) {
     sourceMap.set(row.source, (sourceMap.get(row.source) ?? 0) + 1);

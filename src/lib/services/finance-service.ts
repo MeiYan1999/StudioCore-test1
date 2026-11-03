@@ -21,6 +21,7 @@ import { assertBranchAccess, assertPermission, getBranchScope } from "../auth/pe
 import { AuthorizationError, NotFoundError, ValidationError } from "../errors";
 import { writeAudit } from "../audit";
 import { parseVietnamDateTimeLocal } from "../utils";
+import { getTodayKey, getVietnamMonthRange } from "../scheduling/time";
 import { getTenantSettings } from "./settings-service";
 import { createNotification } from "./notification-service";
 import {
@@ -110,13 +111,13 @@ export type FinanceSummary = {
 };
 
 function dateRange(from?: string, to?: string): { start: Date; end: Date } {
-  const now = new Date();
+  const currentMonth = getVietnamMonthRange(getTodayKey().slice(0, 7));
   const start = from
     ? new Date(`${from}T00:00:00+07:00`)
-    : new Date(now.getFullYear(), now.getMonth(), 1);
+    : currentMonth.start;
   const end = to
     ? new Date(`${to}T23:59:59.999+07:00`)
-    : new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    : currentMonth.end;
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) {
     throw new ValidationError("Khoảng ngày không hợp lệ.");
   }
@@ -470,16 +471,7 @@ export function listBudgets(
     .where(and(...conditions))
     .orderBy(asc(budgets.category))
     .all();
-  const rangeStart = new Date(`${period}-01T00:00:00+07:00`);
-  const rangeEnd = new Date(
-    new Date(rangeStart).getFullYear(),
-    new Date(rangeStart).getMonth() + 1,
-    0,
-    23,
-    59,
-    59,
-    999,
-  );
+  const { start: rangeStart, end: rangeEnd } = getVietnamMonthRange(period);
   return rows.map((row) => {
     const spentConditions: SQL[] = [
       eq(transactions.tenantId, actor.tenantId),

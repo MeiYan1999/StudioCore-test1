@@ -19,7 +19,7 @@
 | Notifications/contact requests | 0 / 0 |
 | Activity log | 2 bản ghi seed |
 | Lint/typecheck/build | Pass (0 error, 0 warning) |
-| Test | **117/117 Vitest pass** (26 file) + **7/7 Playwright E2E pass** |
+| Test | **120/120 Vitest pass** (27 file) + **7/7 Playwright E2E pass** |
 | UI Chrome thật | Pass; route chính desktop/tablet/mobile |
 | `npm audit --omit=dev` | 0 lỗ hổng production |
 | Git/commit/push/deploy | Đã commit `597c6fa` + push `main`; chưa deploy production |
@@ -69,7 +69,7 @@
 | `npm run typecheck` | Pass |
 | `npm run build` | Pass — Next.js 16.4.4 |
 | `npm start` production smoke | Pass — public pages 200; `/platform` 307 khi chưa đăng nhập; mock webhook POST 404 |
-| `npm run test` | **117/117 pass**, 26 file |
+| `npm run test` | **120/120 pass**, 27 file (pass cả `TZ=UTC`) |
 | `npm run test:e2e` | **7/7 pass**, Chrome hệ thống |
 | `npm run db:migrate` trên DB mới | Pass — 0000–0007 |
 | `npm run db:seed` hai lần | Pass, idempotent |
@@ -202,6 +202,7 @@ Tenant phụ: `owner@studiobinhminh.demo` / `BM-OWNER` / PIN `999999` / `Demo@12
 ## 11. CI/CD
 
 - `.github/workflows/ci-cd.yml` chạy CI trên push/PR `main`: npm ci, migrate + seed, lint, typecheck, Vitest, build, Playwright Chromium E2E.
+- CI Linux/UTC đã phát hiện lỗi range tháng phụ thuộc timezone; code dùng mốc UTC+7 cố định (`getVietnamMonthRange`) cho payroll/commission/budget/report.
 - Sau khi CI pass trên `main`: build Docker image và push GHCR (`latest` + tag SHA). Chưa tự deploy lên server.
 - `Dockerfile` chạy migration trước `next start`, không tự seed; cần mount `/app/data`, `/app/public/uploads` và truyền `AUTH_SECRET`/`TOKEN_ENCRYPTION_KEY`.
 - Live deploy vẫn cần target (VPS/cloud) và secrets tương ứng.

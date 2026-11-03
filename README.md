@@ -30,7 +30,7 @@ npm run test
 npm run test:e2e
 ```
 
-Kết quả Phase 7: lint/typecheck/build pass; **117/117 Vitest pass** (26 file); **7/7 Playwright E2E pass** trên Chrome hệ thống. `npm audit --omit=dev` báo 0 lỗ hổng production.
+Kết quả Phase 7: lint/typecheck/build pass; **120/120 Vitest pass** (27 file); **7/7 Playwright E2E pass** trên Chrome hệ thống. `npm audit --omit=dev` báo 0 lỗ hổng production.
 
 E2E mặc định dùng Chrome cài trên máy (`channel: chrome`) và tự khởi động dev server. Có thể đổi bằng `PLAYWRIGHT_CHANNEL` hoặc trỏ `E2E_BASE_URL` tới server đang chạy.
 

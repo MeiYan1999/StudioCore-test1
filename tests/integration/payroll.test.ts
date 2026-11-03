@@ -114,6 +114,34 @@ describe("commission và payroll", () => {
     expect(() => generatePayrolls(db, owner, "2026-11")).toThrow(/đã duyệt|khóa/);
   });
 
+  it("kỳ lương dùng mốc Asia/Ho_Chi_Minh nhất quán khi runner chạy UTC", () => {
+    const boundary = new Date("2026-12-31T16:59:59.999Z");
+    db.insert(commissions)
+      .values({
+        id: "commission-demo-makeup-period-boundary",
+        tenantId: owner.tenantId,
+        orderId: "order-demo-02",
+        staffId: "staff-sc-makeup",
+        ruleId: "commission-rule-demo-makeup",
+        role: "makeup",
+        ruleType: "fixed",
+        ruleValue: 123_456,
+        baseAmount: 13_500_000,
+        amount: 123_456,
+        status: "approved",
+        approvedBy: owner.staffId,
+        approvedAt: boundary,
+        createdAt: boundary,
+      })
+      .run();
+
+    generatePayrolls(db, owner, "2026-12");
+    const makeup = listPayrolls(db, owner, "2026-12").find(
+      (row) => row.staffId === "staff-sc-makeup",
+    );
+    expect(makeup?.commissionAmount).toBe(123_456);
+  });
+
   it("duyệt và chi trả commission ngoài payroll sinh transaction", () => {
     approveCommission(db, owner, "commission-demo-retouch-01");
     markCommissionPaid(db, owner, "commission-demo-retouch-01");
