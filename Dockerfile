@@ -36,7 +36,7 @@ COPY --from=builder /app/scripts ./scripts
 RUN sed -i 's/\r$//' scripts/start.sh
 RUN groupadd --system --gid 1001 nodejs \
   && useradd --system --uid 1001 --gid nodejs nextjs \
-  && mkdir -p data public/uploads \
-  && chown -R nextjs:nodejs .next public data
+  && mkdir -p data public/uploads demo-data \
+  && chown -R nextjs:nodejs .next public data demo-data
 EXPOSE 3000
 ENTRYPOINT ["/bin/sh", "/app/scripts/start.sh"]
