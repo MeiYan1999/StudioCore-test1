@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: studiocore-meiyan1999
+    name: studiocore-test1
     runtime: docker
     plan: starter
     region: singapore
@@ -14,7 +14,7 @@ services:
       - key: TOKEN_ENCRYPTION_KEY
         generateValue: true
       - key: NEXT_PUBLIC_SITE_URL
-        value: https://studiocore-meiyan1999.onrender.com
+        value: https://studiocore-test1.onrender.com
       - key: UPLOAD_ROOT
         value: /app/data/uploads
       - key: STORAGE_PROVIDER

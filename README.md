@@ -62,7 +62,7 @@ GHCR package mặc định có thể để private; đăng nhập `ghcr.io` trư
 
 ## Deploy lên Render
 
-Repo có Blueprint `render.yaml`: Docker web service `studiocore-meiyan1999`, region Singapore, plan Starter, persistent disk 1GB tại `/app/data`, health check `/login`, auto deploy từ `main`.
+Repo có Blueprint `render.yaml`: Docker web service `studiocore-test1`, region Singapore, plan Starter, persistent disk 1GB tại `/app/data`, health check `/login`, auto deploy từ `main`.
 
 [Deploy to Render](https://render.com/deploy?repo=https://github.com/MeiYan1999/StudioCore-test1)
 
@@ -70,7 +70,7 @@ Sau khi kết nối Render với GitHub và duyệt Blueprint:
 
 - Render tự sinh `AUTH_SECRET` và `TOKEN_ENCRYPTION_KEY`.
 - Container chạy migration, sau đó seed demo idempotent khi `SEED_DEMO=true`; DB và uploads nằm trên persistent disk.
-- URL dự kiến: https://studiocore-meiyan1999.onrender.com. Nếu tên service bị trùng, đổi `name` và `NEXT_PUBLIC_SITE_URL` trong `render.yaml` trước khi deploy.
+- URL dự kiến: https://studiocore-test1.onrender.com. Nếu tên service bị trùng, đổi `name` và `NEXT_PUBLIC_SITE_URL` trong `render.yaml` trước khi deploy.
 - Persistent disk yêu cầu plan trả phí (Starter trở lên); free plan không giữ dữ liệu qua restart/redeploy.
 - Đây là môi trường demo công khai với tài khoản demo. Production: đặt `SEED_DEMO=false`, vô hiệu hóa/đổi mật khẩu tài khoản demo, dùng private storage và PostgreSQL.
 
