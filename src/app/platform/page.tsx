@@ -10,6 +10,7 @@ import { logoutAction } from "@/lib/auth/actions";
 import { getDb } from "@/lib/db/client";
 import { branches, contactRequests, staff, tenants } from "@/lib/db/schema";
 import { formatDateTime } from "@/lib/utils";
+import { TenantPlanSelect, TenantStatusSelect } from "./tenant-row-controls";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +46,17 @@ export default async function PlatformPage() {
     .all();
   const branchMap = new Map(branchCounts.map((row) => [row.tenantId, row.value]));
   const staffMap = new Map(staffCounts.map((row) => [row.tenantId, row.value]));
+  const ownerRows = db
+    .select({
+      tenantId: staff.tenantId,
+      name: staff.name,
+      email: staff.email,
+      phone: staff.phone,
+    })
+    .from(staff)
+    .where(eq(staff.role, "owner"))
+    .all();
+  const ownerMap = new Map(ownerRows.map((o) => [o.tenantId, o]));
   const requests = db
     .select()
     .from(contactRequests)
@@ -123,36 +135,52 @@ export default async function PlatformPage() {
             </h2>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px] text-sm">
+            <table className="w-full min-w-[880px] text-sm">
               <thead className="bg-surface-muted text-left text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
-                  <th className="px-4 py-3">Tenant</th>
-                  <th className="px-4 py-3">Slug</th>
-                  <th className="px-4 py-3">Plan</th>
+                  <th className="px-4 py-3">Studio (Tenant)</th>
+                  <th className="px-4 py-3">Đại diện (Chủ studio)</th>
+                  <th className="px-4 py-3">Gói cước (Kích hoạt)</th>
                   <th className="px-4 py-3">Trạng thái</th>
                   <th className="px-4 py-3 text-right">Chi nhánh</th>
                   <th className="px-4 py-3 text-right">Nhân sự</th>
-                  <th className="px-4 py-3">Tạo lúc</th>
+                  <th className="px-4 py-3">Ngày tạo</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {tenantRows.map((tenant) => (
-                  <tr key={tenant.id}>
-                    <td className="px-4 py-3 font-medium">{tenant.name}</td>
-                    <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{tenant.slug}</td>
-                    <td className="px-4 py-3">{tenant.plan}</td>
-                    <td className="px-4 py-3">
-                      <Badge tone={tenant.status === "active" ? "success" : "neutral"}>
-                        {tenant.status}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3 text-right">{branchMap.get(tenant.id) ?? 0}</td>
-                    <td className="px-4 py-3 text-right">{staffMap.get(tenant.id) ?? 0}</td>
-                    <td className="px-4 py-3 text-xs text-muted-foreground">
-                      {formatDateTime(tenant.createdAt)}
-                    </td>
-                  </tr>
-                ))}
+                {tenantRows.map((tenant) => {
+                  const owner = ownerMap.get(tenant.id);
+                  return (
+                    <tr key={tenant.id} className="hover:bg-accent/30 transition-colors">
+                      <td className="px-4 py-3 font-medium">
+                        <div>{tenant.name}</div>
+                        <div className="font-mono text-xs text-muted-foreground">{tenant.slug}</div>
+                      </td>
+                      <td className="px-4 py-3 text-xs">
+                        {owner ? (
+                          <div>
+                            <p className="font-medium text-foreground">{owner.name}</p>
+                            <p className="text-muted-foreground">{owner.email || "Chưa có email"}</p>
+                            {owner.phone ? <p className="text-muted-foreground">{owner.phone}</p> : null}
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <TenantPlanSelect tenantId={tenant.id} currentPlan={tenant.plan} />
+                      </td>
+                      <td className="px-4 py-3">
+                        <TenantStatusSelect tenantId={tenant.id} currentStatus={tenant.status} />
+                      </td>
+                      <td className="px-4 py-3 text-right font-medium">{branchMap.get(tenant.id) ?? 0}</td>
+                      <td className="px-4 py-3 text-right font-medium">{staffMap.get(tenant.id) ?? 0}</td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground">
+                        {formatDateTime(tenant.createdAt)}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

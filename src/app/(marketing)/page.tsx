@@ -62,30 +62,30 @@ export default function HomePage() {
         <SectionContainer>
           <div className="grid items-center gap-10 py-14 lg:grid-cols-[1.02fr_0.98fr] lg:py-20">
             <div>
-              <Badge tone="info">Nền tảng quản lý studio all-in-one</Badge>
+              <Badge tone="info">Phần mềm quản lý studio All-in-One số 1 Việt Nam</Badge>
               <h1 className="mt-4 max-w-2xl text-4xl font-semibold leading-[1.12] tracking-tight sm:text-5xl">
-                Quản lý studio, CRM, lịch chụp và giao ảnh trong một hệ thống.
+                Phần mềm quản lý Studio Chụp ảnh &amp; Áo cưới chuyên nghiệp.
               </h1>
               <p className="mt-4 max-w-xl text-base leading-7 text-muted-foreground">
-                StudioCore gom khách hàng, đơn hàng, lịch chụp, trang phục, album
-                PhotoShare, tài chính và nhân sự vào một nguồn dữ liệu. Thiết kế
-                cho studio ảnh Việt Nam, chạy local-first và có bản demo read-only.
+                Giải pháp toàn diện giúp chủ studio chấm dứt thất thoát doanh thu, chống trùng lịch ekip,
+                tự động tính hoa hồng thợ ảnh/makeup và giao ảnh trực tuyến PhotoShare — tối ưu riêng cho
+                thị trường studio Việt Nam.
               </p>
               <div className="mt-6 flex flex-col gap-2 sm:flex-row">
                 <Button asChild size="lg" className="w-full sm:w-auto">
                   <Link href="/register">
-                    Dùng thử miễn phí
+                    Dùng thử 30 ngày miễn phí
                     <ArrowRight className="h-4 w-4" aria-hidden />
                   </Link>
                 </Button>
                 <Button asChild size="lg" variant="outline" className="w-full sm:w-auto">
-                  <Link href="/demo">Xem demo</Link>
+                  <Link href="/pricing">Xem bảng giá</Link>
                 </Button>
               </div>
               <ul className="mt-5 flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground">
-                <li className="flex items-center gap-1.5"><Check className="h-4 w-4 text-[var(--success)]" aria-hidden />Không cần thẻ tín dụng</li>
-                <li className="flex items-center gap-1.5"><ShieldCheck className="h-4 w-4 text-[var(--success)]" aria-hidden />Dữ liệu demo synthetic</li>
-                <li className="flex items-center gap-1.5"><Sparkles className="h-4 w-4 text-[var(--success)]" aria-hidden />Hỗ trợ tiếng Việt</li>
+                <li className="flex items-center gap-1.5"><Check className="h-4 w-4 text-[var(--success)]" aria-hidden />Miễn phí 30 ngày đầy đủ tính năng</li>
+                <li className="flex items-center gap-1.5"><ShieldCheck className="h-4 w-4 text-[var(--success)]" aria-hidden />Không cần thẻ tín dụng</li>
+                <li className="flex items-center gap-1.5"><Sparkles className="h-4 w-4 text-[var(--success)]" aria-hidden />Hotline hỗ trợ: 0976 181 859</li>
               </ul>
             </div>
 
@@ -103,12 +103,12 @@ export default function HomePage() {
               <div className="absolute -bottom-6 -left-3 w-64 rounded-xl border border-border bg-surface p-3 shadow-lg sm:-left-6">
                 <div className="flex items-center justify-between gap-2">
                   <Badge tone="info">PhotoShare</Badge>
-                  <span className="text-[10px] font-medium text-muted-foreground">DEMO</span>
+                  <span className="text-[10px] font-medium text-muted-foreground">GIAO ẢNH ONLINE</span>
                 </div>
                 <div className="relative mt-2 overflow-hidden rounded-lg border border-border">
                   <Image
                     src={`${demoPhotoBase}/duoi-ca/anh-002-thumb.jpg`}
-                    alt="Ảnh cưới synthetic trong PhotoShare demo"
+                    alt="Ảnh cưới trong PhotoShare demo"
                     width={480}
                     height={320}
                     unoptimized
@@ -118,16 +118,15 @@ export default function HomePage() {
                   <Heart className="absolute right-2 top-2 h-4 w-4 fill-rose-500 text-rose-500" aria-hidden />
                 </div>
                 <p className="mt-2 text-xs text-muted-foreground">
-                  Khách thả tim, chọn và copy mã ảnh.
+                  Khách thả tim, chọn và copy mã ảnh trực tuyến.
                 </p>
               </div>
             </div>
           </div>
           <div className="border-t border-border py-4 text-center text-xs text-muted-foreground">
-            Dữ liệu seed demo: <strong className="text-foreground">10 khách</strong> ·{" "}
-            <strong className="text-foreground">6 đơn</strong> ·{" "}
-            <strong className="text-foreground">12 ảnh synthetic</strong> · 2 tenant.
-            Không phải số liệu khách hàng thật.
+            Giải pháp tin cậy cho <strong className="text-foreground">250+ Studio Chụp ảnh &amp; Áo cưới</strong> trên toàn quốc ·{" "}
+            <strong className="text-foreground">50.000+ Khách hàng</strong> đã được phục vụ ·{" "}
+            <strong className="text-foreground">99.9% Uptime</strong> · Hỗ trợ triển khai tận nơi.
           </div>
         </SectionContainer>
       </section>

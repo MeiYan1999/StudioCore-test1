@@ -1,10 +1,10 @@
 import { getEnv } from "../env";
 
 export const MARKETING_CONTACT = {
-  email: "hello@studiocore.demo",
-  phone: "028 0000 0001",
-  address: "12 Nguyễn Huệ, Phường Bến Nghé, Quận 1, TP.HCM",
-  note: "Thông tin liên hệ demo, không phải studio thật.",
+  email: "samstudio.hn@gmail.com",
+  phone: "0976 181 859",
+  address: "Hà Nội, Việt Nam",
+  note: "Tư vấn giải pháp, hỗ trợ kỹ thuật và demo trực tiếp cho studio toàn quốc.",
 };
 
 export const MARKETING_NAV = [
@@ -171,100 +171,125 @@ export type Plan = {
 export const PLANS: Plan[] = [
   {
     key: "trial",
-    name: "Dùng thử",
+    name: "Dùng thử 30 ngày",
     monthly: 0,
     yearly: 0,
-    description: "Trải nghiệm đầy đủ luồng demo trong 14 ngày.",
-    features: ["1 chi nhánh", "Tối đa 3 nhân sự", "CRM, đơn hàng, lịch chụp", "PhotoShare giới hạn"],
-    cta: "Bắt đầu miễn phí",
+    description: "Trải nghiệm đầy đủ 100% tính năng trong 30 ngày — không cần thẻ tín dụng.",
+    features: [
+      "1 chi nhánh",
+      "5 nhân sự vận hành",
+      "CRM khách hàng & Đơn hàng",
+      "Lịch chụp chống trùng ekip",
+      "PhotoShare giao ảnh online",
+      "Hỗ trợ onboarding 1-1",
+    ],
+    cta: "Đăng ký dùng thử 30 ngày",
     href: "/register",
   },
   {
     key: "basic",
     name: "Vận hành cơ bản",
-    monthly: 499_000,
-    yearly: 4_990_000,
-    description: "Cho studio nhỏ cần quản lý khách, lịch và tài chính.",
-    features: ["1 chi nhánh", "10 nhân sự", "CRM, đơn hàng, lịch", "Sổ quỹ, công nợ", "PhotoShare 5 album"],
-    cta: "Tư vấn gói cơ bản",
+    monthly: 399_000,
+    yearly: 3_990_000,
+    description: "Cho studio vừa & nhỏ cần số hóa đơn hàng, lịch chụp và tài chính.",
+    features: [
+      "1 chi nhánh",
+      "10 nhân sự",
+      "CRM & Quản lý đơn hàng",
+      "Lịch chụp thông minh chống trùng",
+      "Sổ quỹ thu chi & Công nợ",
+      "PhotoShare 20 album giao ảnh",
+      "In hóa đơn, phiếu thu & VietQR",
+    ],
+    cta: "Chọn gói Cơ bản",
     href: "/contact?plan=basic",
   },
   {
     key: "pro",
-    name: "Chuyên nghiệp",
-    monthly: 999_000,
-    yearly: 9_990_000,
-    description: "Phù hợp studio đang mở rộng, cần vận hành và báo cáo.",
+    name: "Chuyên nghiệp (Pro)",
+    monthly: 499_000,
+    yearly: 4_990_000,
+    description: "Gói được hơn 85% studio lựa chọn — đầy đủ sức mạnh bứt phá vận hành.",
     featured: true,
-    features: ["3 chi nhánh", "30 nhân sự", "Toàn bộ CRM/đơn/lịch", "PhotoShare, Drive, filter", "Lương, hoa hồng, báo cáo", "AI Hub local"],
-    cta: "Chọn gói Pro",
+    features: [
+      "3 chi nhánh",
+      "30 nhân sự",
+      "Tất cả tính năng gói Cơ bản",
+      "Hợp đồng điện tử ký tay trên iPad/Mobile",
+      "Kho váy cưới & Đạo cụ mã QR",
+      "Tự động tính hoa hồng & Lương ekip",
+      "PhotoShare không giới hạn album",
+      "Lọc ảnh gốc theo mã khách chọn + ZIP",
+      "Báo cáo phân tích doanh thu chuyên sâu",
+    ],
+    cta: "Chọn gói Pro (Phổ biến nhất)",
     href: "/register?plan=pro",
   },
   {
     key: "business",
     name: "Doanh nghiệp",
-    monthly: 1_999_000,
-    yearly: 19_990_000,
-    description: "Cho chuỗi studio cần nhiều chi nhánh và kiểm soát sâu.",
-    features: ["Chi nhánh không giới hạn", "Nhân sự không giới hạn", "Tích hợp Drive/AI mở rộng", "Audit, backup, phân quyền", "Hỗ trợ onboarding"],
-    cta: "Liên hệ doanh nghiệp",
+    monthly: 699_000,
+    yearly: 6_990_000,
+    description: "Cho chuỗi studio lớn, thương hiệu áo cưới nhiều cơ sở.",
+    features: [
+      "Không giới hạn chi nhánh",
+      "Không giới hạn nhân sự",
+      "Toàn bộ tính năng cao cấp của Pro",
+      "Tùy chỉnh tên miền riêng theo yêu cầu",
+      "Báo cáo tổng hợp chuỗi đa chi nhánh",
+      "Tự động sao lưu dữ liệu & Audit log",
+      "Đào tạo trực tiếp & Ưu tiên hỗ trợ 24/7",
+    ],
+    cta: "Liên hệ gói Doanh nghiệp",
     href: "/contact?plan=business",
   },
 ];
 
 export const PRICING_COMPARISON = [
-  { feature: "Chi nhánh", trial: "1", basic: "1", pro: "3", business: "Không giới hạn" },
-  { feature: "Nhân sự", trial: "3", basic: "10", pro: "30", business: "Không giới hạn" },
-  { feature: "CRM & đơn hàng", trial: "Có", basic: "Có", pro: "Có", business: "Có" },
-  { feature: "Lịch chống trùng", trial: "Có", basic: "Có", pro: "Có", business: "Có" },
-  { feature: "PhotoShare", trial: "5 album", basic: "20 album", pro: "Không giới hạn", business: "Không giới hạn" },
-  { feature: "Lọc mã ảnh + ZIP", trial: "Dùng thử", basic: "Có", pro: "Có", business: "Có" },
-  { feature: "Lương/hoa hồng", trial: "—", basic: "—", pro: "Có", business: "Có" },
-  { feature: "Báo cáo nâng cao", trial: "Cơ bản", basic: "Cơ bản", pro: "Đầy đủ", business: "Đầy đủ" },
-  { feature: "Audit & backup", trial: "—", basic: "—", pro: "Có", business: "Có" },
-  { feature: "AI Hub", trial: "Local", basic: "Local", pro: "Local", business: "Local + live (cấu hình)" },
+  { feature: "Số chi nhánh", trial: "1 chi nhánh", basic: "1 chi nhánh", pro: "3 chi nhánh", business: "Không giới hạn" },
+  { feature: "Số lượng nhân sự", trial: "5 nhân sự", basic: "10 nhân sự", pro: "30 nhân sự", business: "Không giới hạn" },
+  { feature: "CRM & Đơn hàng", trial: "Có", basic: "Có", pro: "Có", business: "Có" },
+  { feature: "Lịch chụp chống trùng", trial: "Có", basic: "Có", pro: "Có", business: "Có" },
+  { feature: "Hợp đồng ký điện tử", trial: "Có", basic: "—", pro: "Có", business: "Có" },
+  { feature: "Kho váy cưới & Đạo cụ QR", trial: "Có", basic: "—", pro: "Có", business: "Có" },
+  { feature: "Tính hoa hồng & Bảng lương", trial: "Có", basic: "—", pro: "Có", business: "Có" },
+  { feature: "PhotoShare giao ảnh", trial: "5 album", basic: "20 album", pro: "Không giới hạn", business: "Không giới hạn" },
+  { feature: "Lọc ảnh theo mã + ZIP", trial: "Có", basic: "Có", pro: "Có", business: "Có" },
+  { feature: "Báo cáo doanh thu & Lãi lỗ", trial: "Cơ bản", basic: "Cơ bản", pro: "Chuyên sâu", business: "Đa chi nhánh real-time" },
+  { feature: "Tên miền riêng", trial: "—", basic: "—", pro: "—", business: "Hỗ trợ riêng" },
+  { feature: "Hỗ trợ kỹ thuật", trial: "Online", basic: "Online", pro: "Ưu tiên hotline", business: "Hotline 24/7 + Onsite" },
 ];
 
 export const FAQS = [
   {
-    question: "StudioCore có miễn phí không?",
+    question: "StudioCore có chính sách dùng thử không?",
     answer:
-      "Có gói dùng thử 14 ngày và bản demo read-only. Giá trên trang pricing là giá demo, chưa phải báo giá chính thức; hãy liên hệ để chốt gói phù hợp.",
+      "Có! Bạn được trải nghiệm dùng thử miễn phí 30 ngày với 100% đầy đủ tính năng ngay sau khi đăng ký. Không yêu cầu thẻ tín dụng, không tự động trừ tiền.",
   },
   {
-    question: "Tôi cần kiến thức kỹ thuật để dùng không?",
+    question: "Tôi có thể thanh toán theo hình thức nào?",
     answer:
-      "Không. Giao diện tiếng Việt, form có hướng dẫn và dữ liệu mẫu giúp bắt đầu nhanh. Phần cài đặt local cần làm theo README nếu bạn tự triển khai.",
+      "Hệ thống hỗ trợ thanh toán linh hoạt theo chu kỳ 3 tháng, 6 tháng hoặc 12 tháng qua chuyển khoản ngân hàng, quét mã VietQR. Thanh toán 12 tháng được chiết khấu ngay 20%.",
   },
   {
-    question: "Nhân viên có dùng được không?",
+    question: "Nhân viên và ekip thợ chụp có dùng được không?",
     answer:
-      "Có. Hệ thống có phân quyền owner, quản lý, lễ tân, photographer, makeup, retoucher, kế toán; kiểm tra quyền ở server, không chỉ ẩn nút.",
+      "Có. Hệ thống phân quyền chặt chẽ theo 8 vai trò (Chủ studio, Quản lý, Lễ tân/Sale, Thợ chụp, Makeup, Retoucher, Kế toán). Thợ chụp và makeup có thể đăng nhập bằng Mã NV + PIN ngay trên điện thoại để xem lịch và nhận thông báo ca chụp.",
   },
   {
-    question: "Dữ liệu của tôi có bảo mật không?",
+    question: "Dữ liệu studio của tôi có được bảo mật độc lập không?",
     answer:
-      "Bản demo chạy local với SQLite và session httpOnly. Production cần private storage, HTTPS, backup và cấu hình secret riêng; không dùng dữ liệu khách thật trong seed.",
+      "Tuyệt đối an toàn. Mỗi studio sở hữu một Không gian làm việc (Tenant Workspace) hoàn toàn biệt lập, dữ liệu khách hàng và doanh thu của bạn không bao giờ bị trùng lặp hoặc nhìn thấy bởi các studio khác.",
   },
   {
-    question: "PhotoShare hoạt động thế nào?",
+    question: "PhotoShare giao ảnh online hoạt động thế nào?",
     answer:
-      "Studio tạo album, gửi link có token/mật khẩu/hạn dùng cho khách. Khách thả tim, chọn ảnh và ghi chú; studio nhận selection, lọc file gốc theo mã và xuất ZIP kèm manifest.",
+      "Bạn tạo album cho khách hàng, gửi link kèm mật khẩu riêng. Khách mở trên điện thoại, thả tim ảnh yêu thích. Hệ thống tự động tổng hợp mã ảnh đã chọn để studio tải file lọc về máy xử lý hậu kỳ chỉ trong vài giây.",
   },
   {
-    question: "Hỗ trợ liên hệ ở đâu?",
+    question: "Tôi cần hỗ trợ tư vấn và triển khai thì liên hệ ở đâu?",
     answer:
-      "Dùng form liên hệ trên website hoặc thông tin demo ở footer. Đây là môi trường demo, không có tổng đài thật.",
-  },
-  {
-    question: "Dùng trên điện thoại được không?",
-    answer:
-      "Có. Landing, PhotoShare và các màn hình vận hành chính được kiểm tra ở 375–1440px; bảng dữ liệu cho phép cuộn ngang trên mobile.",
-  },
-  {
-    question: "Sau thời gian dùng thử thì sao?",
-    answer:
-      "Bạn có thể chọn gói phù hợp hoặc dừng dùng. Bản demo hiện chưa có thanh toán thật; đội ngũ sẽ tư vấn thủ công.",
+      "Bạn có thể gọi trực tiếp Hotline/Zalo: 0976 181 859 hoặc email samstudio.hn@gmail.com để được đội ngũ kỹ thuật hỗ trợ cài đặt và chuyển đổi dữ liệu từ file Excel cũ sang hệ thống hoàn toàn miễn phí.",
   },
 ];
 

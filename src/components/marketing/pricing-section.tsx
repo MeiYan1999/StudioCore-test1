@@ -40,7 +40,7 @@ export function PricingSection({ showComparison = true }: { showComparison?: boo
         </div>
       </div>
       <p className="mt-2 text-center text-xs text-muted-foreground">
-        Giá demo tham khảo, chưa phải báo giá chính thức.
+        Bảng giá minh bạch — Miễn phí 30 ngày trải nghiệm đầy đủ tính năng — Tiết kiệm 20% khi thanh toán 12 tháng.
       </p>
 
       <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">

@@ -25,12 +25,11 @@ export default async function ContactPage({
         <div className="mx-auto max-w-[1240px] px-4 py-12 sm:px-6 lg:px-8 lg:py-16">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Liên hệ</p>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
-            Trao đổi về studio của bạn.
+            Liên hệ tư vấn giải pháp Studio.
           </h1>
           <p className="mt-3 max-w-2xl text-sm leading-7 text-muted-foreground">
-            Cho StudioCore biết quy mô studio, số chi nhánh và vấn đề đang gặp. Yêu
-            cầu được lưu trong bảng contact_requests của bản demo; chưa có email
-            provider thật nên không gửi email tự động.
+            Cho StudioCore biết quy mô studio, số chi nhánh và nhu cầu vận hành của bạn.
+            Chuyên viên tư vấn sẽ liên hệ lại nhanh chóng để hỗ trợ tư vấn và demo giải pháp.
           </p>
         </div>
       </section>
@@ -39,7 +38,7 @@ export default async function ContactPage({
           <h2 className="text-xl font-semibold">Gửi yêu cầu tư vấn</h2>
           {plan ? (
             <p className="mt-2 rounded-lg bg-accent px-3 py-2 text-sm text-accent-foreground">
-              Bạn đang quan tâm gói <strong>{plan}</strong>. Giá trên website là giá demo.
+              Bạn đang quan tâm gói <strong>{plan}</strong>.
             </p>
           ) : null}
           <div className="mt-4">
@@ -48,15 +47,15 @@ export default async function ContactPage({
         </section>
         <aside className="space-y-4">
           <section className="rounded-xl border border-border bg-surface p-5 text-sm">
-            <h2 className="text-lg font-semibold">Thông tin demo</h2>
+            <h2 className="text-lg font-semibold">Kênh hỗ trợ trực tiếp</h2>
             <dl className="mt-3 space-y-2 text-muted-foreground">
+              <div>
+                <dt className="text-xs font-medium uppercase tracking-wide">Hotline / Zalo</dt>
+                <dd><a href={`tel:${MARKETING_CONTACT.phone.replace(/\s/g, "")}`} className="text-base font-semibold text-primary hover:underline">{MARKETING_CONTACT.phone}</a></dd>
+              </div>
               <div>
                 <dt className="text-xs font-medium uppercase tracking-wide">Email</dt>
                 <dd><a href={`mailto:${MARKETING_CONTACT.email}`} className="text-primary hover:underline">{MARKETING_CONTACT.email}</a></dd>
-              </div>
-              <div>
-                <dt className="text-xs font-medium uppercase tracking-wide">Điện thoại</dt>
-                <dd><a href={`tel:${MARKETING_CONTACT.phone.replace(/\s/g, "")}`} className="text-primary hover:underline">{MARKETING_CONTACT.phone}</a></dd>
               </div>
               <div>
                 <dt className="text-xs font-medium uppercase tracking-wide">Địa chỉ</dt>
