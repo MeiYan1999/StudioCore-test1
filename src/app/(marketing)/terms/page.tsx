@@ -1,66 +1,60 @@
 import { marketingMetadata } from "@/lib/marketing/metadata";
 
 export const metadata = marketingMetadata({
-  title: "Điều khoản sử dụng — StudioCore (demo)",
+  title: "Điều khoản sử dụng — StudioCore",
   description:
-    "Điều khoản sử dụng bản demo StudioCore: phạm vi demo, tài khoản, dữ liệu, thanh toán và giới hạn trách nhiệm.",
+    "Điều khoản sử dụng nền tảng phần mềm SaaS quản lý studio chụp ảnh & áo cưới StudioCore.",
   path: "/terms",
 });
 
 const SECTIONS = [
   {
-    title: "1. Phạm vi và tính chất demo",
+    title: "1. Phạm vi dịch vụ",
     paragraphs: [
-      "StudioCore trong kho mã này là sản phẩm demo phục vụ phát triển và kiểm thử. Một số tích hợp như Google Drive live, email, Zalo, SMS, Fanpage và thanh toán thật chưa được cấu hình hoặc chưa được kiểm chứng.",
-      "Tài liệu này là nội dung mẫu cho môi trường demo, không phải tư vấn pháp lý và không thay thế hợp đồng chính thức giữa các bên.",
+      "StudioCore là nền tảng SaaS (Software as a Service) cung cấp các giải pháp công nghệ toàn diện cho studio ảnh cưới, studio gia đình & bé, nhiếp ảnh gia và các đơn vị cung cấp dịch vụ trang phục cưới tại Việt Nam.",
+      "Dịch vụ bao gồm: Hệ thống quản trị quan hệ khách hàng (CRM), quản lý đơn hàng & hợp đồng điện tử ký tay, điều phối lịch chụp chống trùng, quản lý kho váy cưới & đạo cụ qua mã QR, nền tảng giao ảnh trực tuyến PhotoShare Zero-Storage và phân hệ báo cáo tài chính, thuế hộ kinh doanh.",
     ],
   },
   {
     title: "2. Tài khoản và trách nhiệm người dùng",
     paragraphs: [
-      "Bạn chịu trách nhiệm bảo vệ thông tin đăng nhập, PIN và thiết bị truy cập. Không chia sẻ tài khoản owner cho người không có trách nhiệm.",
-      "Bạn cần có quyền hợp pháp đối với dữ liệu khách hàng và ảnh tải lên. Không sử dụng demo để lưu PII thật, ảnh người thật hoặc dữ liệu nhạy cảm.",
+      "Khách hàng (Chủ studio hoặc người đại diện được ủy quyền) chịu trách nhiệm bảo mật thông tin tài khoản, mật khẩu quản trị và mã PIN của nhân sự trong studio. Mọi hoạt động phát sinh dưới tài khoản của bạn sẽ thuộc trách nhiệm của bạn.",
+      "Bạn cam kết cung cấp thông tin trung thực, chính xác khi đăng ký tài khoản và chỉ cấp quyền truy cập hệ thống cho nhân sự hợp pháp của studio theo các vai trò phân quyền (Manager, Sale, Photo, Makeup, Kế toán).",
     ],
   },
   {
-    title: "3. Dữ liệu demo",
+    title: "3. Quyền sở hữu dữ liệu",
     paragraphs: [
-      "Seed data gồm khách hàng, số điện thoại, studio, nhà cung cấp và tài khoản ngân hàng hư cấu. Ảnh trong album demo là ảnh synthetic có nhãn, không phải ảnh khách hàng thật.",
-      "Bạn có thể đặt lại database demo bằng quy trình migrate/seed. Việc reset sẽ xóa dữ liệu phát sinh trong môi trường local.",
+      "Bạn giữ toàn bộ quyền sở hữu trí tuệ và quyền tài sản đối với toàn bộ dữ liệu bạn đưa vào hệ thống, bao gồm danh sách khách hàng, thông tin đơn hàng, số đo trang phục, bảng giá dịch vụ và các tệp hình ảnh lưu trữ.",
+      "StudioCore cam kết không bán, không thương mại hóa, không tiết lộ dữ liệu của khách hàng cho bất kỳ bên thứ ba nào, trừ khi có yêu cầu bằng văn bản từ cơ quan pháp luật có thẩm quyền theo quy định của pháp luật Việt Nam.",
     ],
   },
   {
-    title: "4. Thanh toán và giá",
+    title: "4. Gói cước và thanh toán",
     paragraphs: [
-      "Giá gói cước trên website là giá demo, chưa phải báo giá chính thức. Mock webhook chỉ hoạt động trong development và không xử lý tiền thật.",
-      "Payment request, hóa đơn và báo cáo thuế trong demo không thay thế chứng từ kế toán hay tờ khai thuế hợp pháp.",
+      "StudioCore cung cấp chương trình dùng thử miễn phí 30 ngày với đầy đủ tính năng để khách hàng trải nghiệm thực tế. Hết thời gian dùng thử, khách hàng có thể lựa chọn đăng ký một trong các gói dịch vụ (Cơ bản, Pro, Doanh nghiệp) theo biểu phí niêm yết trên website.",
+      "Chi phí dịch vụ được thanh toán định kỳ theo chu kỳ 1 tháng, 6 tháng, 12 tháng hoặc theo thỏa thuận hợp đồng dịch vụ. Khi thanh toán thành công, hệ thống sẽ tự động gia hạn thời hạn sử dụng tương ứng.",
     ],
   },
   {
-    title: "5. Sử dụng được chấp nhận",
+    title: "5. Cam kết chất lượng dịch vụ (SLA)",
     paragraphs: [
-      "Không dùng hệ thống để gửi spam, tấn công, dò quét trái phép, xâm phạm dữ liệu người khác hoặc vượt qua kiểm tra phân quyền.",
-      "Không tải lên mã độc, tệp thực thi không rõ nguồn gốc hoặc nội dung vi phạm quyền sở hữu trí tuệ.",
+      "StudioCore nỗ lực duy trì tính sẵn sàng của hệ thống với mục tiêu thời gian hoạt động (uptime) đạt tối thiểu 99.9%. Hệ thống được sao lưu dữ liệu tự động định kỳ hàng ngày để phòng ngừa rủi ro gián đoạn.",
+      "Trong trường hợp cần bảo trì định kỳ, nâng cấp hạ tầng hoặc cập nhật tính năng mới, chúng tôi sẽ thông báo trước qua email hoặc bảng tin thông báo trên ứng dụng.",
     ],
   },
   {
-    title: "6. Sở hữu trí tuệ",
+    title: "6. Quy định sử dụng và giới hạn trách nhiệm",
     paragraphs: [
-      "Branding, giao diện và mã nguồn StudioCore thuộc dự án demo này. Không sao chép nội dung, logo hoặc asset độc quyền của bên thứ ba.",
-      "Ảnh do người dùng tải lên vẫn thuộc quyền của người dùng; bạn cấp cho hệ thống quyền xử lý cần thiết để tạo thumbnail/preview và phục vụ luồng album.",
+      "Người dùng không được sử dụng StudioCore vào các mục đích vi phạm pháp luật, truyền bá mã độc, tấn công từ chối dịch vụ hoặc cố ý can thiệp vào tính toàn vẹn của hệ thống.",
+      "StudioCore không chịu trách nhiệm đối với các tranh chấp phát sinh giữa studio và khách hàng của studio liên quan đến chất lượng sản phẩm chụp ảnh, tranh chấp tiền cọc hoặc thỏa thuận dân sự ngoài phạm vi phần mềm.",
     ],
   },
   {
-    title: "7. Giới hạn trách nhiệm",
+    title: "7. Hỗ trợ khách hàng và điều chỉnh điều khoản",
     paragraphs: [
-      "Demo được cung cấp “nguyên trạng” cho mục đích học tập/kiểm thử. Không có cam kết về tính sẵn sàng, khả năng chịu tải production hoặc phù hợp cho một mục đích cụ thể.",
-      "Trước khi dùng production, cần rà soát bảo mật, backup, lưu trữ private, pháp lý dữ liệu và các tích hợp thật.",
-    ],
-  },
-  {
-    title: "8. Liên hệ và cập nhật",
-    paragraphs: [
-      "Câu hỏi về điều khoản có thể gửi qua trang /contact. Nội dung có thể được cập nhật khi sản phẩm thay đổi; phiên bản mới sẽ hiển thị trên trang này.",
+      "Đội ngũ hỗ trợ kỹ thuật và chăm sóc khách hàng của StudioCore phục vụ qua Hotline / Zalo: 0976 181 859 và Email: samstudio.hn@gmail.com từ 08:30 đến 21:00 hàng ngày.",
+      "StudioCore có quyền điều chỉnh các điều khoản này để phù hợp với định hướng phát triển sản phẩm và quy định pháp luật. Nội dung cập nhật sẽ được thông báo công khai trên website.",
     ],
   },
 ];
@@ -71,9 +65,9 @@ export default function TermsPage() {
       <section className="border-b border-border bg-surface">
         <div className="mx-auto max-w-[920px] px-4 py-12 sm:px-6 lg:px-8 lg:py-16">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Pháp lý</p>
-          <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Điều khoản sử dụng</h1>
+          <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Điều khoản dịch vụ</h1>
           <p className="mt-3 text-sm text-muted-foreground">
-            Cập nhật: 03/11/2026 · Tài liệu mẫu cho bản demo, không thay thế tư vấn pháp lý.
+            Áp dụng từ: 01/11/2026 · Nền tảng quản lý Studio chụp ảnh &amp; Áo cưới StudioCore.
           </p>
         </div>
       </section>

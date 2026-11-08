@@ -58,8 +58,7 @@ export function ContactForm({ source = "contact" }: { source?: string }) {
         />
       </div>
       <p className="text-xs text-muted-foreground">
-        Yêu cầu được lưu trong bảng contact_requests của bản demo; chưa có email
-        provider thật nên không gửi email tự động.
+        Thông tin của bạn được cam kết bảo mật. Chuyên viên tư vấn StudioCore sẽ liên hệ lại trong vòng 15 phút qua Zalo / Số điện thoại.
       </p>
       <Button type="submit" className="w-full sm:w-auto" disabled={pending}>
         {pending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Send className="h-4 w-4" aria-hidden />}

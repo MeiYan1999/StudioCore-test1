@@ -4,8 +4,8 @@ import { ResetPasswordForm, ResetRequestForm } from "@/components/auth/reset-for
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "Đặt lại mật khẩu",
-  description: "Tạo liên kết đặt lại mật khẩu StudioCore bằng local adapter demo.",
+  title: "Đặt lại mật khẩu — StudioCore",
+  description: "Khôi phục mật khẩu tài khoản quản trị và nhân sự StudioCore.",
   robots: { index: false, follow: false },
 };
 
@@ -28,7 +28,7 @@ export default async function ResetPasswordPage({
         <p className="mt-1 text-sm text-muted-foreground">
           {token
             ? "Token chỉ dùng một lần, hết hạn sau 30 phút và sẽ thu hồi các phiên đăng nhập cũ."
-            : "Nhập email tài khoản để tạo token đặt lại thật. Demo không gửi email giả."}
+            : "Nhập email tài khoản đã đăng ký để nhận liên kết khôi phục mật khẩu an toàn."}
         </p>
       </div>
       <div className="rounded-xl border border-border bg-surface p-5 shadow-sm sm:p-6">

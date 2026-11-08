@@ -116,7 +116,7 @@ export function MarketingHeader() {
                   onClick={() => setMobileOpen(false)}
                   className="block rounded-lg border border-border px-3 py-2.5 text-center text-sm font-medium"
                 >
-                  Xem demo chỉ xem
+                  Xem trải nghiệm thực tế
                 </Link>
               </nav>
             </SheetContent>

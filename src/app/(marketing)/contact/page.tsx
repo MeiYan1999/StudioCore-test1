@@ -6,7 +6,7 @@ import { marketingMetadata } from "@/lib/marketing/metadata";
 export const metadata = marketingMetadata({
   title: "Liên hệ tư vấn StudioCore",
   description:
-    "Gửi yêu cầu tư vấn StudioCore: quản lý studio, CRM, lịch chụp, PhotoShare và tài chính. Form lưu yêu cầu trong hệ thống demo.",
+    "Gửi yêu cầu tư vấn StudioCore: giải pháp quản lý studio toàn diện, CRM, lịch chụp, PhotoShare và tài chính.",
   path: "/contact",
 });
 
@@ -29,7 +29,7 @@ export default async function ContactPage({
           </h1>
           <p className="mt-3 max-w-2xl text-sm leading-7 text-muted-foreground">
             Cho StudioCore biết quy mô studio, số chi nhánh và nhu cầu vận hành của bạn.
-            Chuyên viên tư vấn sẽ liên hệ lại nhanh chóng để hỗ trợ tư vấn và demo giải pháp.
+            Chuyên viên tư vấn sẽ liên hệ lại nhanh chóng để hỗ trợ tư vấn và giới thiệu giải pháp phù hợp nhất.
           </p>
         </div>
       </section>
@@ -65,22 +65,20 @@ export default async function ContactPage({
             <p className="mt-3 text-xs text-muted-foreground">{MARKETING_CONTACT.note}</p>
           </section>
           <section className="rounded-xl border border-border bg-surface p-5 text-sm">
-            <h2 className="text-lg font-semibold">Tự xem trước</h2>
+            <h2 className="text-lg font-semibold">Trải nghiệm trực tiếp</h2>
             <p className="mt-2 text-muted-foreground">
-              Demo read-only mở dashboard với dữ liệu synthetic; mọi thao tác ghi
-              bị chặn ở server. Đăng ký để tạo tenant riêng.
+              Bạn có thể xem trước giao diện ứng dụng hoặc đăng ký tài khoản dùng thử 30 ngày hoàn toàn miễn phí cho studio của mình.
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
-              <Link href="/demo" className="font-medium text-primary hover:underline">Mở demo</Link>
-              <Link href="/register" className="font-medium text-primary hover:underline">Đăng ký</Link>
-              <Link href="/guide" className="font-medium text-primary hover:underline">Hướng dẫn</Link>
+              <Link href="/demo" className="font-medium text-primary hover:underline">Xem trải nghiệm</Link>
+              <Link href="/register" className="font-medium text-primary hover:underline">Đăng ký dùng thử</Link>
+              <Link href="/guide" className="font-medium text-primary hover:underline">Hướng dẫn sử dụng</Link>
             </div>
           </section>
           <section className="rounded-xl border border-border bg-surface p-5 text-sm text-muted-foreground">
-            <h2 className="text-lg font-semibold text-foreground">Bảo mật dữ liệu</h2>
+            <h2 className="text-lg font-semibold text-foreground">Cam kết an toàn dữ liệu</h2>
             <p className="mt-2">
-              Không nhập PII thật vào bản demo. Dữ liệu trong seed là hư cấu; ảnh
-              demo là synthetic có nhãn. Xem thêm{" "}
+              Toàn bộ dữ liệu khách hàng, hình ảnh, hợp đồng và thông tin tài chính của studio được mã hóa và bảo mật nhiều lớp. Xem thêm{" "}
               <Link href="/privacy" className="text-primary hover:underline">chính sách bảo mật</Link>.
             </p>
           </section>

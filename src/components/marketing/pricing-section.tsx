@@ -93,7 +93,7 @@ export function PricingSection({ showComparison = true }: { showComparison?: boo
       {showComparison ? (
         <div className="mt-8 overflow-x-auto rounded-2xl border border-border bg-surface">
           <table className="w-full min-w-[720px] text-sm">
-            <caption className="sr-only">So sánh gói StudioCore (giá demo)</caption>
+            <caption className="sr-only">So sánh chi tiết các gói tính năng StudioCore</caption>
             <thead className="bg-surface-muted">
               <tr>
                 <th scope="col" className="px-4 py-3 text-left text-xs uppercase tracking-wide text-muted-foreground">

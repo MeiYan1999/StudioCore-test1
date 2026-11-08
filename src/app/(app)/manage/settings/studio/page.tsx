@@ -94,10 +94,9 @@ export default async function StudioSettingsPage() {
             </ul>
           </section>
           <section className="rounded-xl border border-border bg-surface p-4 text-xs text-muted-foreground">
-            <h2 className="text-base font-semibold text-foreground">Lưu ý</h2>
+            <h2 className="text-base font-semibold text-foreground">Thanh toán VietQR</h2>
             <p className="mt-2">
-              Tài khoản ngân hàng trong seed là demo, không dùng chuyển khoản thật.
-              VietQR được tạo từ BIN/tài khoản đã lưu và validate trước khi render.
+              Vui lòng cấu hình đúng số tài khoản ngân hàng và mã BIN ngân hàng của studio để mã VietQR trên hợp đồng và hóa đơn thanh toán chuẩn xác.
             </p>
           </section>
         </aside>

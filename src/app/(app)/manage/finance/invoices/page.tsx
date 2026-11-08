@@ -140,7 +140,7 @@ export default async function InvoicesPage({
     <div>
       <PageHeader
         title="Hóa đơn"
-        description="Hóa đơn demo có VAT, trạng thái phát hành/đã thu/hủy và bản in tiếng Việt."
+        description="Hóa đơn dịch vụ có VAT, trạng thái phát hành/đã thu/hủy và bản in chuẩn tiếng Việt."
         actions={
           <>
             <Button asChild variant="outline" size="sm">

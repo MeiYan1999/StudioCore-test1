@@ -29,7 +29,7 @@ export default async function NewAlbumPage() {
     <div>
       <PageHeader
         title="Tạo album ảnh"
-        description="Chọn nguồn ảnh, thông tin khách và quota chọn ảnh. Album demo dùng ảnh synthetic có nhãn."
+        description="Chọn nguồn ảnh, thông tin khách hàng và cấu hình quota chọn ảnh PhotoShare."
         actions={
           <Button asChild variant="outline">
             <Link href="/manage/photos">

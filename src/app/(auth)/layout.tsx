@@ -48,7 +48,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
             </p>
             <p className="flex items-center gap-3">
               <span className="h-1.5 w-1.5 rounded-full bg-primary-foreground" />
-              Dữ liệu demo thuần Việt, chạy local-first
+              Hỗ trợ kỹ thuật 24/7 qua Hotline 0976 181 859
             </p>
           </div>
         </div>

@@ -84,14 +84,13 @@ export default async function BlogPostPage({
           ))}
         </div>
         <div className="mt-10 rounded-2xl border border-primary/30 bg-accent p-5">
-          <h2 className="text-lg font-semibold">Muốn xem các bước này trong app?</h2>
+          <h2 className="text-lg font-semibold">Muốn trải nghiệm những quy trình này trên studio của bạn?</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Mở demo read-only hoặc tạo tenant trial. Dữ liệu demo là synthetic và
-            mọi thao tác ghi trong demo đều bị chặn.
+            Đăng ký dùng thử StudioCore miễn phí 30 ngày với đầy đủ tính năng. Thiết lập nhanh chóng chỉ trong 30 giây, không cần thẻ tín dụng.
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
-            <Button asChild><Link href="/demo">Mở demo</Link></Button>
-            <Button asChild variant="outline"><Link href="/register">Đăng ký dùng thử</Link></Button>
+            <Button asChild><Link href="/register">Dùng thử 30 ngày</Link></Button>
+            <Button asChild variant="outline"><Link href="/demo">Xem trải nghiệm thực tế</Link></Button>
           </div>
         </div>
 

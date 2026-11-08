@@ -47,7 +47,7 @@ function PasswordLoginForm() {
             name="email"
             type="email"
             autoComplete="username"
-            placeholder="owner@studiocore.demo"
+            placeholder="admin@studio.vn"
             defaultValue={state.values?.email ?? ""}
             aria-invalid={Boolean(state.fieldErrors?.email)}
             aria-describedby={state.fieldErrors?.email ? "email-error" : undefined}
@@ -122,7 +122,7 @@ function PinLoginForm() {
             id="code"
             name="code"
             autoComplete="username"
-            placeholder="SC-OWNER"
+            placeholder="NV01"
             defaultValue={state.values?.code ?? ""}
             aria-invalid={Boolean(state.fieldErrors?.code)}
             aria-describedby={state.fieldErrors?.code ? "code-error" : undefined}

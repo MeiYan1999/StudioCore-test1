@@ -293,7 +293,7 @@ export default async function AlbumsPage({
           <EmptyState
             icon={<Images className="h-6 w-6" aria-hidden />}
             title="Chưa có album nào"
-            description="Tạo album từ Drive demo hoặc tải thư mục/ZIP để bắt đầu PhotoShare."
+            description="Tạo album từ Google Drive hoặc tải thư mục/ZIP để bắt đầu PhotoShare."
             action={
               canManage ? (
                 <Button asChild>

@@ -61,23 +61,23 @@ const GUIDE_SECTIONS = [
     id: "photoshare",
     title: "PhotoShare & lọc ảnh",
     intro:
-      "Tạo album, gửi link cho khách và nhận selection. Không cần đối chiếu tên file thủ công.",
+      "Tạo album trực tuyến, gửi link bảo mật cho khách hàng và nhận mã ảnh khách đã chọn tự động.",
     steps: [
-      "Tạo album từ Drive demo, nhiều link hoặc upload; đặt quota và phí ảnh thêm.",
-      "Gửi link, khách thả tim/chọn/ghi chú; studio khóa selection khi cần.",
-      "Copy mã 4 định dạng hoặc mở trang lọc mã; xuất ZIP + manifest.csv.",
-      "Dùng missing.txt để kiểm tra file không khớp trước khi giao.",
+      "Tạo album từ Google Drive, NAS hoặc tải lên trực tiếp; cấu hình quota và phụ phí ảnh thêm.",
+      "Gửi link cho khách xem trên điện thoại, khách thả tim và ghi chú ảnh cần sửa.",
+      "Sao chép danh sách mã ảnh hoặc mở công cụ lọc file RAW tự động trên máy tính.",
+      "Xuất file ZIP kèm danh sách manifest để bàn giao cho khách hàng nhanh chóng.",
     ],
   },
   {
     id: "tai-chinh",
     title: "Tài chính & báo cáo",
     intro:
-      "Sổ quỹ append-only giúp giữ audit. Công nợ, hóa đơn, lương và báo cáo dùng cùng nguồn giao dịch.",
+      "Sổ quỹ thu chi minh bạch. Quản lý công nợ, in hóa đơn, tự động tính hoa hồng nhân sự và báo cáo thuế HKD.",
     steps: [
-      "Ghi thu/chi đúng category và chi nhánh; hoàn tiền là bút toán riêng.",
-      "Đối soát công nợ theo tuổi nợ trước khi nhắc thu.",
-      "Tạo hóa đơn, bảng lương và báo cáo; xuất CSV hoặc in khi cần.",
+      "Ghi thu/chi đúng danh mục và chi nhánh; hỗ trợ tạo mã VietQR thanh toán nhiều đợt.",
+      "Theo dõi tuổi nợ khách hàng để nhắc thu đúng lịch hẹn.",
+      "Tự động tính hoa hồng thợ chụp, makeup, photoshop và xuất bảng lương nhân viên.",
     ],
   },
 ];
@@ -87,20 +87,20 @@ export default function GuidePage() {
     <>
       <section className="border-b border-border bg-surface">
         <div className="mx-auto max-w-[1240px] px-4 py-14 sm:px-6 lg:px-8 lg:py-18">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Guide</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Hướng dẫn</p>
           <h1 className="mt-3 text-4xl font-semibold tracking-tight sm:text-5xl">
             Hướng dẫn sử dụng StudioCore.
           </h1>
           <p className="mt-4 max-w-2xl text-base leading-7 text-muted-foreground">
-            Các hướng dẫn ngắn, thực tế theo luồng vận hành studio. Nếu bạn mới bắt
-            đầu, hãy đọc phần Bắt đầu trước rồi mở demo read-only để xem dữ liệu mẫu.
+            Các hướng dẫn trực quan, thực tế theo từng bước vận hành studio hàng ngày.
+            Bắt đầu thiết lập studio của bạn hoặc khám phá ngay giao diện ứng dụng.
           </p>
           <div className="mt-5 flex flex-wrap gap-2">
             <Button asChild>
-              <Link href="/demo">Mở demo read-only</Link>
+              <Link href="/register">Đăng ký dùng thử 30 ngày</Link>
             </Button>
             <Button asChild variant="outline">
-              <Link href="/register">Tạo tài khoản</Link>
+              <Link href="/demo">Xem trải nghiệm thực tế</Link>
             </Button>
           </div>
         </div>
@@ -143,14 +143,13 @@ export default function GuidePage() {
           </section>
         ))}
         <section className="rounded-2xl border border-primary/30 bg-accent p-6">
-          <h2 className="text-xl font-semibold">Cần xem trực tiếp?</h2>
+          <h2 className="text-xl font-semibold">Sẵn sàng tối ưu vận hành Studio?</h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            Demo read-only mở dashboard với dữ liệu synthetic và chặn mọi thao tác
-            ghi ở server. Bạn có thể đăng ký tenant riêng khi sẵn sàng.
+            Đăng ký dùng thử 30 ngày hoàn toàn miễn phí. Đội ngũ chuyên viên StudioCore luôn sẵn sàng hỗ trợ bạn thiết lập và số hóa toàn bộ quy trình.
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
-            <Button asChild><Link href="/demo">Mở demo</Link></Button>
-            <Button asChild variant="outline"><Link href="/contact">Liên hệ hỗ trợ</Link></Button>
+            <Button asChild><Link href="/register">Bắt đầu dùng thử</Link></Button>
+            <Button asChild variant="outline"><Link href="/contact">Liên hệ tư vấn 1-1</Link></Button>
           </div>
         </section>
       </div>

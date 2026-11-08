@@ -13,12 +13,10 @@ export function MarketingFooter() {
             <span className="text-base font-semibold">StudioCore</span>
           </div>
           <p className="mt-3 text-sm leading-6 text-muted-foreground">
-            Nền tảng quản lý studio chụp ảnh: CRM, đơn hàng, lịch chụp, PhotoShare
-            và tài chính. Bản demo dùng dữ liệu synthetic.
+            Nền tảng quản lý studio chụp ảnh &amp; áo cưới hàng đầu Việt Nam: CRM, đơn hàng, lịch chụp, hợp đồng số, PhotoShare và quản trị tài chính toàn diện.
           </p>
           <p className="mt-3 text-xs text-muted-foreground">
-            © 2026 StudioCore. Sản phẩm demo, không phải thông tin pháp lý của
-            StudioBase hay bên thứ ba.
+            © 2026 StudioCore. Bản quyền thuộc về StudioCore. Hotline hỗ trợ: {MARKETING_CONTACT.phone}.
           </p>
         </div>
         <div>
@@ -28,7 +26,7 @@ export function MarketingFooter() {
             <li><Link href="/crm-studio-chup-anh" className="hover:text-primary">CRM studio</Link></li>
             <li><Link href="/#features" className="hover:text-primary">Tính năng</Link></li>
             <li><Link href="/pricing" className="hover:text-primary">Bảng giá</Link></li>
-            <li><Link href="/demo" className="hover:text-primary">Demo read-only</Link></li>
+            <li><Link href="/demo" className="hover:text-primary">Xem trải nghiệm</Link></li>
           </ul>
         </div>
         <div>

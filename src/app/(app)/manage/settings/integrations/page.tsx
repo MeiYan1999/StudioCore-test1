@@ -190,7 +190,7 @@ export default async function IntegrationsPage({
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
                 <HardDrive className="h-4 w-4 text-primary" aria-hidden />
-                Local demo Drive
+                Lưu trữ cục bộ / Local Storage
               </h2>
               <Badge tone="success">
                 <CheckCircle2 className="h-3 w-3" aria-hidden />
@@ -198,12 +198,10 @@ export default async function IntegrationsPage({
               </Badge>
             </div>
             <p className="mt-2 text-sm text-muted-foreground">
-              Adapter local đọc <code>demo-data/drive/demo-folder-1</code> với 3
-              thư mục con và 12 ảnh synthetic. Đây là nguồn mặc định để thử
-              PhotoShare mà không cần OAuth.
+              Lưu trữ trực tiếp trên máy chủ hoặc thư mục nội bộ. Phù hợp cho việc tải lên trực tiếp và xử lý ảnh nhanh mà không cần liên kết tài khoản đám mây.
             </p>
             <Button asChild variant="outline" size="sm" className="mt-3">
-              <Link href="/manage/photos/albums/new">Tạo album từ Drive demo</Link>
+              <Link href="/manage/photos/albums/new">Tạo album ảnh mới</Link>
             </Button>
           </section>
 

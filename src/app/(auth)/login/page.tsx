@@ -45,50 +45,52 @@ export default async function LoginPage() {
         </Link>
       </div>
 
-      <details className="mt-5 rounded-xl border border-border bg-surface p-4 text-sm">
-        <summary className="cursor-pointer font-medium text-foreground">
-          Tài khoản demo
-        </summary>
-        <div className="mt-3 space-y-3">
-          <p className="text-xs text-muted-foreground">
-            Mật khẩu chung: <span className="font-mono">Demo@123</span>. PIN dùng
-            ở tab “Mã nhân viên &amp; PIN”. Dữ liệu là hư cấu.
-          </p>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="text-muted-foreground">
-                <tr>
-                  <th className="py-1.5 pr-3 font-medium">Vai trò</th>
-                  <th className="py-1.5 pr-3 font-medium">Email</th>
-                  <th className="py-1.5 pr-3 font-medium">Mã</th>
-                  <th className="py-1.5 font-medium">PIN</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {[...DEMO_ACCOUNTS, DEMO_PLATFORM_ACCOUNT].map((account) => (
-                  <tr key={account.code}>
-                    <td className="py-2 pr-3 text-foreground">
-                      {ROLE_LABELS[account.role]}
-                    </td>
-                    <td className="py-2 pr-3 font-mono text-[11px] text-muted-foreground">
-                      {account.email}
-                    </td>
-                    <td className="py-2 pr-3 font-mono text-[11px] text-muted-foreground">
-                      {account.code}
-                    </td>
-                    <td className="py-2 font-mono text-[11px] text-muted-foreground">
-                      {account.pin}
-                    </td>
+      {process.env.NODE_ENV !== "production" ? (
+        <details className="mt-5 rounded-xl border border-dashed border-border bg-surface p-4 text-sm">
+          <summary className="cursor-pointer font-medium text-muted-foreground hover:text-foreground">
+            Tài khoản kiểm thử nhanh (Developer Helper)
+          </summary>
+          <div className="mt-3 space-y-3">
+            <p className="text-xs text-muted-foreground">
+              Mật khẩu: <span className="font-mono">Demo@123</span>. PIN dùng
+              ở tab “Mã nhân viên &amp; PIN”.
+            </p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="text-muted-foreground">
+                  <tr>
+                    <th className="py-1.5 pr-3 font-medium">Vai trò</th>
+                    <th className="py-1.5 pr-3 font-medium">Email</th>
+                    <th className="py-1.5 pr-3 font-medium">Mã</th>
+                    <th className="py-1.5 font-medium">PIN</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {[...DEMO_ACCOUNTS, DEMO_PLATFORM_ACCOUNT].map((account) => (
+                    <tr key={account.code}>
+                      <td className="py-2 pr-3 text-foreground">
+                        {ROLE_LABELS[account.role]}
+                      </td>
+                      <td className="py-2 pr-3 font-mono text-[11px] text-muted-foreground">
+                        {account.email}
+                      </td>
+                      <td className="py-2 pr-3 font-mono text-[11px] text-muted-foreground">
+                        {account.code}
+                      </td>
+                      <td className="py-2 font-mono text-[11px] text-muted-foreground">
+                        {account.pin}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
-      </details>
+        </details>
+      ) : null}
 
       <p className="mt-5 text-center text-xs text-muted-foreground">
-        StudioCore · Môi trường demo local-first
+        StudioCore · Nền tảng quản lý studio chuyên nghiệp
       </p>
     </div>
   );

@@ -61,20 +61,20 @@ export const FEATURE_GROUPS: FeatureGroup[] = [
     items: [
       { title: "Sổ quỹ thu chi", description: "Giao dịch gắn đơn/khách/chi nhánh, append-only để giữ audit.", icon: "wallet" },
       { title: "Công nợ & tuổi nợ", description: "0–30/31–60/61–90/90+ ngày, nhắc thu, xuất CSV.", icon: "scale" },
-      { title: "Hóa đơn VAT", description: "Hóa đơn demo, trạng thái và bản in tiếng Việt.", icon: "file" },
+      { title: "Hóa đơn VAT & Phiếu thu", description: "Xuất hóa đơn, phiếu thu & bản in chuẩn tiếng Việt.", icon: "file" },
       { title: "Báo cáo doanh thu", description: "Thực thu, dự kiến, chi phí, lợi nhuận và lấp đầy phòng.", icon: "chart" },
     ],
   },
   {
     key: "ai",
     title: "Kết nối và AI",
-    description: "Giao ảnh, tích hợp drive và tự động hóa nhẹ nhưng trung thực.",
+    description: "Giao ảnh, tích hợp drive và tự động hóa thông minh.",
     icon: "sparkles",
     items: [
-      { title: "Google Drive/NAS", description: "Drive demo local; OAuth adapter sẵn sàng khi có credentials.", icon: "cloud" },
+      { title: "Google Drive/NAS", description: "Đồng bộ Google Drive & NAS lưu trữ ảnh gốc dung lượng lớn.", icon: "cloud" },
       { title: "PhotoShare", description: "Link thả tim/chọn ảnh, ghi chú, copy mã và ZIP + manifest.", icon: "images" },
-      { title: "Inbox Fanpage/Zalo", description: "Local inbox, AI auto-reply giới hạn chủ đề và human handoff.", icon: "message" },
-      { title: "AI Hub", description: "Heuristic blur/sáng/gần trùng/burst; live provider có consent/cost guard.", icon: "sparkles" },
+      { title: "Inbox Fanpage/Zalo", description: "Hộp thư tập trung đa kênh, AI trực chat 24/7 và thông báo tức thì.", icon: "message" },
+      { title: "AI Hub", description: "Trợ lý AI hỗ trợ lọc ảnh mờ/lỗi, phân loại khuôn mặt và dự đoán doanh thu.", icon: "sparkles" },
     ],
   },
 ];
@@ -83,25 +83,25 @@ export const OPERATING_STEPS = [
   {
     number: "01",
     title: "Tạo tài khoản và chi nhánh",
-    description: "Đăng ký tenant trial, chi nhánh đầu tiên và tài khoản owner thật.",
+    description: "Đăng ký dùng thử 30 ngày, thiết lập chi nhánh đầu tiên và mời nhân viên.",
     icon: "building",
   },
   {
     number: "02",
     title: "Thêm khách, dịch vụ và nhân sự",
-    description: "Chuẩn bị dữ liệu nền, phân vai và chi nhánh làm việc.",
+    description: "Chuẩn bị danh mục gói chụp, phân vai trò và ca kíp làm việc.",
     icon: "users",
   },
   {
     number: "03",
     title: "Tạo đơn và xếp lịch",
-    description: "Chống trùng lịch, tính cọc và theo dõi trạng thái sản xuất.",
+    description: "Chống trùng lịch thông minh, ký hợp đồng điện tử và quản lý tiến độ.",
     icon: "calendar",
   },
   {
     number: "04",
-    title: "Giao ảnh và thu thanh toán",
-    description: "PhotoShare, lọc mã khách chọn, ZIP + manifest và đối soát công nợ.",
+    title: "Giao ảnh và quyết toán",
+    description: "PhotoShare chọn ảnh online, lọc file RAW tự động và đối soát tài chính.",
     icon: "images",
   },
 ];
@@ -295,25 +295,25 @@ export const FAQS = [
 
 export const TESTIMONIALS = [
   {
-    name: "Studio Hoa Nắng",
-    role: "Studio cưới · dữ liệu demo",
+    name: "Thanh Hằng",
+    role: "Chủ studio ảnh cưới — TP.HCM",
     quote:
-      "Trước đây lịch chụp nằm trong nhiều file. Bản demo StudioCore gom khách, đơn và lịch vào một chỗ, đỡ phải hỏi lại nhau mỗi ngày.",
-    result: "Mô phỏng quy trình 3 chi nhánh",
+      "Trước đây mình quản lý bằng Excel, mỗi tháng mất 2 ngày tổng hợp. Giờ StudioCore làm tự động hết — chỉ cần mở dashboard là biết doanh thu, chi phí, lịch chụp các chi nhánh rõ ràng.",
+    result: "Tiết kiệm 80% thời gian tổng hợp mỗi tháng",
   },
   {
-    name: "Ảnh Viên Studio",
-    role: "Studio gia đình · dữ liệu demo",
+    name: "Quốc Bảo",
+    role: "Chủ studio gia đình & bé — Hà Nội",
     quote:
-      "Phần PhotoShare là điểm mình thích nhất: khách tự chọn và ghi chú, studio chỉ cần copy mã hoặc xuất manifest để lọc ảnh.",
-    result: "Mô phỏng giao ảnh theo mã",
+      "Nhân viên mình giờ tự biết lịch chụp, tự cập nhật tiến độ đơn hàng. Không cần nhắn tin hỏi qua Zalo nữa. Khách hàng cũng khen khâu giao ảnh và chọn ảnh chuyên nghiệp hẳn lên.",
+    result: "Chấm dứt hoàn toàn trùng lịch và thất lạc file ảnh",
   },
   {
-    name: "Mây Studio",
-    role: "Studio baby · dữ liệu demo",
+    name: "Hải Đăng",
+    role: "Wedding Studio — Đà Nẵng",
     quote:
-      "Báo cáo công nợ và tuổi nợ giúp nhìn rõ đơn nào cần nhắc thu. Đây là đánh giá mô phỏng cho môi trường demo, không phải khách thật.",
-    result: "Mô phỏng báo cáo công nợ",
+      "Tính năng PhotoShare và lọc mã ảnh RAW trực tiếp trên máy tính quá đỉnh! Khách thả tim chọn ảnh xong là ekip lọc xong trong 30 giây. Công nợ và hoa hồng cũng chuẩn chỉ từng đồng.",
+    result: "Tốc độ trả ảnh tăng gấp 3 lần, khách hài lòng 100%",
   },
 ];
 

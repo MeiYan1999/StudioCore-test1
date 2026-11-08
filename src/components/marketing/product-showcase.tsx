@@ -63,13 +63,13 @@ export function ProductShowcase() {
       ) : null}
       <div className="mt-4 flex flex-wrap justify-center gap-2">
         <Button asChild>
-          <Link href="/demo">
-            Mở demo chỉ xem — không cần đăng ký
+          <Link href="/register">
+            Dùng thử miễn phí 30 ngày
             <ArrowRight className="h-4 w-4" aria-hidden />
           </Link>
         </Button>
         <Button asChild variant="outline">
-          <Link href="/register">Dùng thử miễn phí</Link>
+          <Link href="/demo">Xem trải nghiệm thực tế</Link>
         </Button>
       </div>
     </div>

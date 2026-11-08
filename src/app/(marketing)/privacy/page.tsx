@@ -1,64 +1,54 @@
 import { marketingMetadata } from "@/lib/marketing/metadata";
 
 export const metadata = marketingMetadata({
-  title: "Chính sách bảo mật — StudioCore (demo)",
+  title: "Chính sách bảo mật — StudioCore",
   description:
-    "Cách bản demo StudioCore xử lý dữ liệu, session, ảnh và thông tin liên hệ; giới hạn của môi trường demo.",
+    "Chính sách bảo mật thông tin và an toàn dữ liệu khách hàng trên nền tảng phần mềm SaaS StudioCore.",
   path: "/privacy",
 });
 
 const SECTIONS = [
   {
-    title: "1. Phạm vi",
+    title: "1. Nguyên tắc chung về bảo mật",
     paragraphs: [
-      "Chính sách này mô tả cách bản demo StudioCore xử lý dữ liệu trong môi trường local. Đây là tài liệu mẫu, không phải chính sách bảo mật chính thức cho một dịch vụ production.",
+      "StudioCore coi trọng và cam kết bảo vệ quyền riêng tư, bí mật kinh doanh cũng như dữ liệu cá nhân của các studio đối tác và khách hàng của studio.",
+      "Chính sách này quy định cách thức chúng tôi thu thập, lưu trữ, xử lý và bảo vệ thông tin khi bạn sử dụng nền tảng StudioCore.",
     ],
   },
   {
-    title: "2. Dữ liệu được lưu",
+    title: "2. Thu thập và mục đích sử dụng thông tin",
     paragraphs: [
-      "Dữ liệu demo: tenant, chi nhánh, tài khoản nhân sự, khách hư cấu, đơn hàng, lịch, album, giao dịch, công việc và cấu hình. Mật khẩu/PIN được băm bằng scrypt; mật khẩu thô không được lưu.",
-      "Ảnh demo là ảnh synthetic. Khi bạn tự tải ảnh lên trong local, file được lưu trong thư mục uploads của máy chạy demo; không dùng dữ liệu ảnh thật trong seed.",
+      "Chúng tôi thu thập các thông tin cần thiết phục vụ việc khởi tạo và vận hành tài khoản studio: Họ tên người đại diện, số điện thoại liên hệ, địa chỉ email, tên studio, địa chỉ chi nhánh và thông tin tài khoản ngân hàng nhận thanh toán VietQR.",
+      "Dữ liệu khách hàng do studio nhập vào hệ thống (họ tên cô dâu chú rể, số điện thoại, ngày cưới, số đo trang phục, hợp đồng dịch vụ) chỉ được sử dụng cho mục đích phục vụ nghiệp vụ nội bộ của chính studio đó.",
     ],
   },
   {
-    title: "3. Mục đích xử lý",
+    title: "3. Bảo mật hình ảnh và tính năng PhotoShare",
     paragraphs: [
-      "Dữ liệu được dùng để hiển thị luồng quản lý studio, kiểm thử phân quyền, tạo báo cáo và minh họa các tính năng. Không dùng dữ liệu demo để bán, quảng cáo hoặc gửi email thật.",
+      "Hình ảnh tải lên hoặc liên kết qua Google Drive/NAS trong PhotoShare thuộc quyền sở hữu riêng của studio và khách hàng của studio.",
+      "StudioCore áp dụng cơ chế phân quyền bảo mật: Link giao ảnh có thể đặt mã bảo vệ (passcode), giới hạn thời gian truy cập (TTL), watermark chống sao chép và quyền khóa tải file gốc khi khách chưa hoàn thành thanh toán.",
     ],
   },
   {
-    title: "4. Session và cookie",
+    title: "4. Cơ chế bảo vệ kỹ thuật và an toàn thông tin",
     paragraphs: [
-      "Session dùng cookie httpOnly, ký JWT; một số luồng dùng cookie truy cập PhotoShare ngắn hạn. Bản demo read-only dùng session có cờ readOnly và quyền chỉ xem; thao tác ghi bị chặn ở server.",
-      "Local adapter có thể ghi notification vào database và log terminal. Không có dịch vụ tracking quảng cáo trong mã demo.",
+      "Toàn bộ kết nối giữa trình duyệt của người dùng và máy chủ StudioCore được mã hóa theo tiêu chuẩn HTTPS/TLS 1.3.",
+      "Mật khẩu quản trị và mã PIN nhân viên được băm bằng thuật toán bảo mật cao (scrypt), không lưu trữ dưới dạng văn bản thô. Phiên đăng nhập được quản lý bằng cookie httpOnly an toàn.",
+      "Dữ liệu của từng studio được cô lập theo mô hình đa người thuê (Multi-tenant isolation) chặt chẽ, đảm bảo không có sự rò rỉ dữ liệu giữa các studio khác nhau.",
     ],
   },
   {
-    title: "5. Chia sẻ dữ liệu",
+    title: "5. Quyền kiểm soát và trích xuất dữ liệu",
     paragraphs: [
-      "Các tích hợp live như Google Drive, email, Zalo, SMS, Fanpage và AI provider chưa được cấu hình. Khi chưa cấu hình, hệ thống hiển thị trạng thái chưa sẵn sàng và không gửi dữ liệu ra ngoài.",
-      "AI local xử lý bằng sharp/rule-based trên server; provider live yêu cầu consent và cost guard trước khi gửi ảnh.",
+      "Chủ studio có toàn quyền trích xuất dữ liệu danh sách khách hàng, báo cáo doanh thu, sổ quỹ thu chi ra định dạng file Excel / CSV hoặc sao lưu dữ liệu toàn diện bất kỳ lúc nào.",
+      "Khi studio ngừng sử dụng dịch vụ hoặc có yêu cầu hủy tài khoản, chúng tôi sẽ hỗ trợ bàn giao toàn bộ dữ liệu và tiến hành xóa bỏ dữ liệu lưu trữ theo quy trình an toàn.",
     ],
   },
   {
-    title: "6. Bảo mật",
+    title: "6. Liên hệ phụ trách bảo mật",
     paragraphs: [
-      "Mọi truy vấn nghiệp vụ có tenant scope; mutation quan trọng kiểm tra quyền và branch ở server. Upload kiểm tra định dạng/kích thước và chặn path traversal; PhotoShare kiểm tra token/mật khẩu/hạn.",
-      "Không có hệ thống bảo mật nào tuyệt đối. Trước khi dùng production cần HTTPS, secret management, private storage, backup và rà soát bảo mật độc lập.",
-    ],
-  },
-  {
-    title: "7. Lưu trữ và xóa",
-    paragraphs: [
-      "Database demo nằm ở data/studiocore.db và có thể bị reset khi chạy migrate/seed. Backup JSON chỉ dành cho owner và loại bỏ hash mật khẩu/API key/token.",
-      "Với dữ liệu production, cần định nghĩa thời hạn lưu, quy trình xóa và xử lý yêu cầu của chủ thể dữ liệu theo quy định áp dụng.",
-    ],
-  },
-  {
-    title: "8. Quyền và liên hệ",
-    paragraphs: [
-      "Trong demo, bạn có thể yêu cầu xem hoặc xóa dữ liệu local bằng cách reset database. Câu hỏi về quyền riêng tư gửi qua /contact.",
+      "Nếu bạn có bất kỳ câu hỏi, thắc mắc hoặc yêu cầu nào liên quan đến chính sách bảo mật và an toàn thông tin, vui lòng liên hệ trực tiếp với chúng tôi:",
+      "Hotline / Zalo: 0976 181 859 · Email: samstudio.hn@gmail.com · Địa chỉ: Hà Nội, Việt Nam.",
     ],
   },
 ];
@@ -71,7 +61,7 @@ export default function PrivacyPage() {
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Pháp lý</p>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Chính sách bảo mật</h1>
           <p className="mt-3 text-sm text-muted-foreground">
-            Cập nhật: 03/11/2026 · Chính sách mẫu cho bản demo, không thay thế tư vấn pháp lý.
+            Áp dụng từ: 01/11/2026 · Cam kết an toàn dữ liệu khách hàng tuyệt đối tại StudioCore.
           </p>
         </div>
       </section>

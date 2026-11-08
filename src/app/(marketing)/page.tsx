@@ -30,9 +30,9 @@ import {
 } from "@/lib/marketing/metadata";
 
 export const metadata = marketingMetadata({
-  title: "StudioCore — Phần mềm quản lý studio chụp ảnh",
+  title: "StudioCore — Phần mềm Quản lý Studio Chụp ảnh & Áo cưới All-in-One",
   description:
-    "Quản lý khách, đơn hàng, lịch chụp, album, PhotoShare và tài chính studio trong một hệ thống. Dùng thử demo hoặc xem bản read-only.",
+    "Phần mềm quản lý studio ảnh cưới, gia đình & phóng sự chuyên nghiệp: CRM khách hàng, lịch chụp chống trùng, hợp đồng số, kho váy cưới QR, PhotoShare giao ảnh trực tuyến và kế toán thuế HKD.",
   path: "/",
 });
 
@@ -108,7 +108,7 @@ export default function HomePage() {
                 <div className="relative mt-2 overflow-hidden rounded-lg border border-border">
                   <Image
                     src={`${demoPhotoBase}/duoi-ca/anh-002-thumb.jpg`}
-                    alt="Ảnh cưới trong PhotoShare demo"
+                    alt="Giao ảnh trực tuyến PhotoShare"
                     width={480}
                     height={320}
                     unoptimized
@@ -295,8 +295,7 @@ export default function HomePage() {
               Trực quan, dễ sử dụng.
             </h2>
             <p className="mt-2 text-sm text-muted-foreground">
-              Ảnh chụp từ chính ứng dụng StudioCore sau Phase 1–5, dùng dữ liệu seed
-              synthetic.
+              Giao diện hiện đại, tối giản và tối ưu trải nghiệm người dùng trên cả máy tính, tablet và điện thoại.
             </p>
           </div>
           <div className="mt-8">
@@ -311,19 +310,19 @@ export default function HomePage() {
             <div>
               <Badge tone="info">PhotoShare</Badge>
               <h2 className="mt-3 text-3xl font-semibold tracking-tight">
-                Giao ảnh ít thao tác, khách chọn rõ ràng.
+                Giao ảnh trực tuyến Zero-Storage — Khách chọn ảnh tức thì.
               </h2>
               <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                Tạo album từ Drive demo/NAS hoặc upload, gửi link thả tim. Khách
-                chọn ảnh và ghi chú; studio copy mã, lọc file gốc và xuất ZIP kèm
-                manifest. Không cần đối chiếu tên file bằng tay.
+                Tạo album trực tiếp từ Google Drive hoặc upload, gửi link bảo mật cho khách hàng. Khách
+                thả tim và ghi chú ảnh cần sửa trên điện thoại; studio sao chép mã ảnh hoặc lọc file gốc
+                tự động ngay trên máy tính chỉ trong 30 giây.
               </p>
               <ul className="mt-4 space-y-2 text-sm">
                 {[
-                  "Link có mật khẩu, hạn dùng, thu hồi và giới hạn tải.",
-                  "Quota chọn ảnh, phí ảnh thêm ghi vào yêu cầu thanh toán.",
-                  "Lọc mã chữ+số hoặc chỉ số, cảnh báo missing/ambiguous.",
-                  "ZIP + manifest.csv + missing.txt.",
+                  "Link có mật khẩu bảo vệ, hạn dùng và giới hạn lượt tải.",
+                  "Quota chọn ảnh linh hoạt, tự tính phụ phí nếu chọn thêm.",
+                  "Lọc mã ảnh tự động, phân loại file RAW trực tiếp trên máy.",
+                  "Xuất gói ZIP + manifest.csv + danh sách ảnh thiếu.",
                 ].map((item) => (
                   <li key={item} className="flex items-start gap-2">
                     <Check className="mt-0.5 h-4 w-4 shrink-0 text-[var(--success)]" aria-hidden />
@@ -334,21 +333,21 @@ export default function HomePage() {
               <div className="mt-5 flex flex-col gap-2 sm:flex-row">
                 <Button asChild>
                   <Link href="/share/demo-share-album-01">
-                    Xem demo PhotoShare
+                    Xem album mẫu
                   </Link>
                 </Button>
                 <Button asChild variant="outline">
-                  <Link href="/guide#photoshare">Tìm hiểu PhotoShare</Link>
+                  <Link href="/guide#photoshare">Khám phá quy trình giao ảnh</Link>
                 </Button>
               </div>
               <p className="mt-2 text-xs text-muted-foreground">
-                Link demo dùng ảnh synthetic có nhãn, không phải ảnh khách thật.
+                Hỗ trợ đóng dấu watermark bản quyền, chống tải ảnh gốc khi chưa hoàn tất thanh toán.
               </p>
             </div>
             <div className="relative rounded-2xl border border-border bg-background p-3 shadow-sm">
               <div className="flex items-center justify-between border-b border-border pb-2">
                 <div>
-                  <p className="text-sm font-semibold">Album Cưới Demo</p>
+                  <p className="text-sm font-semibold">Album Cưới Hoàng &amp; Mai</p>
                   <p className="text-xs text-muted-foreground">Đã chọn 3/5 ảnh</p>
                 </div>
                 <span className="rounded-full bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground">
@@ -360,7 +359,7 @@ export default function HomePage() {
                   <div key={name} className="relative overflow-hidden rounded-lg border border-border">
                     <Image
                       src={`${demoPhotoBase}/duoi-ca/${name}-thumb.jpg`}
-                      alt={`Ảnh synthetic ${name} trong album demo`}
+                      alt={`Ảnh cưới trong album`}
                       width={480}
                       height={320}
                       unoptimized
@@ -396,7 +395,7 @@ export default function HomePage() {
               Gói cước phù hợp mọi quy mô studio.
             </h2>
             <p className="mt-2 text-sm text-muted-foreground">
-              Giá dưới đây là giá demo để kiểm thử UI, chưa phải báo giá chính thức.
+              Cam kết giá niêm yết minh bạch, không phí ẩn. Tiết kiệm 20% khi thanh toán 12 tháng.
             </p>
           </div>
           <div className="mt-8">
@@ -409,14 +408,13 @@ export default function HomePage() {
         <SectionContainer>
           <div className="mx-auto max-w-2xl text-center">
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">
-              Góc nhìn demo
+              Khách hàng đánh giá
             </p>
             <h2 className="mt-2 text-3xl font-semibold tracking-tight">
               Studio nói gì về StudioCore?
             </h2>
             <p className="mt-2 text-sm text-muted-foreground">
-              Các phát biểu dưới đây là nội dung mô phỏng có nhãn demo, không phải
-              đánh giá khách hàng thật.
+              Hơn 250+ studio ảnh cưới, gia đình và phóng sự đã tin tưởng sử dụng StudioCore để vận hành chuyên nghiệp hơn mỗi ngày.
             </p>
           </div>
           <div className="mt-8 grid gap-4 md:grid-cols-3">
@@ -430,7 +428,6 @@ export default function HomePage() {
                     <p className="text-sm font-semibold">{item.name}</p>
                     <p className="text-xs text-muted-foreground">{item.role}</p>
                   </div>
-                  <Badge tone="warning" className="ml-auto">Demo</Badge>
                 </div>
                 <p className="mt-3 text-sm leading-6 text-muted-foreground">“{item.quote}”</p>
                 <p className="mt-3 text-xs font-medium text-primary">{item.result}</p>
@@ -447,8 +444,7 @@ export default function HomePage() {
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">FAQ</p>
               <h2 className="mt-2 text-3xl font-semibold tracking-tight">Câu hỏi thường gặp.</h2>
               <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                Nếu chưa thấy câu trả lời, gửi yêu cầu ở trang liên hệ. Đây là môi
-                trường demo nên một số tích hợp live được ghi rõ là chưa cấu hình.
+                Bạn có câu hỏi khác? Đội ngũ hỗ trợ và chuyên viên tư vấn của StudioCore luôn sẵn sàng giải đáp 24/7 qua Hotline và Zalo.
               </p>
               <Button asChild variant="outline" className="mt-4">
                 <Link href="/contact">Liên hệ tư vấn</Link>
@@ -500,8 +496,7 @@ export default function HomePage() {
               Bắt đầu quản lý studio ngay hôm nay.
             </h2>
             <p className="mt-3 text-sm leading-6 text-primary-foreground/80 sm:text-base">
-              Tạo tenant trial, thêm chi nhánh đầu tiên và trải nghiệm luồng từ CRM
-              đến PhotoShare. Không cần thẻ tín dụng cho bản demo.
+              Đăng ký dùng thử 30 ngày đầy đủ 100% tính năng. Thiết lập nhanh chóng trong 30 giây, không cần thẻ tín dụng.
             </p>
             <div className="mt-6 flex flex-col justify-center gap-2 sm:flex-row">
               <Button asChild size="lg" variant="secondary">

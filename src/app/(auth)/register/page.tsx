@@ -6,9 +6,9 @@ import { RegisterForm } from "@/components/auth/register-form";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "Đăng ký dùng thử",
+  title: "Đăng ký dùng thử 30 ngày — StudioCore",
   description:
-    "Tạo studio demo trên StudioCore: quản lý khách, đơn, lịch chụp, album và tài chính.",
+    "Đăng ký tài khoản StudioCore — Trải nghiệm miễn phí 30 ngày giải pháp quản lý Studio ảnh cưới & sự kiện chuyên nghiệp.",
   robots: { index: true, follow: true },
 };
 
@@ -21,21 +21,28 @@ export default async function RegisterPage() {
     <div>
       <div className="mb-6">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">
-          Bắt đầu trong vài phút
+          Bắt đầu trong 30 giây
         </p>
         <h1 className="mt-2 text-2xl font-semibold leading-8 text-foreground">
           Đăng ký dùng thử StudioCore
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Tạo tenant, chi nhánh đầu tiên và tài khoản owner thật trong một giao
-          dịch. Gói trial, không cần thẻ.
+          Khởi tạo studio, thiết lập chi nhánh đầu tiên và bắt đầu dùng thử 30 ngày miễn phí. Không cần thẻ tín dụng.
         </p>
       </div>
       <div className="rounded-xl border border-border bg-surface p-5 shadow-sm sm:p-6">
         <RegisterForm />
       </div>
       <p className="mt-4 text-center text-xs text-muted-foreground">
-        Bằng việc đăng ký, dữ liệu demo được tạo trong môi trường local của bạn.{" "}
+        Bằng việc đăng ký, bạn đồng ý với{" "}
+        <Link href="/terms" className="text-primary hover:underline">
+          Điều khoản
+        </Link>{" "}
+        &amp;{" "}
+        <Link href="/privacy" className="text-primary hover:underline">
+          Chính sách bảo mật
+        </Link>{" "}
+        của StudioCore.{" "}
         <Link href="/" className="text-primary hover:underline">
           Về trang chủ
         </Link>

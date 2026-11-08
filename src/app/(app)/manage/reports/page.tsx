@@ -324,12 +324,12 @@ export default async function ReportsPage({
             </tbody>
           </table>
           <p className="mt-2 text-xs text-muted-foreground">
-            Tỷ lệ chốt = đơn tạo trong kỳ / khách do nhân sự phụ trách (demo).
+            Tỷ lệ chốt = đơn tạo trong kỳ / khách do nhân sự phụ trách.
           </p>
         </section>
 
         <section className="rounded-xl border border-border bg-surface p-4">
-          <h2 className="text-base font-semibold">Công nợ & thuế demo</h2>
+          <h2 className="text-base font-semibold">Công nợ &amp; Thuế (HKD)</h2>
           <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
             {Object.entries(debts.buckets).map(([bucket, amount]) => (
               <div key={bucket} className="rounded-lg bg-surface-muted p-2">

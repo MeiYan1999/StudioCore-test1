@@ -31,15 +31,15 @@ export function SolutionTemplate({
           <div className="mt-6 flex flex-col gap-2 sm:flex-row">
             <Button asChild size="lg">
               <Link href="/register">
-                Dùng thử miễn phí
+                Dùng thử 30 ngày miễn phí
                 <ArrowRight className="h-4 w-4" aria-hidden />
               </Link>
             </Button>
             <Button asChild size="lg" variant="outline">
-              <Link href="/demo">Xem demo read-only</Link>
+              <Link href="/pricing">Xem bảng giá</Link>
             </Button>
             <Button asChild size="lg" variant="ghost">
-              <Link href="/pricing">Xem bảng giá</Link>
+              <Link href="/contact">Liên hệ tư vấn</Link>
             </Button>
           </div>
         </div>
@@ -103,14 +103,13 @@ export function SolutionTemplate({
 
       <section className="bg-primary py-14 text-primary-foreground sm:py-18">
         <div className="mx-auto max-w-[1240px] px-4 text-center sm:px-6 lg:px-8">
-          <h2 className="text-3xl font-semibold">{data.title} — bắt đầu từ dữ liệu thật.</h2>
+          <h2 className="text-3xl font-semibold">{data.title} — Bứt phá vận hành ngay hôm nay.</h2>
           <p className="mx-auto mt-3 max-w-2xl text-sm text-primary-foreground/80">
-            Tạo tenant trial hoặc mở bản demo read-only. Không cần thẻ tín dụng,
-            không dùng dữ liệu khách thật trong seed.
+            Đăng ký dùng thử 30 ngày hoàn toàn miễn phí. Đội ngũ StudioCore hỗ trợ chuyển đổi dữ liệu và hướng dẫn trực tiếp cho ekip của bạn.
           </p>
           <div className="mt-6 flex flex-col justify-center gap-2 sm:flex-row">
             <Button asChild size="lg" variant="secondary">
-              <Link href="/register">Tạo tài khoản</Link>
+              <Link href="/register">Bắt đầu dùng thử</Link>
             </Button>
             <Button asChild size="lg" variant="outline" className="border-white/40 bg-transparent text-white hover:bg-white/10">
               <Link href="/contact">Liên hệ tư vấn</Link>

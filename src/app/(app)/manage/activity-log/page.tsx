@@ -99,7 +99,7 @@ export default async function ActivityLogPage({
             <Button asChild variant="outline" size="sm">
               <a href="/api/exports/demo-backup">
                 <Download className="h-4 w-4" aria-hidden />
-                Backup demo JSON
+                Sao lưu dữ liệu JSON
               </a>
             </Button>
           ) : null
@@ -176,8 +176,8 @@ export default async function ActivityLogPage({
         </div>
       ) : null}
       {canBackup ? (
-        <Badge tone="warning" className="mt-4">
-          Backup JSON chỉ chứa dữ liệu demo của tenant hiện tại; không gồm hash mật khẩu/API key/token.
+        <Badge tone="info" className="mt-4">
+          File sao lưu JSON chứa toàn bộ cấu hình, khách hàng, đơn hàng và sổ quỹ của studio; không gồm hash mật khẩu/API key/token.
         </Badge>
       ) : null}
     </div>

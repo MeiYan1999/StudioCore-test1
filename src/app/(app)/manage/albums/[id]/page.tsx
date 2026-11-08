@@ -145,14 +145,9 @@ export default async function AlbumDetailPage({
         </Alert>
       ) : null}
 
-      {album.id === "album-demo-01" ? (
+      {album.id === "album-demo-01" && process.env.NODE_ENV !== "production" ? (
         <Alert tone="warning" className="mb-4">
-          <strong>Đây là album demo.</strong> Ảnh được sinh synthetic có nhãn,
-          không dùng ảnh hay PII thật. Storage hiện là{" "}
-          {storage.demoPublic
-            ? "local demo tại /public/uploads"
-            : storage.provider.toUpperCase()}
-          .
+          <strong>Album mẫu:</strong> Ảnh thử nghiệm sinh mẫu phục vụ kiểm tra tính năng PhotoShare.
         </Alert>
       ) : null}
 

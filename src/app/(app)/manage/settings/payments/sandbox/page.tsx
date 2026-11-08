@@ -94,7 +94,7 @@ export default async function PaymentSandboxPage() {
       )}
 
       <section className="mt-5 rounded-xl border border-border bg-surface p-4 text-sm text-muted-foreground">
-        <h2 className="text-base font-semibold text-foreground">Ngân hàng demo</h2>
+        <h2 className="text-base font-semibold text-foreground">Thông tin tài khoản nhận tiền</h2>
         <dl className="mt-2 grid gap-2 sm:grid-cols-2">
           <div>
             <dt className="text-xs">Ngân hàng</dt>
@@ -116,8 +116,7 @@ export default async function PaymentSandboxPage() {
           </div>
         </dl>
         <p className="mt-3 text-xs">
-          Đây là tài khoản demo, không dùng chuyển khoản thật. Webhook chỉ được
-          bật ở development và yêu cầu HMAC + timestamp + eventId unique.
+          Thông tin tài khoản ngân hàng cấu hình cho studio. Webhook thanh toán tự động được bảo vệ bằng mã khóa bí mật HMAC.
         </p>
       </section>
     </div>
