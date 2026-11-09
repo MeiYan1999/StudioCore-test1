@@ -125,7 +125,7 @@ class AgentClient {
   }
 
   async register() {
-    return this.sendRequest("/api/drive/agent", "POST", {
+    const res = await this.sendRequest("/api/drive/agent", "POST", {
       action: "register",
       connectKey: this.config.connectKey,
       agentInfo: {
@@ -136,6 +136,38 @@ class AgentClient {
         activeSharesCount: this.config.shares.length,
       },
     });
+    this.syncShares().catch(() => {});
+    return res;
+  }
+
+  async syncShares() {
+    if (!Array.isArray(this.config.shares) || this.config.shares.length === 0) return;
+    for (const s of this.config.shares) {
+      if (!s.localPath || !fs.existsSync(s.localPath)) continue;
+      try {
+        const scan = scanFolder(s.localPath);
+        await this.sendRequest("/api/drive/agent", "POST", {
+          action: "create_share",
+          connectKey: this.config.connectKey,
+          agentInfo: {
+            hostname: this.config.hostname,
+          },
+          shareData: {
+            id: s.id,
+            title: s.title || scan.title,
+            subtitle: `Thư mục trên máy ${this.config.hostname}`,
+            type: s.type || scan.type,
+            localPath: scan.localPath,
+            items: scan.items,
+            totalSizeBytes: scan.totalSizeBytes,
+            totalSizeLabel: scan.totalSizeLabel,
+            videoMeta: scan.videoMeta,
+          },
+        });
+      } catch {
+        // Ignore offline sync errors
+      }
+    }
   }
 
   async createShare(folderPath, type = null) {
@@ -190,6 +222,9 @@ class AgentClient {
     if (res && res.success) {
       if (res.publicUrl && res.publicUrl.includes("localhost") && !this.config.serverUrl.includes("localhost")) {
         res.publicUrl = publicUrl;
+      }
+      if (res.publicUrl && res.publicUrl.includes("studiocore.io.vn") && !res.publicUrl.includes("www.studiocore.io.vn")) {
+        res.publicUrl = res.publicUrl.replace("studiocore.io.vn", "www.studiocore.io.vn");
       }
       res.publicUrl = res.publicUrl || publicUrl;
       res.lanUrl = lanUrl;

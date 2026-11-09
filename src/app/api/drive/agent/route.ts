@@ -156,10 +156,14 @@ export async function POST(request: Request) {
         request.headers.get("x-forwarded-proto") ||
         (host?.includes("localhost") ? "http" : "https");
 
-      const origin =
+      let origin =
         process.env.NEXT_PUBLIC_APP_URL ||
         process.env.APP_URL ||
         (host ? `${proto}://${host}` : new URL(request.url).origin);
+
+      if (origin.includes("studiocore.io.vn") && !origin.includes("www.studiocore.io.vn")) {
+        origin = origin.replace("studiocore.io.vn", "www.studiocore.io.vn");
+      }
 
       return NextResponse.json({
         success: true,
