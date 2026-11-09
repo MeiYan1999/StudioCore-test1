@@ -14,6 +14,7 @@ import { SESSION_COOKIE } from "@/lib/auth/session";
 import { createSession, getAllowedBranches } from "@/lib/auth/session-core";
 import { writeAudit } from "@/lib/audit";
 import { getDb } from "@/lib/db/client";
+import { saveGoogleConnectionDirect } from "@/lib/services/drive-connection-service";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -147,6 +148,20 @@ export async function GET(request: Request): Promise<Response> {
     ip,
     userAgent,
   });
+
+  // Tự động kết nối Google Drive nếu có refreshToken và người dùng là Chủ Studio/Quản lý
+  if (tokens.refreshToken && isStudioOwnerOrManager(row.staff.role)) {
+    try {
+      saveGoogleConnectionDirect(
+        db,
+        row.tenant.id,
+        row.staff.id,
+        tokens.refreshToken,
+      );
+    } catch (err) {
+      console.warn("[Google Auth] Không thể tự động lưu kết nối Google Drive:", err);
+    }
+  }
 
   writeAudit(db, {
     tenantId: row.tenant.id,

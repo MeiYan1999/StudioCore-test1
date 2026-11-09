@@ -103,17 +103,31 @@ export async function verifyGoogleLoginStateToken(token: string): Promise<boolea
   }
 }
 
-export function buildGoogleLoginUrl(redirectUri: string, state: string): string {
+export function buildGoogleLoginUrl(
+  redirectUri: string,
+  state: string,
+  options?: { includeDrive?: boolean },
+): string {
   const config = getGoogleLoginConfig();
   if (!config.configured) {
     throw new ValidationError("Google OAuth chưa được cấu hình.");
   }
+  const includeDrive = options?.includeDrive ?? true;
+  const scopes = [
+    "openid",
+    "email",
+    "profile",
+    ...(includeDrive ? ["https://www.googleapis.com/auth/drive.readonly"] : []),
+  ];
+
   const params = new URLSearchParams({
     client_id: config.clientId,
     redirect_uri: redirectUri,
     response_type: "code",
-    scope: "openid email profile",
-    prompt: "select_account",
+    scope: scopes.join(" "),
+    access_type: "offline",
+    prompt: "consent select_account",
+    include_granted_scopes: "true",
     state,
   });
   return `${GOOGLE_AUTH_URL}?${params.toString()}`;
@@ -130,7 +144,7 @@ export type GoogleUserProfile = {
 export async function exchangeGoogleLoginCode(
   code: string,
   redirectUri: string,
-): Promise<{ accessToken: string; idToken?: string }> {
+): Promise<{ accessToken: string; refreshToken?: string; idToken?: string }> {
   const config = getGoogleLoginConfig();
   if (!config.configured) {
     throw new ValidationError("Google OAuth chưa được cấu hình.");
@@ -150,6 +164,7 @@ export async function exchangeGoogleLoginCode(
 
   const payload = (await response.json()) as {
     access_token?: string;
+    refresh_token?: string;
     id_token?: string;
     error?: string;
     error_description?: string;
@@ -163,6 +178,7 @@ export async function exchangeGoogleLoginCode(
 
   return {
     accessToken: payload.access_token,
+    refreshToken: payload.refresh_token,
     idToken: payload.id_token,
   };
 }

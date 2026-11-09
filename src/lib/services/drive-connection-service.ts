@@ -149,13 +149,13 @@ export function getGoogleConnection(db: AppDb, tenantId: string) {
   );
 }
 
-export function saveGoogleConnection(
+export function saveGoogleConnectionDirect(
   db: AppDb,
-  actor: ActorContext,
+  tenantId: string,
+  staffId: string,
   refreshToken: string,
 ): void {
-  assertPermission(actor, "integrations.manage");
-  const existing = getGoogleConnection(db, actor.tenantId);
+  const existing = getGoogleConnection(db, tenantId);
   const encrypted = encryptSecret(refreshToken);
   if (existing) {
     db.update(driveConnections)
@@ -170,7 +170,7 @@ export function saveGoogleConnection(
     db.insert(driveConnections)
       .values({
         id: crypto.randomUUID(),
-        tenantId: actor.tenantId,
+        tenantId,
         provider: "google",
         refreshTokenEncrypted: encrypted,
         status: "connected",
@@ -178,11 +178,20 @@ export function saveGoogleConnection(
       .run();
   }
   writeAudit(db, {
-    tenantId: actor.tenantId,
-    actorId: actor.staffId,
+    tenantId,
+    actorId: staffId,
     action: "integrations.google.connect",
     entity: "drive_connection",
   });
+}
+
+export function saveGoogleConnection(
+  db: AppDb,
+  actor: ActorContext,
+  refreshToken: string,
+): void {
+  assertPermission(actor, "integrations.manage");
+  saveGoogleConnectionDirect(db, actor.tenantId, actor.staffId, refreshToken);
 }
 
 export function disconnectGoogleConnection(
