@@ -162,12 +162,43 @@ export async function fetchGoogleUserProfile(
 
 export function findStaffByGoogleEmail(db: AppDb, email: string) {
   const normalized = email.trim().toLowerCase();
-  return db
+  const direct = db
     .select({ staff, tenant: tenants })
     .from(staff)
     .innerJoin(tenants, eq(staff.tenantId, tenants.id))
     .where(eq(staff.email, normalized))
     .get();
+
+  if (direct) {
+    return direct;
+  }
+
+  // Tự động liên kết email chính thức của Studio với tài khoản Chủ Studio
+  if (normalized === "samstudio.hn@gmail.com") {
+    const primaryOwner = db
+      .select({ staff, tenant: tenants })
+      .from(staff)
+      .innerJoin(tenants, eq(staff.tenantId, tenants.id))
+      .where(eq(staff.id, "staff-sc-owner"))
+      .get();
+
+    if (primaryOwner) {
+      db.update(staff)
+        .set({ email: normalized, updatedAt: new Date() })
+        .where(eq(staff.id, "staff-sc-owner"))
+        .run();
+
+      return {
+        ...primaryOwner,
+        staff: {
+          ...primaryOwner.staff,
+          email: normalized,
+        },
+      };
+    }
+  }
+
+  return null;
 }
 
 export function isStudioOwnerOrManager(role: Role): boolean {
