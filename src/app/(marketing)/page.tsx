@@ -17,6 +17,7 @@ import { PricingSection } from "@/components/marketing/pricing-section";
 import { FaqAccordion } from "@/components/marketing/faq-accordion";
 import { AmbientGlow } from "@/components/marketing/ambient-glow";
 import { SpotlightCard } from "@/components/marketing/spotlight-card";
+import { LiquidGlassCard } from "@/components/marketing/liquid-glass-card";
 import { InteractiveHeroPhotoShare } from "@/components/marketing/interactive-hero-photoshare";
 import { InteractivePhotoShareDemo } from "@/components/marketing/interactive-photoshare-showcase";
 import { FloatingContact } from "@/components/marketing/floating-contact";
@@ -126,18 +127,20 @@ export default function HomePage() {
               </ul>
             </div>
 
-            {/* Dashboard & Interactive Floating Widget */}
+            {/* Dashboard & Interactive Floating Widget with Apple Liquid Glass */}
             <div className="group relative mx-auto w-full max-w-xl">
-              <div className="overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl transition-all duration-500 group-hover:border-primary/40 group-hover:shadow-primary/10">
-                <Image
-                  src="/marketing/dashboard.jpg"
-                  alt="Màn hình dashboard thật của StudioCore với KPI doanh thu, lịch chụp và trạng thái đơn"
-                  width={1440}
-                  height={810}
-                  priority
-                  className="h-auto w-full transition-transform duration-700 group-hover:scale-[1.01]"
-                />
-              </div>
+              <LiquidGlassCard className="p-2 sm:p-2.5 shadow-2xl">
+                <div className="overflow-hidden rounded-xl border border-white/60 dark:border-white/10">
+                  <Image
+                    src="/marketing/dashboard.jpg"
+                    alt="Màn hình dashboard thật của StudioCore với KPI doanh thu, lịch chụp và trạng thái đơn"
+                    width={1440}
+                    height={810}
+                    priority
+                    className="h-auto w-full transition-transform duration-700 group-hover:scale-[1.01]"
+                  />
+                </div>
+              </LiquidGlassCard>
 
               {/* Floating Levitation PhotoShare Widget */}
               <InteractiveHeroPhotoShare demoPhotoBase={demoPhotoBase} />

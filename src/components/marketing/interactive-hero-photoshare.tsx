@@ -27,7 +27,7 @@ export function InteractiveHeroPhotoShare({ demoPhotoBase }: { demoPhotoBase: st
   };
 
   return (
-    <div className="absolute -bottom-6 -left-3 w-72 rounded-2xl border border-border/80 bg-surface/95 p-3.5 shadow-2xl backdrop-blur-md transition-all duration-300 hover:shadow-primary/10 sm:-left-6 animate-float">
+    <div className="liquid-glass absolute -bottom-6 -left-3 w-72 rounded-3xl p-4 shadow-2xl transition-all duration-300 hover:shadow-primary/20 sm:-left-6 animate-float">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5">
           <Badge tone="info" className="flex items-center gap-1">

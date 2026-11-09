@@ -46,8 +46,10 @@ export function MarketingHeader() {
   return (
     <header
       className={cn(
-        "sticky top-0 z-40 border-b border-transparent bg-surface/95 backdrop-blur transition-shadow",
-        scrolled && "border-border shadow-sm",
+        "sticky top-0 z-40 transition-all duration-300",
+        scrolled
+          ? "border-b border-white/60 bg-surface/80 backdrop-blur-2xl shadow-sm shadow-black/[0.03] dark:border-white/10 dark:bg-surface/70"
+          : "border-b border-transparent bg-surface/60 backdrop-blur-lg",
       )}
     >
       <div className="mx-auto flex h-16 w-full max-w-[1240px] items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">

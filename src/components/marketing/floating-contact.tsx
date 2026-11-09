@@ -26,7 +26,7 @@ export function FloatingContact() {
   return (
     <aside
       aria-label="Liên hệ hỗ trợ nhanh"
-      className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-full border border-border/80 bg-surface/95 p-1.5 shadow-2xl backdrop-blur-md transition-all duration-300 hover:shadow-primary/20 animate-in fade-in slide-in-from-bottom-5"
+      className="liquid-glass fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-full p-1.5 shadow-2xl transition-all duration-300 hover:shadow-primary/25 animate-in fade-in slide-in-from-bottom-5"
     >
       <a
         href={`tel:${MARKETING_CONTACT.phone.replace(/\s/g, "")}`}

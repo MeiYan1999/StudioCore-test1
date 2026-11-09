@@ -45,8 +45,8 @@ export function InteractivePhotoShareDemo({ demoPhotoBase }: { demoPhotoBase: st
   };
 
   return (
-    <div className="relative rounded-2xl border border-border bg-background p-4 shadow-xl transition-all hover:shadow-2xl sm:p-5">
-      <div className="flex items-center justify-between border-b border-border pb-3">
+    <div className="liquid-glass-card p-5 sm:p-6 shadow-2xl">
+      <div className="flex items-center justify-between border-b border-border/60 pb-3.5">
         <div>
           <div className="flex items-center gap-2">
             <span className="font-semibold text-foreground">Album Cưới Hoàng &amp; Mai</span>
