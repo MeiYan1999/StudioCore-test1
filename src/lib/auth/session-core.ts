@@ -6,13 +6,22 @@ import { branches, rolePermissions, sessions, staff, staffBranches, tenants } fr
 import type { ActorBranch, ActorContext } from "./types";
 import { PERMISSIONS, type Role } from "./roles";
 import { AuthorizationError } from "../errors";
+import { triggerDbBackupDebounced } from "../db/r2-backup";
 
 function getSecret(): Uint8Array {
   return new TextEncoder().encode(getEnv().AUTH_SECRET);
 }
 
-export async function signSessionToken(sessionId: string, expiresAt: Date): Promise<string> {
-  return new SignJWT({ sid: sessionId })
+export async function signSessionToken(
+  sessionId: string,
+  expiresAt: Date,
+  extra?: { staffId?: string; tenantId?: string },
+): Promise<string> {
+  const payload: Record<string, unknown> = { sid: sessionId };
+  if (extra?.staffId) payload.uid = extra.staffId;
+  if (extra?.tenantId) payload.tid = extra.tenantId;
+
+  return new SignJWT(payload)
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime(Math.floor(expiresAt.getTime() / 1000))
@@ -23,6 +32,26 @@ export async function verifySessionToken(token: string): Promise<string | null> 
   try {
     const { payload } = await jwtVerify(token, getSecret());
     return typeof payload.sid === "string" ? payload.sid : null;
+  } catch {
+    return null;
+  }
+}
+
+export type SessionTokenPayload = {
+  sessionId: string;
+  staffId?: string;
+  tenantId?: string;
+};
+
+export async function decodeSessionToken(token: string): Promise<SessionTokenPayload | null> {
+  try {
+    const { payload } = await jwtVerify(token, getSecret());
+    if (typeof payload.sid !== "string") return null;
+    return {
+      sessionId: payload.sid,
+      staffId: typeof payload.uid === "string" ? payload.uid : undefined,
+      tenantId: typeof payload.tid === "string" ? payload.tid : undefined,
+    };
   } catch {
     return null;
   }
@@ -63,7 +92,13 @@ export async function createSession(
     })
     .run();
 
-  const token = await signSessionToken(sessionId, expiresAt);
+  const token = await signSessionToken(sessionId, expiresAt, {
+    staffId: input.staffId,
+    tenantId: input.tenantId,
+  });
+
+  triggerDbBackupDebounced(1500);
+
   return { sessionId, token, expiresAt };
 }
 
@@ -101,12 +136,13 @@ export async function getActorFromToken(
   db: AppDb,
   token: string,
 ): Promise<ActorContext | null> {
-  const sessionId = await verifySessionToken(token);
-  if (!sessionId) {
+  const decoded = await decodeSessionToken(token);
+  if (!decoded) {
     return null;
   }
+  const sessionId = decoded.sessionId;
 
-  const row = db
+  let row = db
     .select({
       session: sessions,
       staff,
@@ -123,6 +159,47 @@ export async function getActorFromToken(
       ),
     )
     .get();
+
+  // Tự động khôi phục session nếu container vừa khởi động lại nhưng SQLite chưa kịp sync session
+  if (!row && decoded.staffId && decoded.tenantId) {
+    const staffRow = db.select().from(staff).where(eq(staff.id, decoded.staffId)).get();
+    const tenantRow = db.select().from(tenants).where(eq(tenants.id, decoded.tenantId)).get();
+    if (staffRow && tenantRow && staffRow.active && tenantRow.status === "active") {
+      try {
+        db.insert(sessions)
+          .values({
+            id: sessionId,
+            tenantId: decoded.tenantId,
+            staffId: decoded.staffId,
+            activeBranchId: null,
+            ip: "0.0.0.0",
+            userAgent: "self-healed",
+            expiresAt: new Date(Date.now() + 72 * 60 * 60 * 1000),
+            readOnly: false,
+          })
+          .onConflictDoNothing()
+          .run();
+
+        row = db
+          .select({
+            session: sessions,
+            staff,
+            tenant: tenants,
+          })
+          .from(sessions)
+          .innerJoin(staff, eq(sessions.staffId, staff.id))
+          .innerJoin(tenants, eq(sessions.tenantId, tenants.id))
+          .where(and(eq(sessions.id, sessionId), isNull(sessions.revokedAt)))
+          .get();
+      } catch {
+        // bỏ qua
+      }
+    }
+  }
+
+  if (!row) {
+    return null;
+  }
 
   if (!row) {
     return null;

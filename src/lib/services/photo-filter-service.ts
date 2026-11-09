@@ -25,7 +25,13 @@ export type AlbumFilterSource = {
   title: string;
   customerName: string | null;
   orderCode: string | null;
-  selectedCodes: { code: string; filename: string; note: string | null }[];
+  selectedCodes: {
+    code: string;
+    filename: string;
+    note: string | null;
+    thumbnailKey?: string | null;
+    previewKey?: string | null;
+  }[];
   albumFiles: { code: string; filename: string }[];
 };
 
@@ -68,6 +74,8 @@ export function getAlbumFilterSource(
       code: photos.code,
       filename: photos.filename,
       note: photoSelections.note,
+      thumbnailKey: photos.thumbnailKey,
+      previewKey: photos.previewKey,
     })
     .from(photoSelections)
     .innerJoin(photos, eq(photoSelections.photoId, photos.id))

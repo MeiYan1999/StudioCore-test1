@@ -3,8 +3,34 @@
 import { getActorContext } from "@/lib/auth/session";
 import { getDb } from "@/lib/db/client";
 import { AuthorizationError, NotFoundError, ValidationError } from "@/lib/errors";
-import { savePhotoFilterJob } from "@/lib/services/photo-filter-service";
+import {
+  getAlbumFilterSource,
+  savePhotoFilterJob,
+  type AlbumFilterSource,
+} from "@/lib/services/photo-filter-service";
 import { saveFilterJobSchema } from "@/lib/validators/photos";
+
+export async function getAlbumFilterSourceAction(
+  albumId: string,
+): Promise<{ ok: true; source: AlbumFilterSource } | { ok: false; error: string }> {
+  const actor = await getActorContext();
+  if (!actor) {
+    return { ok: false, error: "Phiên đăng nhập đã hết hạn." };
+  }
+  try {
+    const source = getAlbumFilterSource(getDb(), actor, albumId);
+    return { ok: true, source };
+  } catch (error) {
+    if (
+      error instanceof AuthorizationError ||
+      error instanceof ValidationError ||
+      error instanceof NotFoundError
+    ) {
+      return { ok: false, error: error.message };
+    }
+    return { ok: false, error: "Không tải được dữ liệu album." };
+  }
+}
 
 export async function savePhotoFilterJobAction(input: {
   albumId: string | null;

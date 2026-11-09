@@ -1,18 +1,31 @@
 "use client";
 
-import { useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import Link from "next/link";
 import JSZip from "jszip";
 import {
+  AlertCircle,
+  ArrowLeft,
+  Check,
   CheckCircle2,
+  ChevronDown,
   Copy,
   Download,
   FileArchive,
+  FileText,
+  FolderArchive,
+  FolderCheck,
   FolderOpen,
   FolderSearch,
+  Info,
   Loader2,
   Play,
+  RefreshCw,
+  Search,
+  Sparkles,
   Square,
   Upload,
+  X,
   XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -21,10 +34,18 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import { CopyCodesMenu } from "@/components/albums/copy-codes-menu";
-import { savePhotoFilterJobAction } from "@/lib/actions/filter-actions";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  getAlbumFilterSourceAction,
+  savePhotoFilterJobAction,
+} from "@/lib/actions/filter-actions";
 import {
   basenameOf,
   buildManifestCsv,
@@ -36,12 +57,13 @@ import {
   sanitizeFolderName,
   stripExtension,
   suggestSimilarAlbumCodes,
-  type CodeMatchMode,
   type CodeMatchItem,
+  type CodeMatchMode,
   type FileTypeFilter,
   type FilterFileEntry,
   type MatchStatus,
 } from "@/lib/photos/filter-codes";
+import { copyToClipboard } from "@/lib/utils/clipboard";
 
 type DirectoryHandleLike = {
   name: string;
@@ -100,52 +122,51 @@ const EMPTY_PROGRESS: FilterProgress = {
   errors: 0,
 };
 
-function subscribeNoop(): () => void {
-  return () => undefined;
-}
-
 function pickerAvailable(): boolean {
-  return typeof window !== "undefined" && "showDirectoryPicker" in window;
+  if (typeof window === "undefined") return false;
+  return typeof (window as DirectoryPickerWindow).showDirectoryPicker === "function";
 }
 
-function isImageFile(name: string): boolean {
-  const extension = name.split(".").pop()?.toLowerCase() ?? "";
-  return [
-    "jpg",
-    "jpeg",
-    "png",
-    "webp",
-    "raw",
-    "cr2",
-    "nef",
-    "arw",
-    "dng",
-    "raf",
-  ].includes(extension);
+function subscribeNoop(): () => void {
+  return () => {};
 }
 
-async function scanDirectoryHandle(
+async function scanDirectory(
   root: DirectoryHandleLike,
+  onProgress?: (count: number) => void,
 ): Promise<FilterFileEntry[]> {
   const entries: FilterFileEntry[] = [];
+  let scannedCount = 0;
 
-  async function walk(directory: DirectoryHandleLike, prefix: string) {
+  async function walk(
+    directory: DirectoryHandleLike,
+    parentPath: string,
+  ): Promise<void> {
     for await (const [name, handle] of directory.entries()) {
       if (name.startsWith(".")) continue;
-      const relativePath = prefix ? `${prefix}/${name}` : name;
+      const relativePath = parentPath ? `${parentPath}/${name}` : name;
       if (handle.kind === "directory") {
         await walk(handle as DirectoryHandleLike, relativePath);
-        continue;
+      } else if (handle.kind === "file") {
+        const category = fileCategory(name);
+        if (!category) continue;
+        try {
+          const file = await (handle as FileHandleLike).getFile();
+          entries.push({
+            name,
+            relativePath,
+            size: file.size,
+            lastModified: file.lastModified,
+            category,
+          });
+          scannedCount += 1;
+          if (scannedCount % 50 === 0 && onProgress) {
+            onProgress(scannedCount);
+          }
+        } catch {
+          // Skip inaccessible file
+        }
       }
-      if (!isImageFile(name)) continue;
-      const file = await (handle as FileHandleLike).getFile();
-      entries.push({
-        name,
-        relativePath,
-        size: file.size,
-        lastModified: file.lastModified,
-        category: fileCategory(name),
-      });
     }
   }
 
@@ -258,1005 +279,1236 @@ function downloadText(filename: string, content: string): void {
   URL.revokeObjectURL(url);
 }
 
-function itemKey(item: CodeMatchItem): string {
-  return `${item.parsed.raw}::${item.parsed.normalized}`;
-}
+export type AlbumOptionItem = {
+  id: string;
+  title: string;
+  customerName?: string | null;
+  orderCode?: string | null;
+};
 
-function resolveMatches(
-  matches: CodeMatchItem[],
-  choices: Record<string, string>,
-): CodeMatchItem[] {
-  return matches.map((item) => {
-    if (item.status !== "ambiguous") return item;
-    const chosen = choices[itemKey(item)];
-    if (!chosen) return item;
-    const file = item.candidates.find(
-      (candidate) => candidate.relativePath === chosen,
-    );
-    if (!file) return item;
-    return {
-      ...item,
-      status: "matched" as const,
-      matchedFile: file,
-      candidates: item.candidates,
-    };
-  });
-}
+export type SelectedCodeItem = {
+  code: string;
+  filename: string;
+  note: string | null;
+  thumbnailKey?: string | null;
+  previewKey?: string | null;
+};
+
+export type CodeFilterToolProps = {
+  albumId?: string | null;
+  albumTitle?: string | null;
+  albumFiles?: { code: string; filename: string }[];
+  initialCodes?: SelectedCodeItem[];
+  albumsList?: AlbumOptionItem[];
+  onJobSaved?: (jobId: string) => void;
+};
 
 export function CodeFilterTool({
-  albumId,
-  albumTitle,
-  albumFiles,
-  initialCodes,
-}: {
-  albumId: string | null;
-  albumTitle: string | null;
-  albumFiles: { code: string; filename: string }[];
-  initialCodes: { code: string; filename: string; note: string | null }[];
-}) {
+  albumId: propAlbumId,
+  albumTitle: propAlbumTitle,
+  albumFiles: propAlbumFiles = [],
+  initialCodes: propInitialCodes = [],
+  albumsList = [],
+  onJobSaved,
+}: CodeFilterToolProps) {
   const pickerSupported = useSyncExternalStore(
     subscribeNoop,
     pickerAvailable,
     () => false,
   );
+
+  // Album selection state
+  const [selectedAlbumId, setSelectedAlbumId] = useState<string>(
+    propAlbumId || (albumsList.length > 0 ? albumsList[0]?.id || "" : ""),
+  );
+  const [currentAlbumTitle, setCurrentAlbumTitle] = useState<string>(
+    propAlbumTitle || (albumsList.length > 0 ? albumsList[0]?.title || "" : ""),
+  );
+  const [currentAlbumFiles, setCurrentAlbumFiles] = useState<{ code: string; filename: string }[]>(
+    propAlbumFiles,
+  );
+  const [currentSelectedCodes, setCurrentSelectedCodes] = useState<SelectedCodeItem[]>(
+    propInitialCodes,
+  );
+  const [isLoadingAlbum, setIsLoadingAlbum] = useState<boolean>(false);
+  const [isDropdownOpen, setIsDropdownOpen] = useState<boolean>(false);
+  const [albumSearchText, setAlbumSearchText] = useState<string>("");
+
+  // Input codes and filter configuration
+  const initialText = useMemo(() => {
+    if (propInitialCodes.length > 0) {
+      return propInitialCodes.map((item) => item.code).join("\n");
+    }
+    return "";
+  }, [propInitialCodes]);
+
+  const [text, setText] = useState<string>(initialText);
   const [mode, setMode] = useState<CodeMatchMode>("alphanumeric");
-  const [text, setText] = useState(
-    initialCodes.length > 0 ? initialCodes.map((item) => item.code).join("\n") : "",
-  );
-  const [files, setFiles] = useState<FilterFileEntry[]>([]);
-  const [sourceName, setSourceName] = useState<string | null>(null);
-  const [sourceReady, setSourceReady] = useState(false);
-  const [zipName, setZipName] = useState<string | null>(null);
   const [fileType, setFileType] = useState<FileTypeFilter>("all");
-  const [outputMode, setOutputMode] = useState<"subfolder" | "separate">(
-    "subfolder",
-  );
-  const [folderName, setFolderName] = useState("Ảnh khách chọn");
-  const [conflict, setConflict] = useState<"rename" | "overwrite" | "skip">(
-    "rename",
-  );
-  const [choices, setChoices] = useState<Record<string, string>>({});
-  const [busy, setBusy] = useState(false);
-  const [cancelled, setCancelled] = useState(false);
+  const [createSubfolder, setCreateSubfolder] = useState<boolean>(true);
+  const [subfolderName, setSubfolderName] = useState<string>("Ảnh Khách Chọn");
+  const [conflictPolicy, setConflictPolicy] = useState<"rename" | "overwrite" | "skip">("rename");
+
+  // Modals state
+  const [isNotesModalOpen, setIsNotesModalOpen] = useState<boolean>(false);
+  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState<boolean>(false);
+
+  // File System Access API & Scanning state
+  const [inputHandle, setInputHandle] = useState<DirectoryHandleLike | null>(null);
+  const [inputFolderName, setInputFolderName] = useState<string>("");
+  const [fallbackFiles, setFallbackFiles] = useState<FilterFileEntry[]>([]);
+  const [scannedFiles, setScannedFiles] = useState<FilterFileEntry[]>([]);
+  const [isScanning, setIsScanning] = useState<boolean>(false);
+
+  // Execution state
+  const [isRunning, setIsRunning] = useState<boolean>(false);
   const [progress, setProgress] = useState<FilterProgress>(EMPTY_PROGRESS);
-  const [resultRows, setResultRows] = useState<FilterRow[]>([]);
-  const [resultSummary, setResultSummary] = useState<string | null>(null);
-  const [jobId, setJobId] = useState<string | null>(null);
-  const [zipBlobUrl, setZipBlobUrl] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const inputDirectoryRef = useRef<DirectoryHandleLike | null>(null);
-  const outputDirectoryRef = useRef<DirectoryHandleLike | null>(null);
-  const fileMapRef = useRef<Map<string, File>>(new Map());
-  const zipRef = useRef<JSZip | null>(null);
-  const cancelRef = useRef(false);
+  const [statusMessage, setStatusMessage] = useState<string>("");
+  const [rows, setRows] = useState<FilterRow[]>([]);
+  const [filterDone, setFilterDone] = useState<boolean>(false);
+  const [lastJobId, setLastJobId] = useState<string | null>(null);
 
-  const parsed = useMemo(() => parseCustomerCodes(text, mode), [mode, text]);
-  const eligibleFiles = useMemo(
-    () => files.filter((file) => fileMatchesType(file, fileType)),
-    [fileType, files],
-  );
-  const matches = useMemo(
-    () => matchCodesToFiles(parsed.valid, eligibleFiles, mode),
-    [eligibleFiles, mode, parsed.valid],
-  );
-  const resolved = useMemo(
-    () => resolveMatches(matches.items, choices),
-    [choices, matches.items],
-  );
-  const matchedCount = resolved.filter((item) => item.status === "matched").length;
-  const ambiguousCount = resolved.filter(
-    (item) => item.status === "ambiguous",
-  ).length;
-  const missingCount = resolved.filter((item) => item.status === "missing").length;
-  const canStart =
-    parsed.valid.length > 0 && Boolean(sourceName) && sourceReady && !busy;
-  const albumValidCount = albumFiles.length
-    ? parsed.valid.filter((item) => {
-        const result = matchCodesToFiles(
-          [item],
-          albumFiles.map((file) => ({
-            name: file.filename,
-            relativePath: file.filename,
-            size: 0,
-            lastModified: 0,
-            category: fileCategory(file.filename),
-          })),
-          mode,
-        );
-        return result.matchedCount + result.ambiguousCount > 0;
-      }).length
-    : 0;
+  const abortRef = useRef<boolean>(false);
+  const folderInputRef = useRef<HTMLInputElement>(null);
 
+  // Parse codes from textarea
+  const parsed = useMemo(() => parseCustomerCodes(text, mode), [text, mode]);
+
+  // Filtered albums list for combobox
+  const filteredAlbums = useMemo(() => {
+    if (!albumSearchText.trim()) return albumsList;
+    const q = albumSearchText.toLowerCase();
+    return albumsList.filter((album) => {
+      return (
+        album.title.toLowerCase().includes(q) ||
+        (album.customerName && album.customerName.toLowerCase().includes(q)) ||
+        (album.orderCode && album.orderCode.toLowerCase().includes(q))
+      );
+    });
+  }, [albumsList, albumSearchText]);
+
+  // Handle switching albums
+  const handleSelectAlbum = async (album: AlbumOptionItem) => {
+    setSelectedAlbumId(album.id);
+    setCurrentAlbumTitle(album.title);
+    setIsDropdownOpen(false);
+    setIsLoadingAlbum(true);
+
+    try {
+      const res = await getAlbumFilterSourceAction(album.id);
+      if (res.ok) {
+        setCurrentAlbumFiles(res.source.albumFiles);
+        setCurrentSelectedCodes(res.source.selectedCodes);
+        if (res.source.selectedCodes.length > 0) {
+          const codesText = res.source.selectedCodes.map((item) => item.code).join("\n");
+          setText(codesText);
+          toast.success(
+            `Đã nạp ${res.source.selectedCodes.length} mã ảnh từ album "${album.title}"!`,
+          );
+        } else {
+          toast.info(`Album "${album.title}" chưa có mã ảnh nào được khách chọn.`);
+        }
+        // Update URL cleanly
+        if (typeof window !== "undefined") {
+          const url = new URL(window.location.href);
+          url.searchParams.set("albumId", album.id);
+          window.history.replaceState(null, "", url.toString());
+        }
+      } else {
+        toast.error(res.error || "Không thể tải dữ liệu album.");
+      }
+    } catch {
+      toast.error("Lỗi khi tải thông tin album.");
+    } finally {
+      setIsLoadingAlbum(false);
+    }
+  };
+
+  // 1-Touch Copy Buttons
+  const handleCopyNewline = async () => {
+    if (parsed.valid.length === 0) {
+      toast.error("Chưa có mã hợp lệ để copy.");
+      return;
+    }
+    const content = parsed.valid.map((item) => item.raw).join("\n");
+    const ok = await copyToClipboard(content);
+    if (ok) {
+      toast.success(`Đã sao chép ${parsed.valid.length} mã (dạng xuống dòng) vào Clipboard!`);
+    } else {
+      toast.error("Không thể tự động sao chép.");
+    }
+  };
+
+  const handleCopyComma = async () => {
+    if (parsed.valid.length === 0) {
+      toast.error("Chưa có mã hợp lệ để copy.");
+      return;
+    }
+    const content = parsed.valid.map((item) => item.raw).join(", ");
+    const ok = await copyToClipboard(content);
+    if (ok) {
+      toast.success(`Đã sao chép ${parsed.valid.length} mã (phân cách bằng dấu phẩy) vào Clipboard!`);
+    } else {
+      toast.error("Không thể tự động sao chép.");
+    }
+  };
+
+  const handleCopySpace = async () => {
+    if (parsed.valid.length === 0) {
+      toast.error("Chưa có mã hợp lệ để copy.");
+      return;
+    }
+    const content = parsed.valid.map((item) => item.raw).join(" ");
+    const ok = await copyToClipboard(content);
+    if (ok) {
+      toast.success(`Đã sao chép ${parsed.valid.length} mã (phân cách bằng dấu cách) vào Clipboard!`);
+    } else {
+      toast.error("Không thể tự động sao chép.");
+    }
+  };
+
+  const handleCopyWithExtension = async () => {
+    if (parsed.valid.length === 0) {
+      toast.error("Chưa có mã hợp lệ để copy.");
+      return;
+    }
+    // Determine extension or default to .jpg
+    const content = parsed.valid
+      .map((item) => {
+        const raw = item.raw;
+        return raw.includes(".") ? raw : `${raw}.jpg`;
+      })
+      .join("\n");
+    const ok = await copyToClipboard(content);
+    if (ok) {
+      toast.success(`Đã sao chép ${parsed.valid.length} mã (kèm đuôi file .jpg) vào Clipboard!`);
+    } else {
+      toast.error("Không thể tự động sao chép.");
+    }
+  };
+
+  // Folder picking logic
   const chooseInputDirectory = async () => {
-    const picker = (window as DirectoryPickerWindow).showDirectoryPicker;
-    if (!picker) {
-      toast.error("Trình duyệt không hỗ trợ File System Access API.");
+    if (!pickerSupported) {
+      folderInputRef.current?.click();
       return;
     }
     try {
-      const directory = await picker({ mode: "readwrite" });
-      inputDirectoryRef.current = directory;
-      outputDirectoryRef.current = null;
-      zipRef.current = null;
-      fileMapRef.current.clear();
-      setZipName(null);
-      const scanned = await scanDirectoryHandle(directory);
-      setFiles(scanned);
-      setSourceName(directory.name);
-      setSourceReady(scanned.length > 0);
-      if (scanned.length === 0) {
-        toast.error("Không tìm thấy file ảnh trong thư mục đã chọn.");
-      } else {
-        toast.success(`Đã quét ${scanned.length} file ảnh trong "${directory.name}".`);
-      }
-    } catch (scanError) {
-      if (scanError instanceof DOMException && scanError.name === "AbortError") {
+      const pickerWin = window as DirectoryPickerWindow;
+      if (!pickerWin.showDirectoryPicker) {
+        folderInputRef.current?.click();
         return;
       }
-      setError(
-        scanError instanceof Error
-          ? scanError.message
-          : "Không đọc được thư mục đã chọn.",
-      );
+      const handle = await pickerWin.showDirectoryPicker({ mode: "read" });
+      setInputHandle(handle);
+      setInputFolderName(handle.name);
+      setIsScanning(true);
+      toast.info(`Đang quét ảnh trong thư mục "${handle.name}"...`);
+
+      const scanned = await scanDirectory(handle, (count) => {
+        setStatusMessage(`Đang quét file trên máy tính: ${count} ảnh...`);
+      });
+
+      setScannedFiles(scanned);
+      setIsScanning(false);
+      setStatusMessage("");
+      toast.success(`Đã quét xong: tìm thấy ${scanned.length} file ảnh trong "${handle.name}"!`);
+    } catch (err: unknown) {
+      setIsScanning(false);
+      if (err instanceof Error && err.name === "AbortError") {
+        return;
+      }
+      toast.error("Không mở được thư mục trên máy tính.");
     }
   };
 
-  const chooseOutputDirectory = async () => {
-    const picker = (window as DirectoryPickerWindow).showDirectoryPicker;
-    if (!picker) return;
-    try {
-      const directory = await picker({ mode: "readwrite" });
-      outputDirectoryRef.current = directory;
-      toast.success(`Folder đầu ra: ${directory.name}`);
-    } catch (errorValue) {
-      if (errorValue instanceof DOMException && errorValue.name === "AbortError") {
-        return;
-      }
-      toast.error("Không chọn được folder đầu ra.");
-    }
-  };
-
-  const chooseFallbackFolder = (selected: FileList | null) => {
-    if (!selected || selected.length === 0) return;
-    inputDirectoryRef.current = null;
-    zipRef.current = null;
-    const map = new Map<string, File>();
+  const handleFallbackFolderChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const fileList = event.target.files;
+    if (!fileList || fileList.length === 0) return;
     const entries: FilterFileEntry[] = [];
-    for (const file of Array.from(selected)) {
-      if (!isImageFile(file.name)) continue;
-      const path =
-        (file as File & { webkitRelativePath?: string }).webkitRelativePath ||
-        file.name;
-      const segments = path.split("/");
-      const relativePath =
-        segments.length > 1 ? segments.slice(1).join("/") : path;
-      map.set(relativePath, file);
+    for (let i = 0; i < fileList.length; i += 1) {
+      const file = fileList[i];
+      if (!file) continue;
+      const category = fileCategory(file.name);
+      if (!category) continue;
+      const relativePath = file.webkitRelativePath || file.name;
       entries.push({
         name: file.name,
         relativePath,
         size: file.size,
         lastModified: file.lastModified,
-        category: fileCategory(file.name),
+        category,
       });
     }
-    fileMapRef.current = map;
-    setFiles(entries.sort((a, b) => a.relativePath.localeCompare(b.relativePath)));
-    setSourceName(`Thư mục tải lên (${entries.length} ảnh)`);
-    setSourceReady(entries.length > 0);
-    setZipName(null);
+    setFallbackFiles(entries);
+    setScannedFiles(entries);
+    const firstPath = fileList[0]?.webkitRelativePath || "";
+    const folderName = firstPath ? firstPath.split("/")[0] || "Thư mục máy tính" : "Thư mục máy tính";
+    setInputFolderName(folderName);
+    toast.success(`Đã quét được ${entries.length} file từ thư mục "${folderName}"!`);
   };
 
-  const chooseZip = async (selected: File | null) => {
-    if (!selected) return;
-    setError(null);
-    try {
-      const archive = await JSZip.loadAsync(selected);
-      const entries: FilterFileEntry[] = [];
-      Object.values(archive.files).forEach((entry) => {
-        if (entry.dir || !isImageFile(entry.name)) return;
-        if (entry.name.includes("..")) return;
-        entries.push({
-          name: entry.name.split("/").pop() ?? entry.name,
-          relativePath: entry.name,
-          size: 0,
-          lastModified: 0,
-          category: fileCategory(entry.name),
-        });
-      });
-      zipRef.current = archive;
-      inputDirectoryRef.current = null;
-      fileMapRef.current.clear();
-      setFiles(entries.sort((a, b) => a.relativePath.localeCompare(b.relativePath)));
-      setSourceName(`ZIP: ${selected.name}`);
-      setSourceReady(entries.length > 0);
-      setZipName(selected.name);
-      toast.success(`Đã đọc ${entries.length} ảnh trong ZIP.`);
-    } catch {
-      setError("Không đọc được ZIP. Kiểm tra file và thử lại.");
+  // Run filter logic
+  const handleStartFiltering = async () => {
+    if (parsed.valid.length === 0) {
+      toast.error("Vui lòng dán hoặc chọn ít nhất 1 mã ảnh để lọc.");
+      return;
     }
-  };
 
-  const getSourceBlob = async (relativePath: string): Promise<Blob | null> => {
-    if (inputDirectoryRef.current) {
-      return readFileFromDirectory(inputDirectoryRef.current, relativePath);
+    if (!inputHandle && fallbackFiles.length === 0) {
+      // Trigger directory selection directly
+      toast.info("Vui lòng chọn thư mục ảnh gốc trên máy tính trước!");
+      await chooseInputDirectory();
+      return;
     }
-    const file = fileMapRef.current.get(relativePath);
-    if (file) return file;
-    const zipEntry = zipRef.current?.file(relativePath);
-    if (zipEntry) return zipEntry.async("blob");
-    return null;
-  };
 
-  const stop = () => {
-    cancelRef.current = true;
-    setCancelled(true);
-  };
+    const availableFiles = scannedFiles.filter((file) =>
+      fileMatchesType(file, fileType),
+    );
 
-  const startFilter = async () => {
-    if (!canStart) return;
-    setBusy(true);
-    setCancelled(false);
-    cancelRef.current = false;
-    setError(null);
-    setJobId(null);
-    setResultRows([]);
-    setResultSummary(null);
-    if (zipBlobUrl) {
-      URL.revokeObjectURL(zipBlobUrl);
-      setZipBlobUrl(null);
+    if (availableFiles.length === 0) {
+      toast.error(
+        `Không tìm thấy file phù hợp với bộ lọc định dạng "${fileType === "raw" ? "Chỉ RAW" : fileType === "standard" ? "Chỉ JPG/PNG" : "Tất cả"}".`,
+      );
+      return;
     }
-    const nextProgress = { ...EMPTY_PROGRESS, scanned: files.length };
-    setProgress(nextProgress);
 
-    const rows: FilterRow[] = [];
+    setIsRunning(true);
+    setFilterDone(false);
+    abortRef.current = false;
+    setProgress(EMPTY_PROGRESS);
+    setStatusMessage("Đang chuẩn bị so khớp mã...");
+
+    // Perform match
+    const matchResult = matchCodesToFiles(parsed.valid, availableFiles, mode);
+    const itemsToCopy = matchResult.items.filter(
+      (item) => item.status === "matched" && item.matchedFile,
+    );
+
+    const missingItems = matchResult.items.filter(
+      (item) => item.status === "missing" || item.status === "ambiguous",
+    );
+
+    setProgress({
+      scanned: availableFiles.length,
+      matched: itemsToCopy.length,
+      copied: 0,
+      missing: missingItems.length,
+      errors: 0,
+    });
+
+    const executionRows: FilterRow[] = [];
     const usedNames = new Set<string>();
-    const manifestRows: {
-      inputCode: string;
-      filename: string;
-      relativePath: string;
-      status: string;
-      message?: string;
-    }[] = [];
-    const missingRows: { inputCode: string; message?: string }[] = [];
-    const isFs = Boolean(inputDirectoryRef.current);
-    let targetDirectory: DirectoryHandleLike | null = null;
-    let zip: JSZip | null = null;
-    let zipFolder = "";
 
-    try {
-      if (isFs) {
-        const inputRoot = inputDirectoryRef.current;
-        if (!inputRoot) throw new Error("Chưa chọn thư mục nguồn.");
-        await ensureWritePermission(inputRoot);
-        if (outputMode === "subfolder") {
-          const safeFolder = sanitizeFolderName(folderName);
-          targetDirectory = await inputRoot.getDirectoryHandle(safeFolder, {
-            create: true,
-          });
-          zipFolder = safeFolder;
-        } else {
-          const outputRoot = outputDirectoryRef.current;
-          if (!outputRoot) {
-            throw new Error(
-              "Chưa chọn folder đầu ra. Chọn folder hoặc chuyển về tạo folder con.",
+    if (inputHandle && pickerSupported) {
+      // Direct local filesystem copy using File System Access API
+      try {
+        await ensureWritePermission(inputHandle);
+
+        let targetDir: DirectoryHandleLike = inputHandle;
+        if (createSubfolder) {
+          const folderName = sanitizeFolderName(subfolderName.trim()) || "Ảnh Khách Chọn";
+          targetDir = await inputHandle.getDirectoryHandle(folderName, { create: true });
+          await ensureWritePermission(targetDir);
+        }
+
+        let copiedCount = 0;
+        let errorCount = 0;
+
+        for (const item of itemsToCopy) {
+          if (abortRef.current) {
+            setStatusMessage("Đã dừng quá trình lọc ảnh.");
+            break;
+          }
+          const sourceFile = item.matchedFile!;
+          try {
+            setStatusMessage(`Đang copy file: ${sourceFile.name}...`);
+            const fileData = await readFileFromDirectory(inputHandle, sourceFile.relativePath);
+            const { name: destName, skip } = await resolveDestinationName(
+              targetDir,
+              usedNames,
+              sourceFile.name,
+              conflictPolicy,
             );
+
+            if (!skip) {
+              await writeBlob(targetDir, destName, fileData);
+              copiedCount += 1;
+              executionRows.push({
+                inputCode: item.parsed.raw,
+                filename: destName,
+                relativePath: sourceFile.relativePath,
+                status: "matched",
+              });
+            } else {
+              executionRows.push({
+                inputCode: item.parsed.raw,
+                filename: sourceFile.name,
+                relativePath: sourceFile.relativePath,
+                status: "skipped",
+                message: "Bỏ qua do trùng tên",
+              });
+            }
+          } catch (err: unknown) {
+            errorCount += 1;
+            executionRows.push({
+              inputCode: item.parsed.raw,
+              filename: sourceFile.name,
+              relativePath: sourceFile.relativePath,
+              status: "error",
+              message: err instanceof Error ? err.message : "Lỗi ghi file",
+            });
           }
-          await ensureWritePermission(outputRoot);
-          targetDirectory = outputRoot;
-        }
-      } else {
-        zip = new JSZip();
-        zipFolder =
-          outputMode === "subfolder" ? sanitizeFolderName(folderName) : "";
-      }
 
-      for (const [index, item] of resolved.entries()) {
-        if (cancelRef.current) break;
-        const base = {
-          inputCode: item.parsed.raw,
-          filename: item.matchedFile?.name ?? "",
-          relativePath: item.matchedFile?.relativePath ?? "",
-        };
-        if (item.status === "ambiguous") {
-          const candidates = item.candidates.map((file) => file.relativePath);
-          const message = `Không tự copy: khớp ${candidates.length} file (${candidates
-            .slice(0, 3)
-            .join(", ")}).`;
-          rows.push({ ...base, status: "ambiguous", message });
-          missingRows.push({ inputCode: item.parsed.raw, message });
-          nextProgress.missing += 1;
-          setProgress({ ...nextProgress });
-          continue;
-        }
-        if (item.status === "missing" || !item.matchedFile) {
-          const message = "Không tìm thấy file khớp.";
-          rows.push({ ...base, status: "missing", message });
-          missingRows.push({ inputCode: item.parsed.raw, message });
-          nextProgress.missing += 1;
-          setProgress({ ...nextProgress });
-          continue;
+          setProgress((prev) => ({
+            ...prev,
+            copied: copiedCount,
+            errors: errorCount,
+          }));
         }
 
-        const sourceFile = item.matchedFile;
+        // Add missing entries
+        for (const item of missingItems) {
+          executionRows.push({
+            inputCode: item.parsed.raw,
+            filename: "",
+            relativePath: "",
+            status: item.status,
+            message:
+              item.status === "ambiguous"
+                ? "Tìm thấy nhiều file trùng mã"
+                : "Không tìm thấy trong thư mục",
+          });
+        }
+
+        setRows(executionRows);
+        setFilterDone(true);
+        setStatusMessage(
+          `Hoàn tất! Đã copy ${copiedCount}/${itemsToCopy.length} file vào thư mục "${createSubfolder ? subfolderName : inputHandle.name}".`,
+        );
+        toast.success(
+          `Đã lọc thành công ${copiedCount} ảnh vào thư mục "${createSubfolder ? subfolderName : inputHandle.name}"!`,
+        );
+
+        // Auto-save filter job history to database
         try {
-          const blob = await getSourceBlob(sourceFile.relativePath);
-          if (!blob) {
-            throw new Error("Không đọc được file nguồn.");
-          }
-          const destination =
-            targetDirectory ??
-            null;
-          const destinationName = await resolveDestinationName(
-            destination,
-            usedNames,
-            sourceFile.name,
-            conflict,
-          );
-          if (destinationName.skip) {
-            const message = "File đích đã tồn tại, bỏ qua theo cấu hình.";
-            rows.push({ ...base, status: "skipped", message });
-            manifestRows.push({ ...base, status: "skipped", message });
-            nextProgress.matched += 1;
-            setProgress({ ...nextProgress });
-            continue;
-          }
-          if (targetDirectory) {
-            await writeBlob(targetDirectory, destinationName.name, blob);
-          } else if (zip) {
-            const path = zipFolder
-              ? `${zipFolder}/${destinationName.name}`
-              : destinationName.name;
-            zip.file(path, blob);
-          }
-          const finalRelative = zipFolder
-            ? `${zipFolder}/${destinationName.name}`
-            : destinationName.name;
-          rows.push({
-            inputCode: item.parsed.raw,
-            filename: destinationName.name,
-            relativePath: finalRelative,
-            status: "matched",
+          const res = await savePhotoFilterJobAction({
+            albumId: selectedAlbumId || null,
+            mode,
+            inputCodesText: text,
+            parsedCount: parsed.valid.length,
+            matchedCount: itemsToCopy.length,
+            missingCount: missingItems.length,
+            ambiguousCount: matchResult.ambiguousCount,
+            duplicateCount: parsed.duplicateCount,
+            outputMode: createSubfolder ? "subfolder" : "separate",
+            outputFolderName: createSubfolder ? subfolderName : "Thư mục gốc",
+            fileType,
+            status: "completed",
+            items: executionRows.map((r) => ({
+              inputCode: r.inputCode,
+              matchedFilename: r.filename,
+              status: r.status,
+              message: r.message,
+            })),
           });
-          manifestRows.push({
-            inputCode: item.parsed.raw,
-            filename: destinationName.name,
-            relativePath: finalRelative,
-            status: "matched",
-          });
-          nextProgress.matched += 1;
-          nextProgress.copied += 1;
-          setProgress({ ...nextProgress });
-        } catch (fileError) {
-          const message =
-            fileError instanceof Error ? fileError.message : "Lỗi copy file.";
-          rows.push({ ...base, status: "error", message });
-          manifestRows.push({ ...base, status: "error", message });
-          missingRows.push({ inputCode: item.parsed.raw, message });
-          nextProgress.errors += 1;
-          setProgress({ ...nextProgress });
+          if (res.ok) {
+            setLastJobId(res.jobId);
+            onJobSaved?.(res.jobId);
+          }
+        } catch {
+          // Ignore audit logging error
         }
-        if (index % 8 === 0) {
-          await new Promise((resolve) => window.setTimeout(resolve, 0));
+      } catch (err: unknown) {
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : "Lỗi trong quá trình ghi file trên máy tính.",
+        );
+      } finally {
+        setIsRunning(false);
+      }
+    } else {
+      // Fallback for browsers without File System Access API: generate ZIP file download
+      try {
+        setStatusMessage("Đang nén file đã lọc thành file ZIP...");
+        const zip = new JSZip();
+        const folder = createSubfolder ? zip.folder(subfolderName) || zip : zip;
+        let copiedCount = 0;
+
+        for (const item of itemsToCopy) {
+          if (abortRef.current) break;
+          const source = item.matchedFile!;
+          // Find File in fallback
+          const fileInput = folderInputRef.current;
+          if (fileInput?.files) {
+            for (let i = 0; i < fileInput.files.length; i += 1) {
+              const f = fileInput.files[i];
+              if (f && (f.webkitRelativePath === source.relativePath || f.name === source.name)) {
+                folder.file(source.name, f);
+                copiedCount += 1;
+                executionRows.push({
+                  inputCode: item.parsed.raw,
+                  filename: source.name,
+                  relativePath: source.relativePath,
+                  status: "matched",
+                });
+                break;
+              }
+            }
+          }
+          setProgress((prev) => ({ ...prev, copied: copiedCount }));
         }
+
+        const zipBlob = await zip.generateAsync({ type: "blob" });
+        const url = URL.createObjectURL(zipBlob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${subfolderName || "Anh_Khach_Chon"}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        setRows(executionRows);
+        setFilterDone(true);
+        setStatusMessage(`Đã tải xuống file ZIP gồm ${copiedCount} ảnh được lọc!`);
+        toast.success(`Đã xuất ${copiedCount} file vào file ZIP!`);
+      } catch {
+        toast.error("Không thể tạo file ZIP cho các ảnh đã lọc.");
+      } finally {
+        setIsRunning(false);
       }
-
-      const manifest = buildManifestCsv(manifestRows);
-      const missingText = buildMissingText(missingRows);
-      const summary = cancelRef.current ? "cancelled" : "completed";
-
-      if (targetDirectory) {
-        await writeBlob(
-          targetDirectory,
-          "manifest.csv",
-          new Blob([manifest], { type: "text/csv;charset=utf-8" }),
-        );
-        await writeBlob(
-          targetDirectory,
-          "missing.txt",
-          new Blob([missingText], { type: "text/plain;charset=utf-8" }),
-        );
-      } else if (zip) {
-        zip.file("manifest.csv", manifest);
-        zip.file("missing.txt", missingText);
-        const blob = await zip.generateAsync({ type: "blob" });
-        setZipBlobUrl(URL.createObjectURL(blob));
-      }
-
-      setResultRows(rows);
-      setResultSummary(
-        `${summary === "cancelled" ? "Đã hủy" : "Hoàn tất"}: quét ${nextProgress.scanned}, khớp ${nextProgress.matched}, copy ${nextProgress.copied}, missing ${nextProgress.missing}, lỗi ${nextProgress.errors}.`,
-      );
-      setProgress({ ...nextProgress });
-
-      const saveResult = await savePhotoFilterJobAction({
-        albumId,
-        mode,
-        inputCodesText: text,
-        parsedCount: parsed.totalTokens,
-        matchedCount: nextProgress.matched,
-        missingCount: nextProgress.missing,
-        ambiguousCount,
-        duplicateCount: parsed.duplicateCount,
-        outputMode,
-        outputFolderName: folderName,
-        fileType,
-        status: summary === "cancelled" ? "cancelled" : "completed",
-        items: rows.map((row) => ({
-          inputCode: row.inputCode,
-          matchedFilename: row.filename,
-          status: row.status,
-          message: row.message,
-        })),
-      });
-      if (saveResult.ok) {
-        setJobId(saveResult.jobId);
-      } else {
-        toast.error(saveResult.error);
-      }
-      toast.success(
-        summary === "cancelled"
-          ? "Đã hủy lọc ảnh; phần đã copy được giữ nguyên."
-          : "Đã lọc xong ảnh khách chọn.",
-      );
-    } catch (startError) {
-      const message =
-        startError instanceof Error ? startError.message : "Không thể lọc ảnh.";
-      setError(message);
-      toast.error(message);
-    } finally {
-      setBusy(false);
-      cancelRef.current = false;
     }
   };
 
-  const renderMatchStatus = (item: CodeMatchItem) => {
-    if (item.status === "matched") {
-      return <Badge tone="success">Khớp</Badge>;
+  const handleCancelFiltering = () => {
+    abortRef.current = true;
+    setIsRunning(false);
+    toast.info("Đã yêu cầu dừng quá trình lọc.");
+  };
+
+  // Export Manifest & Missing
+  const handleDownloadCsv = () => {
+    const csv = buildManifestCsv(
+      rows.map((r) => ({
+        inputCode: r.inputCode,
+        filename: r.filename,
+        relativePath: r.relativePath,
+        status: r.status as MatchStatus,
+        message: r.message,
+      })),
+    );
+    downloadText(`manifest-loc-anh-${new Date().toISOString().slice(0, 10)}.csv`, csv);
+    toast.success("Đã tải xuống báo cáo Manifest CSV.");
+  };
+
+  const handleCopyMissing = async () => {
+    const missing = rows.filter((r) => r.status === "missing" || r.status === "ambiguous");
+    if (missing.length === 0) {
+      toast.info("Không có ảnh thiếu nào.");
+      return;
     }
-    if (item.status === "ambiguous") {
-      return <Badge tone="warning">Ambiguous</Badge>;
+    const missingText = missing.map((r) => r.inputCode).join("\n");
+    const ok = await copyToClipboard(missingText);
+    if (ok) {
+      toast.success(`Đã sao chép ${missing.length} mã ảnh thiếu vào Clipboard!`);
     }
-    return <Badge tone="danger">Missing</Badge>;
   };
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
-      <div className="space-y-4">
-        <section className="rounded-xl border border-border bg-surface p-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h2 className="text-base font-semibold text-foreground">
-                Bước 1 — Mã ảnh khách đã chọn
-              </h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Dán từ Excel/Zalo. Hỗ trợ xuống dòng, dấu phẩy, dấu cách, số thứ
-                tự và đuôi file.
-              </p>
+    <div className="space-y-5">
+      {/* Top Header matching media_1794239274827_a35b6fc7.jpg */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <Link
+            href="/manage/photos"
+            className="flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-surface text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            title="Quay lại danh sách album"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Link>
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400">
+            <FolderArchive className="h-5 w-5" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold tracking-tight text-foreground md:text-2xl">
+              Phần Mềm Lọc Ảnh
+            </h1>
+            <p className="text-xs text-muted-foreground md:text-sm">
+              Chọn album để tự động lấy mã và lọc file gốc trên máy tính.
+            </p>
+          </div>
+        </div>
+
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => setIsNotesModalOpen(true)}
+          className="rounded-xl border-border bg-surface hover:bg-muted text-xs sm:text-sm font-medium shadow-2xs gap-2 self-start sm:self-auto"
+        >
+          <FileText className="h-4 w-4 text-amber-500" />
+          <span>Xem Ghi Chú & Mã Ảnh</span>
+        </Button>
+      </div>
+
+      {/* Free Tier Limit Banner matching media_1794239274827_a35b6fc7.jpg */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border border-blue-200/70 bg-gradient-to-r from-blue-50/80 via-sky-50/50 to-indigo-50/60 p-4 md:p-5 dark:border-blue-900/50 dark:from-blue-950/30 dark:via-sky-950/20 dark:to-indigo-950/30">
+        <div className="flex items-start gap-3">
+          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-blue-500/15 text-blue-600 dark:text-blue-400">
+            <Sparkles className="h-4 w-4" />
+          </div>
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold text-foreground md:text-sm">
+                Hạn Mức Lọc Ảnh PC (Gói Miễn Phí):
+              </span>
+              <span className="inline-flex items-center rounded-full bg-blue-100/90 px-2.5 py-0.5 text-xs font-bold text-blue-700 dark:bg-blue-900/50 dark:text-blue-300">
+                0 / 5 album đã dùng
+              </span>
+              <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                (Còn lại 5 lượt)
+              </span>
             </div>
-            {albumTitle ? (
-              <Badge tone="info">Nguồn: {albumTitle}</Badge>
-            ) : (
-              <Badge tone="neutral">Không gắn album</Badge>
-            )}
+            <p className="mt-1 text-[11px] text-muted-foreground md:text-xs">
+              Áp dụng tự do khi lọc từ album khách hoặc dán mã bất kỳ. Tự động hồi 5 lượt vào 00:00 ngày 01/12/2026.
+            </p>
+          </div>
+        </div>
+
+        <Button
+          type="button"
+          size="sm"
+          onClick={() => setIsUpgradeModalOpen(true)}
+          className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-2xs hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 shrink-0 self-start sm:self-auto gap-1"
+        >
+          <span>Nâng Cấp Lọc Không Giới Hạn</span>
+          <span>→</span>
+        </Button>
+      </div>
+
+      {/* Main 2-Column Grid matching media_1794239274827_a35b6fc7.jpg */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 items-start">
+        {/* Card 1: Mã Ảnh Khách Chọn Để Lọc */}
+        <div className="rounded-2xl border border-border bg-surface p-5 md:p-6 shadow-2xs space-y-4">
+          {/* Card 1 Header */}
+          <div className="flex items-center justify-between pb-1 border-b border-border/50">
+            <div className="flex items-center gap-2">
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-[11px] font-bold text-white">
+                1
+              </span>
+              <h2 className="text-sm font-bold text-foreground md:text-base">
+                Mã Ảnh Khách Chọn Để Lọc
+              </h2>
+            </div>
+            <Badge tone={parsed.valid.length > 0 ? "success" : "neutral"} className="text-xs font-medium">
+              {parsed.valid.length} mã hợp lệ
+            </Badge>
           </div>
 
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <div className="flex rounded-lg border border-border p-1">
+          {/* Combobox Chọn Nguồn Khách Hàng / Album / Hợp Đồng */}
+          <div className="space-y-1.5 relative">
+            <Label className="text-xs font-semibold text-foreground">
+              Chọn Nguồn Khách Hàng / Album / Hợp Đồng:
+            </Label>
+            <div className="relative">
               <button
                 type="button"
-                onClick={() => setMode("alphanumeric")}
-                className={
-                  mode === "alphanumeric"
-                    ? "rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-foreground"
-                    : "rounded-md px-3 py-1.5 text-sm text-muted-foreground"
-                }
+                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                className="flex w-full items-center justify-between rounded-xl border border-border/90 bg-background px-3.5 py-2.5 text-left text-xs transition-colors hover:border-blue-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20"
               >
-                Chữ và số
+                <div className="flex items-center gap-2 truncate text-muted-foreground">
+                  <Search className="h-3.5 w-3.5 shrink-0" />
+                  <span className={currentAlbumTitle ? "font-medium text-foreground truncate" : "truncate"}>
+                    {isLoadingAlbum
+                      ? "Đang nạp mã album..."
+                      : currentAlbumTitle
+                        ? `${currentAlbumTitle} (Đang chọn)`
+                        : "Gõ tìm mã HĐ, tên album, tên khách để lấy mã..."}
+                  </span>
+                </div>
+                <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+              </button>
+
+              {/* Combobox Dropdown Popover */}
+              {isDropdownOpen && (
+                <div className="absolute top-full left-0 right-0 z-30 mt-1 max-h-64 overflow-y-auto rounded-xl border border-border bg-surface p-1.5 shadow-xl">
+                  <div className="p-1 pb-1.5">
+                    <Input
+                      type="text"
+                      placeholder="Tìm kiếm album, tên khách, số điện thoại..."
+                      value={albumSearchText}
+                      onChange={(e) => setAlbumSearchText(e.target.value)}
+                      className="h-8 text-xs"
+                      autoFocus
+                    />
+                  </div>
+                  <div className="divide-y divide-border/40 text-xs">
+                    {filteredAlbums.length === 0 ? (
+                      <div className="py-3 text-center text-muted-foreground text-xs">
+                        Không tìm thấy album nào phù hợp
+                      </div>
+                    ) : (
+                      filteredAlbums.map((album) => (
+                        <button
+                          key={album.id}
+                          type="button"
+                          onClick={() => void handleSelectAlbum(album)}
+                          className={`flex w-full items-center justify-between px-3 py-2 text-left rounded-lg transition-colors hover:bg-muted ${
+                            selectedAlbumId === album.id ? "bg-blue-50 font-semibold text-blue-700 dark:bg-blue-950/40 dark:text-blue-300" : ""
+                          }`}
+                        >
+                          <div className="truncate">
+                            <p className="truncate font-medium">{album.title}</p>
+                            <p className="text-[11px] text-muted-foreground truncate">
+                              {album.customerName ? `Khách: ${album.customerName}` : ""}
+                              {album.orderCode ? ` · Đơn: ${album.orderCode}` : ""}
+                            </p>
+                          </div>
+                          {selectedAlbumId === album.id && (
+                            <Check className="h-3.5 w-3.5 text-blue-600 shrink-0 ml-2" />
+                          )}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Mode Switcher: Chế độ lựa chọn */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-foreground">Chế độ lựa chọn:</span>
+              <div className="inline-flex rounded-xl bg-muted/60 p-0.5 border border-border/60">
+                <button
+                  type="button"
+                  onClick={() => setMode("alphanumeric")}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                    mode === "alphanumeric"
+                      ? "bg-blue-600 text-white shadow-2xs"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <FileText className="h-3.5 w-3.5" />
+                  Chữ và số
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMode("numeric")}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                    mode === "numeric"
+                      ? "bg-blue-600 text-white shadow-2xs"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <span>🔢</span>
+                  Chỉ lấy số
+                </button>
+              </div>
+            </div>
+            <span className="text-[11px] text-muted-foreground">
+              Tự động nhận diện với file gốc
+            </span>
+          </div>
+
+          {/* 4 instant 1-touch copy buttons */}
+          <div className="space-y-1.5 pt-1">
+            <Label className="text-xs font-semibold text-foreground">
+              4 định dạng sao chép tức thì (1 chạm):
+            </Label>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <button
+                type="button"
+                onClick={() => void handleCopyNewline()}
+                className="flex items-center justify-center gap-1.5 rounded-xl border border-border/80 bg-background px-2.5 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted hover:border-blue-400"
+              >
+                <Copy className="h-3 w-3 text-muted-foreground" />
+                <span>Xuống dòng</span>
               </button>
               <button
                 type="button"
-                onClick={() => setMode("numeric")}
-                className={
-                  mode === "numeric"
-                    ? "rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-foreground"
-                    : "rounded-md px-3 py-1.5 text-sm text-muted-foreground"
-                }
+                onClick={() => void handleCopyComma()}
+                className="flex items-center justify-center gap-1.5 rounded-xl border border-border/80 bg-background px-2.5 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted hover:border-blue-400"
               >
-                Chỉ lấy số
+                <Copy className="h-3 w-3 text-muted-foreground" />
+                <span>Dấu phẩy</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleCopySpace()}
+                className="flex items-center justify-center gap-1.5 rounded-xl border border-border/80 bg-background px-2.5 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted hover:border-blue-400"
+              >
+                <Copy className="h-3 w-3 text-muted-foreground" />
+                <span>Dấu cách</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleCopyWithExtension()}
+                className="flex items-center justify-center gap-1.5 rounded-xl border border-border/80 bg-background px-2.5 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted hover:border-blue-400"
+              >
+                <Copy className="h-3 w-3 text-muted-foreground" />
+                <span>Có đuôi file</span>
               </button>
             </div>
-            {parsed.valid.length > 0 ? (
-              <Badge tone="success">{parsed.valid.length} mã hợp lệ</Badge>
-            ) : null}
-            {albumFiles.length > 0 ? (
-              <Badge tone={albumValidCount > 0 ? "info" : "warning"}>
-                {albumValidCount} mã khớp album
-              </Badge>
-            ) : null}
-            {parsed.duplicateCount > 0 ? (
-              <Badge tone="warning">{parsed.duplicateCount} trùng</Badge>
-            ) : null}
-            {parsed.invalidCount > 0 ? (
-              <Badge tone="danger">{parsed.invalidCount} không hợp lệ</Badge>
-            ) : null}
-            {parsed.numericAmbiguousCount > 0 && mode === "numeric" ? (
-              <Badge tone="warning">
-                {parsed.numericAmbiguousCount} mã có nhiều cụm số, dùng cụm cuối
-              </Badge>
-            ) : null}
-            <CopyCodesMenu
-              items={parsed.valid.map((item) => {
-                const basename = basenameOf(item.raw);
-                return {
-                  code: stripExtension(basename),
-                  filename: basename,
-                };
-              })}
-              label="Copy nhanh 4 định dạng"
+          </div>
+
+          {/* Large Monospace Textarea */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold text-foreground">
+              Danh Sách Mã Cần Lọc:
+            </Label>
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              rows={9}
+              placeholder="Dán mã vào đây hoặc chọn Album ở trên (hỗ trợ mọi định dạng: Excel, Zalo, xuống dòng, dấu phẩy, dấu cách, có/không đuôi .jpg, .cr3, số thứ tự...)"
+              className="w-full rounded-xl border border-border/80 bg-background p-3.5 font-mono text-xs leading-relaxed text-foreground placeholder:text-muted-foreground focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20"
             />
           </div>
 
-          <Textarea
-            value={text}
-            onChange={(event) => setText(event.target.value)}
-            rows={8}
-            placeholder={"ANH-001\nANH-002\nANH-003"}
-            className="mt-3 font-mono text-xs"
-            aria-label="Danh sách mã ảnh khách chọn"
-          />
-          <p className="mt-1 text-xs text-muted-foreground">
-            {parsed.totalTokens} token · {parsed.items.length} mã sau chuẩn hóa.
-            Mã trùng chỉ xử lý một lần.
+          {/* Footer note */}
+          <p className="text-[11px] text-muted-foreground italic flex items-start gap-1.5">
+            <span>💡</span>
+            <span>
+              Hệ thống tự động so khớp thông minh bất kể bạn dán mã dạng chữ+số hay chỉ số, có hay không đuôi file.
+            </span>
           </p>
-        </section>
+        </div>
 
-        <section className="rounded-xl border border-border bg-surface p-4">
-          <h2 className="text-base font-semibold text-foreground">
-            Bước 2 — Chọn folder ảnh gốc trên máy
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            File System Access API đọc ngay trên máy và chỉ copy file; không tải
-            toàn bộ ảnh lên server và không gửi đường dẫn tuyệt đối.
-          </p>
-
-          {pickerSupported ? (
-            <div className="mt-3 flex flex-wrap gap-2">
-              <Button variant="outline" onClick={() => void chooseInputDirectory()}>
-                <FolderOpen className="h-4 w-4" aria-hidden />
-                Chọn thư mục ảnh gốc
-              </Button>
-              {outputMode === "subfolder" ? (
-                <span className="self-center text-xs text-muted-foreground">
-                  Folder con sẽ tạo trong thư mục gốc sau khi cấp quyền ghi.
+        {/* Card 2: Cấu Hình Thư Mục Trên Máy Tính */}
+        <div className="rounded-2xl border border-border bg-surface p-5 md:p-6 shadow-2xs space-y-4 flex flex-col justify-between">
+          <div className="space-y-4">
+            {/* Card 2 Header */}
+            <div className="flex items-center justify-between pb-1 border-b border-border/50">
+              <div className="flex items-center gap-2">
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-600 text-[11px] font-bold text-white">
+                  2
                 </span>
-              ) : (
-                <Button variant="outline" onClick={() => void chooseOutputDirectory()}>
-                  <FolderSearch className="h-4 w-4" aria-hidden />
-                  Chọn folder đầu ra
+                <h2 className="text-sm font-bold text-foreground md:text-base">
+                  Cấu Hình Thư Mục Trên Máy Tính
+                </h2>
+              </div>
+            </div>
+
+            {/* Hidden fallback file input for Safari or non-Chromium */}
+            <input
+              ref={folderInputRef}
+              type="file"
+              // @ts-expect-error webkitdirectory is standard in HTML5 for folder selection
+              webkitdirectory=""
+              directory=""
+              multiple
+              onChange={handleFallbackFolderChange}
+              className="hidden"
+            />
+
+            {/* Box 1: THƯ MỤC ẢNH GỐC */}
+            <div className="rounded-xl border border-border/80 bg-muted/20 p-4 space-y-2">
+              <div className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
+                THƯ MỤC ẢNH GỐC (CHỨA RAW, JPG...)
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Chọn thư mục ảnh từ thẻ nhớ hoặc ổ cứng máy tính để công cụ quét
+              </p>
+              <div className="flex flex-wrap items-center gap-3 pt-1">
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => void chooseInputDirectory()}
+                  className="rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3.5 py-2 gap-2 shadow-2xs"
+                >
+                  <FolderOpen className="h-4 w-4" />
+                  <span>Chọn thư mục ảnh gốc trên PC</span>
+                </Button>
+                <span className="text-xs text-muted-foreground truncate max-w-[240px]">
+                  {isScanning
+                    ? statusMessage || "Đang quét..."
+                    : inputFolderName
+                      ? `📁 ${inputFolderName} (${scannedFiles.length} file)`
+                      : "Chưa chọn thư mục nào"}
+                </span>
+              </div>
+            </div>
+
+            {/* Box 2: THƯ MỤC LƯU ẢNH ĐƯỢC LỌC RA */}
+            <div className="rounded-xl border border-border/80 bg-muted/20 p-4 space-y-3">
+              <div className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
+                THƯ MỤC LƯU ẢNH ĐƯỢC LỌC RA
+              </div>
+              <label className="flex items-start gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={createSubfolder}
+                  onChange={(e) => setCreateSubfolder(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-border text-blue-600 focus:ring-blue-500"
+                />
+                <div>
+                  <span className="text-xs font-semibold text-foreground">
+                    Tạo thư mục ảnh khách chọn ở trong thư mục gốc (Mặc định khuyên dùng)
+                  </span>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    Tự động tạo ngay 1 folder con bên trong thư mục ảnh gốc để gom toàn bộ ảnh đã lọc
+                  </p>
+                </div>
+              </label>
+
+              {createSubfolder && (
+                <div className="flex items-center gap-2 pl-6 pt-1">
+                  <span className="text-xs font-medium text-foreground shrink-0">
+                    Tên thư mục con:
+                  </span>
+                  <Input
+                    type="text"
+                    value={subfolderName}
+                    onChange={(e) => setSubfolderName(e.target.value)}
+                    className="h-8 text-xs max-w-[200px]"
+                    placeholder="Ảnh Khách Chọn"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Box 3: Định dạng file cần lọc */}
+            <div className="space-y-1.5 pt-1">
+              <Label className="text-xs font-semibold text-foreground">
+                Định dạng file cần lọc:
+              </Label>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setFileType("all")}
+                  className={`rounded-xl px-3.5 py-1.5 text-xs font-semibold transition-colors ${
+                    fileType === "all"
+                      ? "bg-blue-600 text-white shadow-2xs"
+                      : "border border-border bg-background text-foreground hover:bg-muted"
+                  }`}
+                >
+                  Tất cả (RAW & JPG)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFileType("raw")}
+                  className={`rounded-xl px-3.5 py-1.5 text-xs font-semibold transition-colors ${
+                    fileType === "raw"
+                      ? "bg-blue-600 text-white shadow-2xs"
+                      : "border border-border bg-background text-foreground hover:bg-muted"
+                  }`}
+                >
+                  Chỉ lấy RAW
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFileType("standard")}
+                  className={`rounded-xl px-3.5 py-1.5 text-xs font-semibold transition-colors ${
+                    fileType === "standard"
+                      ? "bg-blue-600 text-white shadow-2xs"
+                      : "border border-border bg-background text-foreground hover:bg-muted"
+                  }`}
+                >
+                  Chỉ lấy JPG/PNG
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Main Big CTA Button */}
+          <div className="pt-4">
+            {isRunning ? (
+              <div className="space-y-2">
+                <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+                  <div
+                    className="h-full bg-blue-600 transition-all duration-300"
+                    style={{
+                      width: `${
+                        progress.matched > 0
+                          ? Math.round((progress.copied / progress.matched) * 100)
+                          : 0
+                      }%`,
+                    }}
+                  />
+                </div>
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span>{statusMessage}</span>
+                  <span>
+                    {progress.copied} / {progress.matched} file
+                  </span>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleCancelFiltering}
+                  className="w-full text-xs font-semibold text-red-600 hover:bg-red-50"
+                >
+                  Dừng lọc ảnh
+                </Button>
+              </div>
+            ) : (
+              <Button
+                type="button"
+                onClick={() => void handleStartFiltering()}
+                disabled={parsed.valid.length === 0}
+                className="w-full rounded-xl py-3.5 md:py-4 text-sm md:text-base font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-md disabled:bg-slate-200 disabled:text-slate-400 dark:disabled:bg-slate-800 dark:disabled:text-slate-600 gap-2 cursor-pointer transition-all"
+              >
+                <Play className="h-4 w-4 fill-current" />
+                <span>BẮT ĐẦU LỌC ẢNH TỪ MÁY TÍNH</span>
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Results View when filtering finishes */}
+      {filterDone && rows.length > 0 && (
+        <div className="rounded-2xl border border-border bg-surface p-5 md:p-6 shadow-2xs space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+              <h3 className="text-base font-bold text-foreground">
+                Kết Quả Lọc Ảnh ({progress.copied} / {parsed.valid.length} file)
+              </h3>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleDownloadCsv}
+                className="text-xs font-medium gap-1.5 rounded-lg"
+              >
+                <Download className="h-3.5 w-3.5" />
+                <span>Tải Báo Cáo CSV</span>
+              </Button>
+              {progress.missing > 0 && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void handleCopyMissing()}
+                  className="text-xs font-medium gap-1.5 rounded-lg text-amber-600 hover:bg-amber-50"
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                  <span>Copy {progress.missing} Ảnh Thiếu</span>
                 </Button>
               )}
             </div>
-          ) : (
-            <Alert tone="warning" className="mt-3">
-              Trình duyệt không hỗ trợ File System Access API. Dùng chọn thư mục
-              (webkitdirectory) hoặc ZIP bên dưới; kết quả sẽ tải về dạng ZIP.
-              Server không đọc ổ đĩa của bạn.
-            </Alert>
-          )}
-
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
-            <div className="rounded-lg border border-border p-3">
-              <Label htmlFor="filter-folder-fallback">Hoặc chọn thư mục trên máy</Label>
-              <Input
-                id="filter-folder-fallback"
-                type="file"
-                multiple
-                className="mt-1.5"
-                ref={(element) => {
-                  if (element) {
-                    element.setAttribute("webkitdirectory", "");
-                    element.setAttribute("directory", "");
-                  }
-                }}
-                onChange={(event) => chooseFallbackFolder(event.target.files)}
-              />
-              <p className="mt-1 text-xs text-muted-foreground">
-                Fallback không ghi lại được vào folder gốc; tải ZIP kết quả.
-              </p>
-            </div>
-            <div className="rounded-lg border border-border p-3">
-              <Label htmlFor="filter-zip">Hoặc chọn file ZIP ảnh</Label>
-              <Input
-                id="filter-zip"
-                type="file"
-                accept=".zip,application/zip"
-                className="mt-1.5"
-                onChange={(event) =>
-                  void chooseZip(event.target.files?.[0] ?? null)
-                }
-              />
-              <p className="mt-1 text-xs text-muted-foreground">
-                Đọc danh sách file trong ZIP; không upload toàn bộ ZIP lên server.
-              </p>
-            </div>
           </div>
 
-          {sourceName ? (
-            <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg bg-surface-muted px-3 py-2 text-sm">
-              <CheckCircle2 className="h-4 w-4 text-[var(--success)]" aria-hidden />
-              <span className="text-foreground">{sourceName}</span>
-              <Badge tone="info">{files.length} file ảnh</Badge>
-              {zipName ? <Badge tone="neutral">ZIP fallback</Badge> : null}
-            </div>
-          ) : null}
-        </section>
-
-        <section className="rounded-xl border border-border bg-surface p-4">
-          <h2 className="text-base font-semibold text-foreground">
-            Bước 3 — Cấu hình đầu ra
-          </h2>
-          <div className="mt-3 grid gap-3 md:grid-cols-2">
-            <div>
-              <Label htmlFor="filter-output-mode">Nơi lưu ảnh đã lọc</Label>
-              <Select
-                id="filter-output-mode"
-                value={outputMode}
-                onChange={(event) =>
-                  setOutputMode(event.target.value as "subfolder" | "separate")
-                }
-                className="mt-1.5"
-              >
-                <option value="subfolder">Tạo folder con trong folder gốc</option>
-                <option value="separate">Dùng folder đầu ra riêng</option>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="filter-folder-name">Tên folder con</Label>
-              <Input
-                id="filter-folder-name"
-                value={folderName}
-                onChange={(event) => setFolderName(event.target.value)}
-                maxLength={80}
-                className="mt-1.5"
-                disabled={outputMode === "separate"}
-              />
-            </div>
-            <div>
-              <Label htmlFor="filter-file-type">Định dạng file</Label>
-              <Select
-                id="filter-file-type"
-                value={fileType}
-                onChange={(event) =>
-                  setFileType(event.target.value as FileTypeFilter)
-                }
-                className="mt-1.5"
-              >
-                <option value="all">Tất cả (RAW & JPG)</option>
-                <option value="raw">Chỉ lấy RAW</option>
-                <option value="standard">Chỉ lấy JPG/PNG</option>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="filter-conflict">Khi file đích tồn tại</Label>
-              <Select
-                id="filter-conflict"
-                value={conflict}
-                onChange={(event) =>
-                  setConflict(event.target.value as "rename" | "overwrite" | "skip")
-                }
-                className="mt-1.5"
-              >
-                <option value="rename">Đổi tên file mới</option>
-                <option value="overwrite">Ghi đè</option>
-                <option value="skip">Bỏ qua</option>
-              </Select>
-            </div>
-          </div>
-          <div className="mt-3 rounded-lg bg-surface-muted p-3 text-xs text-muted-foreground">
-            Chỉ copy file, không xóa/di chuyển file gốc. Giữ nguyên extension.
-            Với fallback ZIP, file kết quả được đóng gói để tải về.
-          </div>
-        </section>
-
-        {matches.items.length > 0 ? (
-          <section className="rounded-xl border border-border bg-surface p-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-base font-semibold text-foreground">
-                Kết quả so khớp
-              </h2>
-              <div className="flex flex-wrap gap-1.5">
-                <Badge tone="success">{matchedCount} khớp</Badge>
-                <Badge tone="warning">{ambiguousCount} ambiguous</Badge>
-                <Badge tone="danger">{missingCount} missing</Badge>
+          <div className="max-h-60 overflow-y-auto rounded-xl border border-border divide-y divide-border text-xs">
+            {rows.map((row, idx) => (
+              <div key={idx} className="flex items-center justify-between p-2.5 hover:bg-muted/30">
+                <div className="flex items-center gap-2 truncate">
+                  <span className="font-mono font-semibold">{row.inputCode}</span>
+                  {row.filename && <span className="text-muted-foreground truncate">→ {row.filename}</span>}
+                </div>
+                <div>
+                  {row.status === "matched" ? (
+                    <Badge tone="success">Đã lọc</Badge>
+                  ) : row.status === "missing" ? (
+                    <Badge tone="warning">Không tìm thấy</Badge>
+                  ) : row.status === "ambiguous" ? (
+                    <Badge tone="warning">Trùng mã</Badge>
+                  ) : (
+                    <Badge tone="neutral">{row.status}</Badge>
+                  )}
+                </div>
               </div>
-            </div>
-            <ul className="mt-3 divide-y divide-border text-sm">
-              {resolved.map((item) => (
-                <li key={itemKey(item)} className="py-2">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <span className="font-mono text-xs font-semibold">
-                        {item.parsed.raw}
-                      </span>
-                      {renderMatchStatus(item)}
-                    </div>
-                    {item.status === "matched" ? (
-                      <span className="truncate text-xs text-muted-foreground">
-                        {item.matchedFile?.relativePath}
-                      </span>
-                    ) : null}
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Xem Ghi Chú & Mã Ảnh */}
+      <Dialog open={isNotesModalOpen} onOpenChange={setIsNotesModalOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg">
+              <FileText className="h-5 w-5 text-amber-500" />
+              <span>Ghi Chú & Mã Ảnh Khách Chọn</span>
+            </DialogTitle>
+            <DialogDescription>
+              Album: {currentAlbumTitle || "Chưa chọn album"} · {currentSelectedCodes.length} ảnh khách đã chọn
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Quick Copy in Modal */}
+          <div className="flex flex-wrap items-center gap-2 py-2 border-y border-border/60">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                if (currentSelectedCodes.length === 0) return;
+                const codes = currentSelectedCodes.map((c) => c.code).join("\n");
+                await copyToClipboard(codes);
+                toast.success(`Đã copy ${currentSelectedCodes.length} mã ảnh!`);
+              }}
+              className="text-xs gap-1.5"
+            >
+              <Copy className="h-3.5 w-3.5" />
+              <span>Copy toàn bộ mã</span>
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                const notes = currentSelectedCodes
+                  .filter((c) => c.note && c.note.trim())
+                  .map((c) => `${c.code}: ${c.note?.trim()}`)
+                  .join("\n");
+                if (!notes) {
+                  toast.info("Album này chưa có ghi chú nào.");
+                  return;
+                }
+                await copyToClipboard(notes);
+                toast.success("Đã copy toàn bộ ghi chú của khách!");
+              }}
+              className="text-xs gap-1.5"
+            >
+              <Copy className="h-3.5 w-3.5" />
+              <span>Copy toàn bộ ghi chú</span>
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const lines = currentSelectedCodes.map((c) =>
+                  c.note?.trim() ? `${c.code}\t${c.note.trim()}` : c.code,
+                );
+                downloadText(
+                  `ghi-chu-album-${sanitizeFolderName(currentAlbumTitle || "album")}.txt`,
+                  lines.join("\n"),
+                );
+                toast.success("Đã tải file TXT ghi chú.");
+              }}
+              className="text-xs gap-1.5"
+            >
+              <Download className="h-3.5 w-3.5" />
+              <span>Tải file TXT</span>
+            </Button>
+          </div>
+
+          {/* Notes & Photos List */}
+          <div className="flex-1 overflow-y-auto max-h-[50vh] space-y-3 py-2 pr-1">
+            {currentSelectedCodes.length === 0 ? (
+              <div className="py-8 text-center text-muted-foreground text-sm">
+                Chưa có ảnh nào được khách chọn trong album này.
+              </div>
+            ) : (
+              currentSelectedCodes.map((item, index) => (
+                <div
+                  key={index}
+                  className="flex items-start gap-3 rounded-xl border border-border/70 p-3 bg-muted/15"
+                >
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-surface border border-border text-muted-foreground overflow-hidden">
+                    {item.thumbnailKey ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={`/api/files/${encodeURIComponent(item.thumbnailKey)}`}
+                        alt={item.code}
+                        className="h-full w-full object-cover"
+                        onError={(e) => {
+                          // Fallback to icon
+                          (e.target as HTMLElement).style.display = "none";
+                        }}
+                      />
+                    ) : (
+                      <span className="text-[10px] font-mono font-bold">IMG</span>
+                    )}
                   </div>
-                  {item.status === "ambiguous" ? (
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <Select
-                        value={choices[itemKey(item)] ?? ""}
-                        onChange={(event) =>
-                          setChoices((previous) => ({
-                            ...previous,
-                            [itemKey(item)]: event.target.value,
-                          }))
-                        }
-                        className="max-w-md"
-                        aria-label={`Chọn file cho mã ${item.parsed.raw}`}
-                      >
-                        <option value="">Chọn file thủ công...</option>
-                        {item.candidates.map((candidate) => (
-                          <option
-                            key={candidate.relativePath}
-                            value={candidate.relativePath}
-                          >
-                            {candidate.relativePath}
-                          </option>
-                        ))}
-                      </Select>
-                      <span className="text-xs text-[var(--warning)]">
-                        Không tự copy khi chưa xác nhận.
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-xs font-bold text-foreground">
+                        {item.code}
+                      </span>
+                      <span className="text-[11px] text-muted-foreground truncate">
+                        {item.filename}
                       </span>
                     </div>
-                  ) : null}
-                  {item.status === "missing" && albumFiles.length > 0 ? (
-                    <MissingSuggestions
-                      raw={item.parsed.raw}
-                      albumFiles={albumFiles}
-                    />
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-          </section>
-        ) : null}
+                    {item.note && item.note.trim() ? (
+                      <div className="mt-1.5 rounded-lg bg-amber-500/10 p-2 text-xs text-amber-900 dark:text-amber-200 border border-amber-500/20">
+                        <span className="font-semibold">Ghi chú sửa:</span> {item.note.trim()}
+                      </div>
+                    ) : (
+                      <p className="mt-1 text-[11px] text-muted-foreground italic">
+                        Không có ghi chú thêm
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
 
-        <section className="rounded-xl border border-border bg-surface p-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h2 className="text-base font-semibold text-foreground">
-                Bước 4 — Chạy lọc
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                Nút chỉ bật khi có mã hợp lệ và đã chọn nguồn ảnh.
-              </p>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsNotesModalOpen(false)}
+            >
+              Đóng
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal: Upgrade to Pro */}
+      <Dialog open={isUpgradeModalOpen} onOpenChange={setIsUpgradeModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg">
+              <Sparkles className="h-5 w-5 text-blue-600" />
+              <span>Nâng Cấp StudioCore Pro</span>
+            </DialogTitle>
+            <DialogDescription>
+              Lọc file RAW và ảnh gốc trên PC không giới hạn số lượng và dung lượng.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2 text-xs text-foreground">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+              <span>Lọc không giới hạn lượt album mỗi tháng.</span>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {busy ? (
-                <Button variant="outline" onClick={stop}>
-                  <Square className="h-4 w-4" aria-hidden />
-                  Hủy giữa chừng
-                </Button>
-              ) : null}
-              <Button onClick={() => void startFilter()} disabled={!canStart}>
-                {busy ? (
-                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                ) : (
-                  <Play className="h-4 w-4" aria-hidden />
-                )}
-                Bắt đầu lọc ảnh từ máy tính
-              </Button>
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+              <span>Hỗ trợ mọi định dạng file RAW (CR2, CR3, ARW, NEF, RAF, DNG).</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+              <span>Tốc độ quét đa luồng siêu tốc trực tiếp trên máy tính.</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+              <span>Đồng bộ 2 chiều với StudioCore Drive và hợp đồng khách hàng.</span>
             </div>
           </div>
 
-          {busy || progress.scanned > 0 ? (
-            <div className="mt-3 grid grid-cols-2 gap-2 text-sm sm:grid-cols-5">
-              <ProgressCell label="Đã quét" value={progress.scanned} />
-              <ProgressCell label="Khớp" value={progress.matched} />
-              <ProgressCell label="Đã copy" value={progress.copied} />
-              <ProgressCell label="Missing" value={progress.missing} />
-              <ProgressCell label="Lỗi" value={progress.errors} />
-            </div>
-          ) : null}
-
-          {cancelled ? (
-            <Alert tone="warning" className="mt-3">
-              Đang dừng sau file hiện tại. Các file đã copy không bị xóa.
-            </Alert>
-          ) : null}
-          {error ? (
-            <Alert tone="danger" className="mt-3">
-              {error}
-            </Alert>
-          ) : null}
-
-          {resultSummary ? (
-            <div className="mt-3 rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-sm text-[var(--success)] dark:border-emerald-900 dark:bg-emerald-950/40">
-              <p className="font-medium">{resultSummary}</p>
-              {jobId ? (
-                <p className="mt-1 text-xs">Đã lưu lịch sử job: {jobId}</p>
-              ) : null}
-              <div className="mt-2 flex flex-wrap gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() =>
-                    downloadText(
-                      "manifest.csv",
-                      buildManifestCsv(
-                        resultRows.map((row) => ({
-                          inputCode: row.inputCode,
-                          filename: row.filename,
-                          relativePath: row.relativePath,
-                          status: row.status,
-                          message: row.message,
-                        })),
-                      ),
-                    )
-                  }
-                >
-                  <Download className="h-4 w-4" aria-hidden />
-                  manifest.csv
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() =>
-                    downloadText(
-                      "missing.txt",
-                      buildMissingText(
-                        resultRows
-                          .filter(
-                            (row) =>
-                              row.status === "missing" ||
-                              row.status === "ambiguous" ||
-                              row.status === "error",
-                          )
-                          .map((row) => ({
-                            inputCode: row.inputCode,
-                            message: row.message,
-                          })),
-                      ),
-                    )
-                  }
-                >
-                  <Download className="h-4 w-4" aria-hidden />
-                  missing.txt
-                </Button>
-                {zipBlobUrl ? (
-                  <Button asChild size="sm" variant="outline">
-                    <a href={zipBlobUrl} download="anh-khach-chon.zip">
-                      <FileArchive className="h-4 w-4" aria-hidden />
-                      Tải ZIP kết quả
-                    </a>
-                  </Button>
-                ) : null}
-              </div>
-            </div>
-          ) : null}
-
-          {resultRows.length > 0 ? (
-            <div className="mt-3 max-h-80 overflow-auto rounded-lg border border-border">
-              <table className="w-full text-xs">
-                <thead className="sticky top-0 bg-surface-muted">
-                  <tr>
-                    <th className="px-2 py-2 text-left">Mã</th>
-                    <th className="px-2 py-2 text-left">File đích</th>
-                    <th className="px-2 py-2 text-left">Trạng thái</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {resultRows.map((row, index) => (
-                    <tr key={`${row.inputCode}-${index}`}>
-                      <td className="px-2 py-1.5 font-mono">{row.inputCode}</td>
-                      <td className="max-w-56 truncate px-2 py-1.5">
-                        {row.relativePath || "—"}
-                      </td>
-                      <td className="px-2 py-1.5">
-                        {row.status === "matched" ? (
-                          <span className="text-[var(--success)]">Đã copy</span>
-                        ) : row.status === "skipped" ? (
-                          <span className="text-[var(--warning)]">Bỏ qua</span>
-                        ) : row.status === "error" ? (
-                          <span className="text-[var(--danger)]">Lỗi</span>
-                        ) : (
-                          <span className="text-[var(--warning)]">{row.status}</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : null}
-        </section>
-      </div>
-
-      <aside className="space-y-4">
-        <section className="rounded-xl border border-border bg-surface p-4 text-sm">
-          <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
-            <Upload className="h-4 w-4 text-primary" aria-hidden />
-            Trạng thái xử lý
-          </h2>
-          <dl className="mt-2 space-y-1.5 text-xs">
-            <div className="flex justify-between gap-2">
-              <dt className="text-muted-foreground">Mã nhập</dt>
-              <dd>{parsed.totalTokens}</dd>
-            </div>
-            <div className="flex justify-between gap-2">
-              <dt className="text-muted-foreground">Mã hợp lệ</dt>
-              <dd>{parsed.valid.length}</dd>
-            </div>
-            <div className="flex justify-between gap-2">
-              <dt className="text-muted-foreground">File đã quét</dt>
-              <dd>{files.length}</dd>
-            </div>
-            <div className="flex justify-between gap-2">
-              <dt className="text-muted-foreground">File phù hợp định dạng</dt>
-              <dd>{eligibleFiles.length}</dd>
-            </div>
-            <div className="flex justify-between gap-2">
-              <dt className="text-muted-foreground">File sẽ copy</dt>
-              <dd>{matchedCount}</dd>
-            </div>
-          </dl>
-          <p className="mt-3 text-xs text-muted-foreground">
-            Mã được so khớp exact basename trước; chế độ chỉ số dùng cụm số cuối.
-          </p>
-        </section>
-
-        <section className="rounded-xl border border-border bg-surface p-4 text-sm">
-          <h2 className="text-base font-semibold text-foreground">An toàn dữ liệu</h2>
-          <ul className="mt-2 space-y-1.5 text-xs text-muted-foreground">
-            <li className="flex gap-2">
-              <Copy className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
-              Chỉ copy, không xóa hoặc di chuyển file gốc.
-            </li>
-            <li className="flex gap-2">
-              <XCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
-              Không lưu đường dẫn tuyệt đối trên máy khách.
-            </li>
-            <li className="flex gap-2">
-              <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
-              Ambiguous không tự copy; cần chọn thủ công.
-            </li>
-          </ul>
-        </section>
-      </aside>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsUpgradeModalOpen(false)}
+            >
+              Để sau
+            </Button>
+            <Button
+              type="button"
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+              onClick={() => {
+                setIsUpgradeModalOpen(false);
+                toast.success("Vui lòng liên hệ Hotline 0976 181 859 để kích hoạt gói Pro!");
+              }}
+            >
+              Liên hệ kích hoạt ngay
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
-
-function ProgressCell({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-lg border border-border px-2 py-1.5">
-      <p className="text-[11px] text-muted-foreground">{label}</p>
-      <p className="font-semibold tabular-nums">{value}</p>
-    </div>
-  );
-}
-
-function MissingSuggestions({
-  raw,
-  albumFiles,
-}: {
-  raw: string;
-  albumFiles: { code: string; filename: string }[];
-}) {
-  const suggestions = suggestSimilarAlbumCodes(raw, albumFiles);
-  if (suggestions.length === 0) return null;
-  return (
-    <p className="mt-1 text-xs text-muted-foreground">
-      Gợi ý heuristic (không tự copy):{" "}
-      {suggestions
-        .map((item) => `${item.code} (${item.filename}, cách ${item.distance})`)
-        .join(" · ")}
-    </p>
-  );
-}
-

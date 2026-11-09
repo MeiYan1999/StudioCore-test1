@@ -10,9 +10,9 @@ services:
     autoDeploy: true
     envVars:
       - key: AUTH_SECRET
-        generateValue: true
+        value: studiocore-prod-auth-secret-key-stable-2026-vn-secure
       - key: TOKEN_ENCRYPTION_KEY
-        generateValue: true
+        value: 0123456789abcdef0123456789abcdef
       - key: NEXT_PUBLIC_SITE_URL
         value: https://studiocore-test1.onrender.com
       - key: UPLOAD_ROOT
@@ -20,7 +20,15 @@ services:
       - key: STORAGE_PROVIDER
         value: local
       - key: SEED_DEMO
-        value: "true"
+        value: "false"
+      - key: R2_ACCOUNT_ID
+        value: b23b61dca3b7bcb70fb3e044e8943dad
+      - key: R2_ACCESS_KEY_ID
+        value: 8d28087a0b082f353b6b0487fbafb0ef
+      - key: R2_SECRET_ACCESS_KEY
+        value: d9866b88d3d2e51a9869b1d98be4075bc800c2036fe6bcb4c36061457a3124a0
+      - key: R2_BUCKET_NAME
+        value: studiocore-data
     disk:
       name: studiocore-data
       mountPath: /app/data
