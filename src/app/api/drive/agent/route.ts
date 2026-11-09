@@ -148,10 +148,15 @@ export async function POST(request: Request) {
 
       const created = createDriveShare(newShare);
 
+      const origin =
+        process.env.NEXT_PUBLIC_APP_URL ||
+        process.env.APP_URL ||
+        new URL(request.url).origin;
+
       return NextResponse.json({
         success: true,
         shareId: created.id,
-        publicUrl: `${new URL(request.url).origin}/drive/${created.id}`,
+        publicUrl: `${origin}/drive/${created.id}`,
         share: created,
       });
     }

@@ -43,6 +43,18 @@ function saveConfig(cfg) {
   fs.writeFileSync(CONFIG_FILE, JSON.stringify(cfg, null, 2), "utf8");
 }
 
+function getLocalNetworkIp() {
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name] || []) {
+      if (iface.family === "IPv4" && !iface.internal) {
+        return iface.address;
+      }
+    }
+  }
+  return "127.0.0.1";
+}
+
 class AgentClient {
   constructor(config = loadConfig()) {
     this.config = config;
@@ -103,6 +115,17 @@ class AgentClient {
     const shareId = `drv-${path.basename(folderPath).toLowerCase().replace(/[^a-z0-9]/g, "-")}-${Date.now().toString().slice(-4)}`;
     const publicUrl = `${this.config.serverUrl.replace(/\/$/, "")}/drive/${shareId}`;
 
+    const localIp = getLocalNetworkIp();
+    let lanUrl = publicUrl;
+    try {
+      const serverUrlObj = new URL(this.config.serverUrl);
+      if (serverUrlObj.hostname === "localhost" || serverUrlObj.hostname === "127.0.0.1") {
+        lanUrl = `${serverUrlObj.protocol}//${localIp}:${serverUrlObj.port || 3000}/drive/${shareId}`;
+      }
+    } catch {
+      // Ignore
+    }
+
     let res = null;
     try {
       res = await this.sendRequest("/api/drive/agent", "POST", {
@@ -135,12 +158,15 @@ class AgentClient {
     }
 
     if (res && res.success) {
+      res.lanUrl = lanUrl;
+      res.localIp = localIp;
       this.config.shares.push({
         id: shareId,
         title: scan.title,
         localPath: scan.localPath,
         type: scan.type,
         publicUrl: res.publicUrl || publicUrl,
+        lanUrl,
         createdAt: new Date().toISOString(),
       });
       saveConfig(this.config);

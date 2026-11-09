@@ -8,7 +8,7 @@
     "node": ">=20.9.0"
   },
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -H 0.0.0.0",
     "dev:demo": "npm run db:migrate && npm run db:seed && next dev",
     "build": "next build",
     "start": "next start",
