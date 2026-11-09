@@ -112,7 +112,7 @@ export function buildGoogleLoginUrl(
   if (!config.configured) {
     throw new ValidationError("Google OAuth chưa được cấu hình.");
   }
-  const includeDrive = options?.includeDrive ?? true;
+  const includeDrive = options?.includeDrive ?? false;
   const scopes = [
     "openid",
     "email",
@@ -125,9 +125,15 @@ export function buildGoogleLoginUrl(
     redirect_uri: redirectUri,
     response_type: "code",
     scope: scopes.join(" "),
-    access_type: "offline",
-    prompt: "consent select_account",
-    include_granted_scopes: "true",
+    ...(includeDrive
+      ? {
+          access_type: "offline",
+          prompt: "consent select_account",
+          include_granted_scopes: "true",
+        }
+      : {
+          prompt: "select_account",
+        }),
     state,
   });
   return `${GOOGLE_AUTH_URL}?${params.toString()}`;

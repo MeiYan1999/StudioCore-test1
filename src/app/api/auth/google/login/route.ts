@@ -18,9 +18,12 @@ export async function GET(request: Request): Promise<Response> {
     );
   }
 
+  const url = new URL(request.url);
+  const includeDrive = url.searchParams.get("drive") === "true";
+
   const redirectUri = getGoogleLoginRedirectUri(request);
   const state = await createGoogleLoginStateToken();
-  const authUrl = buildGoogleLoginUrl(redirectUri, state);
+  const authUrl = buildGoogleLoginUrl(redirectUri, state, { includeDrive });
 
   return NextResponse.redirect(authUrl);
 }
