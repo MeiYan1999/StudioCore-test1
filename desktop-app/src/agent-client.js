@@ -23,7 +23,7 @@ function loadConfig() {
   }
 
   const defaultConfig = {
-    serverUrl: "http://localhost:3000",
+    serverUrl: "https://www.studiocore.io.vn",
     connectKey: "sc_drive_live_tenant_demo_984f7b2e1a",
     hostname: os.hostname(),
     os: process.platform === "win32" ? "windows" : process.platform === "darwin" ? "macos" : "linux",
