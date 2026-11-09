@@ -6,6 +6,7 @@ import {
   readStorageBuffer,
   writeStorageBuffer,
 } from "../storage/local-storage";
+import { createR2Adapter, getR2Config } from "../storage/r2-storage";
 
 export type StorageProvider = "local" | "s3" | "r2";
 
@@ -83,6 +84,9 @@ export function getStorageProvider(): StorageProvider {
   if (value === "s3" || value === "r2") {
     return value;
   }
+  if (getR2Config()) {
+    return "r2";
+  }
   return "local";
 }
 
@@ -92,7 +96,7 @@ export function getStorageAdapter(): StorageAdapter {
     return unconfiguredAdapter("s3");
   }
   if (provider === "r2") {
-    return unconfiguredAdapter("r2");
+    return createR2Adapter();
   }
   return localAdapter;
 }
