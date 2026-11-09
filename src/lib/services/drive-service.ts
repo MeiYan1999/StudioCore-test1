@@ -359,6 +359,13 @@ export function updateDriveShareStatus(id: string, status: DriveShareStatus): bo
   return true;
 }
 
+export function deleteDriveShare(id: string): boolean {
+  const index = globalShares.findIndex((s) => s.id === id);
+  if (index === -1) return false;
+  globalShares.splice(index, 1);
+  return true;
+}
+
 export function toggleDriveItemSelection(shareId: string, itemId: string, note?: string | null): boolean {
   const share = globalShares.find((s) => s.id === shareId);
   if (!share) return false;

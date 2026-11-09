@@ -14,26 +14,56 @@ function loadConfig() {
     fs.mkdirSync(CONFIG_DIR, { recursive: true });
   }
 
+  let cfg = null;
   if (fs.existsSync(CONFIG_FILE)) {
     try {
-      return JSON.parse(fs.readFileSync(CONFIG_FILE, "utf8"));
+      cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, "utf8"));
     } catch {
       // Fallback
     }
   }
 
-  const defaultConfig = {
-    serverUrl: "https://www.studiocore.io.vn",
-    connectKey: "sc_drive_live_tenant_demo_984f7b2e1a",
-    hostname: os.hostname(),
-    os: process.platform === "win32" ? "windows" : process.platform === "darwin" ? "macos" : "linux",
-    shares: [],
-    autoFilterRaw: true,
-    chimeSound: true,
-  };
+  if (!cfg) {
+    cfg = {
+      serverUrl: "https://www.studiocore.io.vn",
+      connectKey: "sc_drive_live_tenant_demo_984f7b2e1a",
+      hostname: os.hostname(),
+      os: process.platform === "win32" ? "windows" : process.platform === "darwin" ? "macos" : "linux",
+      shares: [],
+      autoFilterRaw: true,
+      chimeSound: true,
+    };
+    saveConfig(cfg);
+    return cfg;
+  }
 
-  saveConfig(defaultConfig);
-  return defaultConfig;
+  // Deduplicate and ensure status
+  let modified = false;
+  if (Array.isArray(cfg.shares)) {
+    const seen = new Set();
+    const deduped = [];
+    for (let i = cfg.shares.length - 1; i >= 0; i--) {
+      const s = cfg.shares[i];
+      if (!s || !s.localPath) continue;
+      const key = s.localPath.toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        if (!s.status) {
+          s.status = "active";
+          modified = true;
+        }
+        deduped.unshift(s);
+      } else {
+        modified = true;
+      }
+    }
+    if (modified || deduped.length !== cfg.shares.length) {
+      cfg.shares = deduped;
+      saveConfig(cfg);
+    }
+  }
+
+  return cfg;
 }
 
 function saveConfig(cfg) {
@@ -164,19 +194,73 @@ class AgentClient {
       res.publicUrl = res.publicUrl || publicUrl;
       res.lanUrl = lanUrl;
       res.localIp = localIp;
-      this.config.shares.push({
+
+      const shareEntry = {
         id: shareId,
         title: scan.title,
         localPath: scan.localPath,
         type: scan.type,
+        status: "active",
         publicUrl: res.publicUrl,
         lanUrl,
         createdAt: new Date().toISOString(),
-      });
+      };
+
+      const existingIndex = this.config.shares.findIndex(
+        (s) => s.localPath && s.localPath.toLowerCase() === scan.localPath.toLowerCase()
+      );
+      if (existingIndex !== -1) {
+        this.config.shares[existingIndex] = shareEntry;
+      } else {
+        this.config.shares.push(shareEntry);
+      }
       saveConfig(this.config);
     }
 
     return res;
+  }
+
+  async deleteShare(shareId) {
+    const idx = this.config.shares.findIndex((s) => s.id === shareId);
+    if (idx !== -1) {
+      this.config.shares.splice(idx, 1);
+      saveConfig(this.config);
+    }
+
+    try {
+      await this.sendRequest("/api/drive/agent", "POST", {
+        action: "delete_share",
+        connectKey: this.config.connectKey,
+        shareId,
+      });
+    } catch {
+      // Offline / ignore error
+    }
+
+    return { success: true, shareId };
+  }
+
+  async toggleShareStatus(shareId) {
+    const share = this.config.shares.find((s) => s.id === shareId);
+    if (!share) {
+      return { success: false, error: "Share not found" };
+    }
+
+    share.status = share.status === "paused" ? "active" : "paused";
+    saveConfig(this.config);
+
+    try {
+      await this.sendRequest("/api/drive/agent", "POST", {
+        action: "toggle_status",
+        connectKey: this.config.connectKey,
+        shareId,
+        status: share.status,
+      });
+    } catch {
+      // Offline / ignore error
+    }
+
+    return { success: true, shareId, status: share.status };
   }
 
   async pollNotifications() {

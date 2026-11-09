@@ -12,9 +12,12 @@ import {
   Heart,
   Key,
   Monitor,
+  PauseCircle,
+  PlayCircle,
   Server,
   Sparkles,
   Terminal,
+  Trash2,
   Video,
   X,
 } from "lucide-react";
@@ -23,6 +26,7 @@ import { Button } from "@/components/ui/button";
 import {
   listDriveShares,
   updateDriveShareStatus,
+  deleteDriveShare,
   getDriveExportRawCodes,
   type DriveShare,
   type DriveShareStatus,
@@ -41,6 +45,13 @@ export default function ManageDrivePage() {
   const handleToggleStatus = (shareId: string, currentStatus: DriveShareStatus) => {
     const newStatus: DriveShareStatus = currentStatus === "active" ? "paused" : "active";
     updateDriveShareStatus(shareId, newStatus);
+    setShares([...listDriveShares()]);
+  };
+
+  const handleDeleteShare = (share: DriveShare) => {
+    const ok = window.confirm(`Bạn có chắc chắn muốn xóa chia sẻ "${share.title}"?\nKhách sẽ không thể truy cập link này nữa.`);
+    if (!ok) return;
+    deleteDriveShare(share.id);
     setShares([...listDriveShares()]);
   };
 
@@ -250,11 +261,37 @@ export default function ManageDrivePage() {
 
                   <Button
                     size="sm"
-                    variant="ghost"
+                    variant="outline"
                     onClick={() => handleToggleStatus(share.id, share.status)}
-                    className="text-xs"
+                    className={`text-xs ${
+                      share.status === "active"
+                        ? "text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 hover:text-amber-600 dark:hover:text-amber-300 border-amber-500/20"
+                        : "text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-600 dark:hover:text-emerald-300 border-emerald-500/20"
+                    }`}
+                    title={share.status === "active" ? "Dừng chia sẻ tạm thời" : "Tiếp tục chia sẻ"}
                   >
-                    {share.status === "active" ? "Tạm khóa" : "Mở lại"}
+                    {share.status === "active" ? (
+                      <>
+                        <PauseCircle className="h-3.5 w-3.5 mr-1" />
+                        Dừng chia sẻ
+                      </>
+                    ) : (
+                      <>
+                        <PlayCircle className="h-3.5 w-3.5 mr-1" />
+                        Tiếp tục chia sẻ
+                      </>
+                    )}
+                  </Button>
+
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleDeleteShare(share)}
+                    className="text-xs text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 hover:text-rose-600 dark:hover:text-rose-300 border-rose-500/20"
+                    title="Xóa chia sẻ này"
+                  >
+                    <Trash2 className="h-3.5 w-3.5 mr-1" />
+                    Xóa
                   </Button>
 
                   <Button asChild size="sm" variant="ghost">

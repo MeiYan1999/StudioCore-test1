@@ -40,20 +40,32 @@ function renderShares(shares) {
   }
 
   sharesList.innerHTML = shares
-    .map(
-      (share) => `
-    <div class="share-card">
+    .map((share) => {
+      const isPaused = share.status === "paused";
+      return `
+    <div class="share-card ${isPaused ? "is-paused" : ""}">
       <div class="share-card-info">
-        <h4>${share.title} <span style="font-size: 10px; background: rgba(124, 58, 237, 0.2); color: #a78bfa; padding: 2px 6px; border-radius: 4px; margin-left: 6px;">${share.type.toUpperCase()}</span></h4>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <h4>${share.title}</h4>
+          <span style="font-size: 10px; background: rgba(124, 58, 237, 0.2); color: #a78bfa; padding: 2px 6px; border-radius: 4px;">${share.type.toUpperCase()}</span>
+          <span class="status-badge ${isPaused ? "badge-paused" : "badge-active"}">
+            <span class="dot ${isPaused ? "dot-paused" : "dot-active"}"></span>
+            ${isPaused ? "Đã dừng chia sẻ" : "Đang chia sẻ"}
+          </span>
+        </div>
         <p class="path">${share.localPath}</p>
       </div>
       <div class="share-card-actions">
         <button class="btn btn-primary" onclick="copyShareLink('${share.publicUrl}')">Copy Link</button>
         <button class="btn btn-secondary" onclick="openWebLink('${share.publicUrl}')">Mở Web</button>
+        <button class="btn ${isPaused ? "btn-warning" : "btn-outline"}" onclick="toggleShare('${share.id}')">
+          ${isPaused ? "Tiếp tục chia sẻ" : "Dừng chia sẻ"}
+        </button>
+        <button class="btn btn-danger" onclick="deleteShare('${share.id}', '${(share.title || "").replace(/'/g, "\\'")}')">Xóa</button>
       </div>
     </div>
-  `,
-    )
+  `;
+    })
     .join("");
 }
 
@@ -64,6 +76,49 @@ window.copyShareLink = (url) => {
 
 window.openWebLink = (url) => {
   window.open(url, "_blank");
+};
+
+window.toggleShare = async (shareId) => {
+  try {
+    const res = await fetch("/api/toggle-share", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ shareId }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast(data.status === "paused" ? "Đã dừng chia sẻ thư mục." : "Đã kích hoạt lại chia sẻ!");
+      loadAgentState();
+    } else {
+      showToast("Không tìm thấy chia sẻ.");
+    }
+  } catch {
+    showToast("Lỗi khi thay đổi trạng thái chia sẻ.");
+  }
+};
+
+window.deleteShare = async (shareId, title) => {
+  const confirmed = window.confirm(
+    `Bạn có chắc chắn muốn xóa chia sẻ "${title}"?\nKhách sẽ không thể xem hoặc chọn ảnh qua link này nữa.`
+  );
+  if (!confirmed) return;
+
+  try {
+    const res = await fetch("/api/delete-share", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ shareId }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast(`Đã xóa chia sẻ "${title}"!`);
+      loadAgentState();
+    } else {
+      showToast("Không thể xóa chia sẻ.");
+    }
+  } catch {
+    showToast("Lỗi khi xóa chia sẻ.");
+  }
 };
 
 // Navigation

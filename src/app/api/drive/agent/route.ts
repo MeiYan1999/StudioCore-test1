@@ -3,6 +3,7 @@ import {
   listDriveShares,
   createDriveShare,
   updateDriveShareStatus,
+  deleteDriveShare,
   type DriveShare,
 } from "@/lib/services/drive-service";
 
@@ -172,6 +173,13 @@ export async function POST(request: Request) {
     if (action === "toggle_status") {
       const { shareId, status } = body;
       const ok = updateDriveShareStatus(shareId, status);
+      return NextResponse.json({ success: ok });
+    }
+
+    // Delete Share
+    if (action === "delete_share") {
+      const { shareId } = body;
+      const ok = deleteDriveShare(shareId);
       return NextResponse.json({ success: ok });
     }
 

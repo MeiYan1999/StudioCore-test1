@@ -3,6 +3,8 @@ import {
   listDriveShares,
   getDriveShareById,
   updateDriveShareStatus,
+  deleteDriveShare,
+  createDriveShare,
   toggleDriveItemSelection,
   addDriveVideoComment,
   getDriveExportRawCodes,
@@ -65,5 +67,33 @@ describe("StudioCore Drive Service", () => {
 
     const share = getDriveShareById("highlight-cuoi-minh-lan-video");
     expect(share?.comments?.some((c) => c.seconds === 95)).toBe(true);
+  });
+
+  it("cho phép xóa link chia sẻ (deleteDriveShare)", () => {
+    createDriveShare({
+      id: "test-delete-share-id",
+      tenantId: "tenant-demo",
+      title: "Test Delete Share",
+      type: "album",
+      status: "active",
+      localPath: "/tmp/test-delete",
+      agentHostname: "MacStudio",
+      agentConnected: true,
+      passwordProtected: false,
+      allowRawDownload: true,
+      allowZipDownload: true,
+      maxSelectCount: 40,
+      totalFiles: 0,
+      totalSizeBytes: 100,
+      totalSizeLabel: "100 B",
+      createdAt: new Date().toISOString(),
+      expiresAt: null,
+      items: [],
+    });
+
+    expect(getDriveShareById("test-delete-share-id")).toBeDefined();
+    const ok = deleteDriveShare("test-delete-share-id");
+    expect(ok).toBe(true);
+    expect(getDriveShareById("test-delete-share-id")).toBeUndefined();
   });
 });

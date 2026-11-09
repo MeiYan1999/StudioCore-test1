@@ -170,6 +170,40 @@ function startLocalUiServer(port = 3888) {
       return;
     }
 
+    if (url.pathname === "/api/delete-share" && req.method === "POST") {
+      let body = "";
+      req.on("data", (chunk) => (body += chunk));
+      req.on("end", async () => {
+        try {
+          const { shareId } = JSON.parse(body);
+          const result = await agent.deleteShare(shareId);
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify(result));
+        } catch (e) {
+          res.writeHead(500, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: e.message }));
+        }
+      });
+      return;
+    }
+
+    if (url.pathname === "/api/toggle-share" && req.method === "POST") {
+      let body = "";
+      req.on("data", (chunk) => (body += chunk));
+      req.on("end", async () => {
+        try {
+          const { shareId } = JSON.parse(body);
+          const result = await agent.toggleShareStatus(shareId);
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify(result));
+        } catch (e) {
+          res.writeHead(500, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: e.message }));
+        }
+      });
+      return;
+    }
+
     if (url.pathname === "/api/save-config" && req.method === "POST") {
       let body = "";
       req.on("data", (chunk) => (body += chunk));
