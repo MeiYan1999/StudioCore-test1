@@ -43,6 +43,7 @@ import {
 import { logoutAction, switchBranchAction } from "@/lib/auth/actions";
 import { markAllNotificationsReadAction } from "@/lib/actions/notification-actions";
 import { cn, initials } from "@/lib/utils";
+import { BrandApertureIcon } from "@/components/brand/brand-logo";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -434,9 +435,9 @@ function SidebarContent({
   return (
     <div className="flex h-full flex-col">
       <div className="flex h-16 items-center gap-3 border-b border-border px-5">
-        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-base font-bold text-primary-foreground">
-          S
-        </span>
+        <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-violet-600 via-indigo-600 to-fuchsia-500 text-white shadow-md shadow-violet-500/20 ring-1 ring-white/20">
+          <BrandApertureIcon className="h-5 w-5 text-white" />
+        </div>
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-foreground">StudioCore</p>
           <p className="truncate text-xs text-muted-foreground">{actor.tenantName}</p>

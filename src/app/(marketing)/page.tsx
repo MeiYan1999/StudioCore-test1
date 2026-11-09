@@ -3,7 +3,7 @@ import Link from "next/link";
 import {
   ArrowRight,
   Check,
-  CircleAlert,
+  CheckCircle2,
   ShieldCheck,
   Sparkles,
   Star,
@@ -19,11 +19,13 @@ import { AmbientGlow } from "@/components/marketing/ambient-glow";
 import { SpotlightCard } from "@/components/marketing/spotlight-card";
 import { LiquidGlassCard } from "@/components/marketing/liquid-glass-card";
 import { InteractiveHeroPhotoShare } from "@/components/marketing/interactive-hero-photoshare";
+import { FloatingScheduleCard } from "@/components/marketing/floating-schedule-card";
+import { TransformationMatrix } from "@/components/marketing/transformation-matrix";
+import { BentoGridFeatures } from "@/components/marketing/bento-grid-features";
 import { InteractivePhotoShareDemo } from "@/components/marketing/interactive-photoshare-showcase";
 import { FloatingContact } from "@/components/marketing/floating-contact";
 import {
   FAQS,
-  FEATURE_GROUPS,
   GUIDES,
   OPERATING_STEPS,
   TESTIMONIALS,
@@ -36,9 +38,9 @@ import {
 } from "@/lib/marketing/metadata";
 
 export const metadata = marketingMetadata({
-  title: "StudioCore — Phần mềm Quản lý Studio Chụp ảnh & Áo cưới All-in-One",
+  title: "StudioCore — Hệ điều hành Quản lý Studio Chụp ảnh & Áo cưới Đột phá",
   description:
-    "Phần mềm quản lý studio ảnh cưới, gia đình & phóng sự chuyên nghiệp: CRM khách hàng, lịch chụp chống trùng, hợp đồng số, kho váy cưới QR, PhotoShare giao ảnh trực tuyến và kế toán thuế HKD.",
+    "Phần mềm SaaS chuyên sâu cho studio ảnh cưới, gia đình & phóng sự: Lịch chụp chống trùng ekip, hợp đồng số ký tay VietQR, PhotoShare Zero-Storage và kế toán thuế HKD.",
   path: "/",
 });
 
@@ -64,326 +66,251 @@ export default function HomePage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd(FAQS)) }}
       />
 
-      {/* Hero Section with Ambient Glow & Floating Interactive Preview */}
-      <section className="relative overflow-hidden border-b border-border bg-surface">
+      {/* =========================================================================
+          HERO SECTION: High-Impact Centered Layout + 3D Command Stage
+          ========================================================================= */}
+      <section className="relative overflow-hidden border-b border-border bg-surface pt-12 pb-16 lg:pt-20 lg:pb-24">
         <AmbientGlow />
         <SectionContainer>
-          <div className="grid items-center gap-10 py-16 lg:grid-cols-[1.05fr_0.95fr] lg:py-24">
-            <div>
-              {/* Shimmer Badge with Live Ping Beacon */}
-              <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-4 py-1.5 text-xs font-semibold text-primary shadow-xs backdrop-blur-md transition-all duration-300 hover:scale-105 hover:bg-primary/10">
-                <span className="relative flex h-2 w-2">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
-                  <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
-                </span>
-                <span>Phần mềm quản lý studio All-in-One số 1 Việt Nam</span>
-                <Sparkles className="h-3.5 w-3.5 text-amber-500" />
-              </div>
-
-              <h1 className="mt-5 max-w-2xl text-4xl font-semibold leading-[1.14] tracking-tight text-foreground sm:text-5xl lg:text-5xl">
-                Phần mềm quản lý Studio Chụp ảnh &amp; Áo cưới chuyên nghiệp.
-              </h1>
-              <p className="mt-5 max-w-xl text-base leading-7 text-muted-foreground">
-                Giải pháp toàn diện giúp chủ studio chấm dứt thất thoát doanh thu, chống trùng lịch ekip,
-                tự động tính hoa hồng thợ ảnh/makeup và giao ảnh trực tuyến PhotoShare — tối ưu riêng cho
-                thị trường studio Việt Nam.
-              </p>
-
-              {/* Action Buttons with Micro-interactions */}
-              <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-                <Button
-                  asChild
-                  size="lg"
-                  className="w-full shadow-lg shadow-primary/25 transition-all duration-300 hover:scale-[1.02] hover:shadow-primary/35 active:scale-[0.98] sm:w-auto"
-                >
-                  <Link href="/register">
-                    Dùng thử 30 ngày miễn phí
-                    <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" aria-hidden />
-                  </Link>
-                </Button>
-                <Button
-                  asChild
-                  size="lg"
-                  variant="outline"
-                  className="w-full transition-all duration-300 hover:bg-accent/60 active:scale-[0.98] sm:w-auto"
-                >
-                  <Link href="/pricing">Xem bảng giá</Link>
-                </Button>
-              </div>
-
-              <ul className="mt-6 flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground">
-                <li className="flex items-center gap-1.5 transition-colors hover:text-foreground">
-                  <Check className="h-4 w-4 text-[var(--success)]" aria-hidden />
-                  Miễn phí 30 ngày đầy đủ tính năng
-                </li>
-                <li className="flex items-center gap-1.5 transition-colors hover:text-foreground">
-                  <ShieldCheck className="h-4 w-4 text-[var(--success)]" aria-hidden />
-                  Không cần thẻ tín dụng
-                </li>
-                <li className="flex items-center gap-1.5 transition-colors hover:text-foreground">
-                  <Sparkles className="h-4 w-4 text-amber-500" aria-hidden />
-                  Hotline hỗ trợ: 0976 181 859
-                </li>
-              </ul>
+          <div className="mx-auto max-w-4xl text-center">
+            {/* Shimmer Pill Badge with Live Beacon */}
+            <div className="inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/5 px-4 py-1.5 text-xs font-semibold text-primary shadow-xs backdrop-blur-md transition-all duration-300 hover:scale-105 hover:bg-primary/10">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+              </span>
+              <span>StudioCore 2.0 • Nền tảng Điều hành Studio Đột phá</span>
+              <Sparkles className="h-3.5 w-3.5 text-amber-500" />
             </div>
 
-            {/* Dashboard & Interactive Floating Widget with Apple Liquid Glass */}
-            <div className="group relative mx-auto w-full max-w-xl">
-              <LiquidGlassCard className="p-2 sm:p-2.5 shadow-2xl">
-                <div className="overflow-hidden rounded-xl border border-white/60 dark:border-white/10">
-                  <Image
-                    src="/marketing/dashboard.jpg"
-                    alt="Màn hình dashboard thật của StudioCore với KPI doanh thu, lịch chụp và trạng thái đơn"
-                    width={1440}
-                    height={810}
-                    priority
-                    className="h-auto w-full transition-transform duration-700 group-hover:scale-[1.01]"
-                  />
-                </div>
-              </LiquidGlassCard>
+            {/* Display Typography */}
+            <h1 className="mt-6 text-4xl font-extrabold tracking-tight text-foreground sm:text-5xl lg:text-6xl sm:leading-[1.12]">
+              Vận hành Studio Tinh gọn.{" "}
+              <span className="block mt-1 bg-gradient-to-r from-violet-600 via-indigo-600 to-fuchsia-500 bg-clip-text text-transparent">
+                Trao khoảnh khắc trọn vẹn.
+              </span>
+            </h1>
 
-              {/* Floating Levitation PhotoShare Widget */}
-              <InteractiveHeroPhotoShare demoPhotoBase={demoPhotoBase} />
+            <p className="mx-auto mt-6 max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg">
+              Giải pháp SaaS all-in-one chuyên sâu cho Studio Cưới, Phim trường &amp; Áo cưới: Lịch chụp
+              chống trùng ekip, hợp đồng số ký tay VietQR, PhotoShare chọn ảnh RAW 30 giây và kế toán thuế
+              Hộ kinh doanh.
+            </p>
+
+            {/* Centered CTA Buttons */}
+            <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+              <Button
+                asChild
+                size="lg"
+                className="w-full shadow-xl shadow-primary/25 transition-all duration-300 hover:scale-[1.02] hover:shadow-primary/35 active:scale-[0.98] sm:w-auto"
+              >
+                <Link href="/register">
+                  Dùng thử 30 ngày miễn phí
+                  <ArrowRight className="h-4 w-4 ml-1.5" aria-hidden />
+                </Link>
+              </Button>
+              <Button
+                asChild
+                size="lg"
+                variant="outline"
+                className="w-full border-border/80 bg-surface/80 backdrop-blur-md transition-all duration-300 hover:bg-accent/60 active:scale-[0.98] sm:w-auto"
+              >
+                <Link href="#photoshare">Trải nghiệm PhotoShare</Link>
+              </Button>
             </div>
+
+            {/* Trust Checklist */}
+            <ul className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs sm:text-sm text-muted-foreground">
+              <li className="flex items-center gap-1.5 transition-colors hover:text-foreground">
+                <Check className="h-4 w-4 text-[var(--success)]" aria-hidden />
+                Miễn phí 30 ngày đầy đủ tính năng
+              </li>
+              <li className="flex items-center gap-1.5 transition-colors hover:text-foreground">
+                <ShieldCheck className="h-4 w-4 text-[var(--success)]" aria-hidden />
+                Không cần thẻ tín dụng
+              </li>
+              <li className="flex items-center gap-1.5 transition-colors hover:text-foreground">
+                <Sparkles className="h-4 w-4 text-amber-500" aria-hidden />
+                Hotline hỗ trợ: 0976 181 859
+              </li>
+            </ul>
+          </div>
+
+          {/* 3D Multi-Widget Command Center Console */}
+          <div className="relative mx-auto mt-12 max-w-5xl sm:mt-16">
+            <LiquidGlassCard className="p-2 sm:p-3 shadow-2xl">
+              <div className="overflow-hidden rounded-2xl border border-white/60 dark:border-white/10">
+                <Image
+                  src="/marketing/dashboard.jpg"
+                  alt="Màn hình bảng điều khiển điều hành trung tâm StudioCore với KPI doanh thu, lịch chụp và đơn hàng"
+                  width={1440}
+                  height={810}
+                  priority
+                  className="h-auto w-full transition-transform duration-700 hover:scale-[1.01]"
+                />
+              </div>
+            </LiquidGlassCard>
+
+            {/* Floating Left: Schedule Anti-Conflict Card */}
+            <FloatingScheduleCard />
+
+            {/* Floating Right: Interactive PhotoShare Picker */}
+            <InteractiveHeroPhotoShare demoPhotoBase={demoPhotoBase} />
           </div>
 
           {/* Social Proof Trust Bar */}
-          <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 border-t border-border/80 py-4 text-center text-xs text-muted-foreground">
+          <div className="mt-14 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 border-t border-border/80 pt-6 text-center text-xs text-muted-foreground sm:gap-x-8">
             <span className="flex items-center gap-1.5">
-              <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+              <span className="h-2 w-2 rounded-full bg-primary" />
               Tin cậy bởi <strong className="text-foreground">250+ Studio &amp; Áo cưới</strong>
             </span>
-            <span>·</span>
+            <span className="hidden sm:inline">·</span>
             <span className="flex items-center gap-1.5">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+              <span className="h-2 w-2 rounded-full bg-emerald-500" />
               Phục vụ <strong className="text-foreground">50.000+ Khách hàng</strong>
             </span>
-            <span>·</span>
+            <span className="hidden sm:inline">·</span>
             <span className="flex items-center gap-1.5">
               <span className="relative flex h-2 w-2">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
               </span>
-              <strong className="text-foreground">99.9% Uptime</strong>
+              <strong className="text-foreground">99.9% Uptime Cam kết</strong>
             </span>
-            <span>·</span>
-            <span>Hỗ trợ chuyển đổi dữ liệu 1-1 tận nơi</span>
+            <span className="hidden sm:inline">·</span>
+            <span>Hỗ trợ chuyển đổi dữ liệu 1-1 miễn phí</span>
           </div>
         </SectionContainer>
       </section>
 
-      {/* Pain Points vs Solutions with Spotlight Cards */}
-      <section className="border-b border-border bg-background py-16 sm:py-20">
+      {/* =========================================================================
+          TRANSFORMATION MATRIX: Traditional vs StudioCore (Interactive Before/After)
+          ========================================================================= */}
+      <section className="border-b border-border bg-background py-16 sm:py-24">
         <SectionContainer>
           <div className="mx-auto max-w-2xl text-center">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">
-              Vấn đề thường gặp
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">
+              Bước nhảy vọt vận hành
             </p>
-            <h2 className="mt-2 text-3xl font-semibold tracking-tight">
-              Bạn đang gặp những vấn đề này?
+            <h2 className="mt-2 text-3xl font-extrabold tracking-tight sm:text-4xl text-foreground">
+              Từ thủ công rời rạc đến hệ thống tự động thông minh.
             </h2>
-          </div>
-          <div className="mt-8 grid gap-4 lg:grid-cols-2">
-            {[
-              {
-                title: "Vấn đề của chủ studio",
-                items: [
-                  "Doanh thu, công nợ không rõ ràng, sổ sách thất lạc",
-                  "Lịch chụp trùng phòng hoặc trùng thợ chụp / makeup",
-                  "Khó kiểm soát hiệu suất và tính hoa hồng nhân viên",
-                  "Gửi ảnh qua Zalo giảm dung lượng, khách phàn nàn",
-                ],
-              },
-              {
-                title: "Vấn đề của nhân viên",
-                items: [
-                  "Nhập liệu lặp lại ở nhiều file Excel và nhóm chat",
-                  "Tìm thông tin số đo trang phục, ngày cưới của khách mất thời gian",
-                  "Giao ảnh thủ công, đối chiếu mã ảnh nhầm lẫn",
-                  "Không biết lịch chụp ca hôm nay, phải hỏi quản lý",
-                ],
-              },
-            ].map((group) => (
-              <SpotlightCard key={group.title} className="p-6">
-                <h3 className="text-lg font-semibold">{group.title}</h3>
-                <ul className="mt-4 space-y-2.5 text-sm text-muted-foreground">
-                  {group.items.map((item) => (
-                    <li key={item} className="flex items-start gap-2.5">
-                      <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-[var(--warning)]" aria-hidden />
-                      <span>{item}</span>
-                    </li>
-                  ))}
-                </ul>
-              </SpotlightCard>
-            ))}
+            <p className="mt-3 text-sm leading-6 text-muted-foreground sm:text-base">
+              So sánh sự khác biệt rõ nét khi chuyển đổi từ quy trình ghi sổ tay, chat Zalo sang nền tảng
+              quản trị số hóa StudioCore.
+            </p>
           </div>
 
-          <SpotlightCard
-            spotlightColor="rgba(59, 130, 246, 0.2)"
-            className="mt-6 border-primary/30 bg-accent p-6"
-          >
-            <div className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-primary" />
-              <h3 className="text-lg font-semibold text-foreground">StudioCore giải quyết tất cả</h3>
-            </div>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {[
-                ["Một nguồn dữ liệu", "Khách, đơn hàng, lịch, ảnh và dòng tiền không còn rời rạc."],
-                ["Tự động hóa", "Phí, hoa hồng và các giao dịch cọc được tính tự động ở server."],
-                ["Báo cáo realtime", "Theo dõi doanh thu, công nợ, lợi nhuận và hiệu suất tức thì."],
-                ["PhotoShare Zero-Storage", "Giao ảnh, khách chọn và lọc mã RAW theo một luồng khép kín."],
-              ].map(([title, description]) => (
-                <div key={title} className="rounded-xl bg-background/60 p-3.5 backdrop-blur-xs">
-                  <p className="text-sm font-semibold text-foreground">{title}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">{description}</p>
-                </div>
-              ))}
-            </div>
-          </SpotlightCard>
+          <div className="mt-12">
+            <TransformationMatrix />
+          </div>
         </SectionContainer>
       </section>
 
-      {/* Operating Steps */}
-      <section className="border-b border-border bg-surface py-16 sm:py-20">
+      {/* =========================================================================
+          ASYMMETRIC BENTO GRID: Core Capabilities
+          ========================================================================= */}
+      <section id="features" className="scroll-mt-20 border-b border-border bg-surface py-16 sm:py-24">
         <SectionContainer>
           <div className="mx-auto max-w-2xl text-center">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">
-              Quy trình
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">
+              Hệ tính năng chuyên sâu
             </p>
-            <h2 className="mt-2 text-3xl font-semibold tracking-tight">
-              Bắt đầu đi vào vận hành trong 4 bước.
+            <h2 className="mt-2 text-3xl font-extrabold tracking-tight sm:text-4xl text-foreground">
+              Thiết kế chuẩn mực cho Studio &amp; Áo cưới Việt Nam.
             </h2>
+            <p className="mt-3 text-sm leading-6 text-muted-foreground sm:text-base">
+              Không dàn trải tính năng thừa thãi. Mọi module đều giải quyết triệt để bài toán doanh thu,
+              tiến độ và chi phí cho từng ca chụp.
+            </p>
           </div>
-          <ol className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+
+          <div className="mt-12">
+            <BentoGridFeatures />
+          </div>
+        </SectionContainer>
+      </section>
+
+      {/* =========================================================================
+          OPERATING STEPS: 4-Step Rollout Workflow
+          ========================================================================= */}
+      <section className="border-b border-border bg-background py-16 sm:py-24">
+        <SectionContainer>
+          <div className="mx-auto max-w-2xl text-center">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">
+              Quy trình triển khai
+            </p>
+            <h2 className="mt-2 text-3xl font-extrabold tracking-tight sm:text-4xl text-foreground">
+              Bắt đầu vận hành trong 4 bước đơn giản.
+            </h2>
+            <p className="mt-3 text-sm leading-6 text-muted-foreground sm:text-base">
+              Thiết lập dữ liệu ban đầu trong 30 giây, đội ngũ StudioCore đồng hành hướng dẫn tận tình.
+            </p>
+          </div>
+
+          <ol className="mt-12 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
             {OPERATING_STEPS.map((step) => (
               <li
                 key={step.number}
-                className="group rounded-2xl border border-border bg-background p-5 transition-all duration-300 hover:-translate-y-1 hover:border-primary/40 hover:shadow-lg"
+                className="group relative overflow-hidden rounded-3xl border border-border bg-surface p-6 shadow-xs transition-all duration-300 hover:-translate-y-1.5 hover:border-primary/50 hover:shadow-xl"
               >
                 <div className="flex items-center justify-between">
-                  <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-accent text-accent-foreground transition-transform duration-300 group-hover:scale-110">
-                    <MarketingIcon name={step.icon} className="h-5 w-5" />
+                  <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary transition-transform duration-300 group-hover:scale-110">
+                    <MarketingIcon name={step.icon} className="h-6 w-6" />
                   </span>
-                  <span className="font-mono text-2xl font-bold text-muted-foreground/30 transition-colors group-hover:text-primary/50">
+                  <span className="font-mono text-3xl font-extrabold text-muted-foreground/25 transition-colors group-hover:text-primary/40">
                     {step.number}
                   </span>
                 </div>
-                <h3 className="mt-4 text-base font-semibold group-hover:text-primary transition-colors">
+                <h3 className="mt-5 text-base font-bold text-foreground group-hover:text-primary transition-colors">
                   {step.title}
                 </h3>
-                <p className="mt-1 text-sm text-muted-foreground leading-6">{step.description}</p>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">{step.description}</p>
               </li>
             ))}
           </ol>
         </SectionContainer>
       </section>
 
-      {/* Features Grid with Spotlight Effect */}
-      <section id="features" className="scroll-mt-20 border-b border-border bg-background py-16 sm:py-20">
+      {/* =========================================================================
+          PRODUCT SHOWCASE: Interactive Multi-Tab Workspace
+          ========================================================================= */}
+      <section className="border-b border-border bg-surface py-16 sm:py-24">
         <SectionContainer>
           <div className="mx-auto max-w-2xl text-center">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">
-              Tính năng
-            </p>
-            <h2 className="mt-2 text-3xl font-semibold tracking-tight">
-              Hơn 20 tính năng cho mọi nhu cầu.
-            </h2>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Bốn nhóm năng lực cốt lõi giúp số hóa toàn bộ khâu tiếp nhận, sản xuất đến quyết toán.
-            </p>
-          </div>
-          <div className="mt-8 grid gap-5 lg:grid-cols-2">
-            {FEATURE_GROUPS.map((group) => (
-              <SpotlightCard key={group.key} className="p-6">
-                <div className="flex items-center gap-3">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent text-accent-foreground shadow-xs">
-                    <MarketingIcon name={group.icon} className="h-5 w-5" />
-                  </span>
-                  <div>
-                    <h3 className="text-lg font-semibold text-foreground">{group.title}</h3>
-                    <p className="text-xs text-muted-foreground">{group.description}</p>
-                  </div>
-                </div>
-                <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                  {group.items.map((item) => (
-                    <div
-                      key={item.title}
-                      className="group rounded-xl border border-transparent bg-background/80 p-3.5 transition-all duration-200 hover:border-border hover:bg-background hover:shadow-xs hover:translate-x-0.5"
-                    >
-                      <p className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
-                        <MarketingIcon name={item.icon} className="h-4 w-4 text-primary transition-transform group-hover:scale-110" />
-                        {item.title}
-                      </p>
-                      <p className="mt-1 text-xs text-muted-foreground leading-5">{item.description}</p>
-                    </div>
-                  ))}
-                </div>
-              </SpotlightCard>
-            ))}
-          </div>
-          <div className="mt-8 text-center">
-            <Button asChild variant="outline" className="transition-all hover:bg-accent hover:border-primary/30">
-              <Link href="/phan-mem-quan-ly-studio">
-                Xem chi tiết giải pháp tổng thể
-                <ArrowRight className="h-4 w-4" aria-hidden />
-              </Link>
-            </Button>
-          </div>
-        </SectionContainer>
-      </section>
-
-      {/* Product Showcase Tabs */}
-      <section className="border-b border-border bg-surface py-16 sm:py-20">
-        <SectionContainer>
-          <div className="mx-auto max-w-2xl text-center">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">
               Giao diện thực tế
             </p>
-            <h2 className="mt-2 text-3xl font-semibold tracking-tight">
+            <h2 className="mt-2 text-3xl font-extrabold tracking-tight sm:text-4xl text-foreground">
               Một nền tảng. Mọi hoạt động.
             </h2>
+            <p className="mt-3 text-sm leading-6 text-muted-foreground sm:text-base">
+              Khám phá các góc làm việc chuyên nghiệp được tối ưu cho từng bộ phận trong studio.
+            </p>
           </div>
-          <div className="mt-8">
+          <div className="mt-12">
             <ProductShowcase />
           </div>
         </SectionContainer>
       </section>
 
-      {/* Screenshots Gallery */}
-      <section className="border-b border-border bg-background py-16 sm:py-20">
+      {/* =========================================================================
+          PHOTOSHARE ZERO-STORAGE LIVE DEMO
+          ========================================================================= */}
+      <section id="photoshare" className="scroll-mt-20 border-b border-border bg-background py-16 sm:py-24">
         <SectionContainer>
-          <div className="mx-auto max-w-2xl text-center">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">
-              Screenshots
-            </p>
-            <h2 className="mt-2 text-3xl font-semibold tracking-tight">
-              Trực quan, dễ sử dụng.
-            </h2>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Giao diện hiện đại, tối giản và tối ưu trải nghiệm người dùng trên cả máy tính, tablet và điện thoại.
-            </p>
-          </div>
-          <div className="mt-8">
-            <ScreenshotGallery />
-          </div>
-        </SectionContainer>
-      </section>
-
-      {/* PhotoShare Interactive Section */}
-      <section id="photoshare" className="scroll-mt-20 border-b border-border bg-surface py-16 sm:py-20">
-        <SectionContainer>
-          <div className="grid items-center gap-10 lg:grid-cols-2">
+          <div className="grid items-center gap-12 lg:grid-cols-2">
             <div>
-              <Badge tone="info">PhotoShare</Badge>
-              <h2 className="mt-3 text-3xl font-semibold tracking-tight">
-                Giao ảnh trực tuyến Zero-Storage — Khách chọn ảnh tức thì.
+              <Badge tone="info">PhotoShare™ Live Demo</Badge>
+              <h2 className="mt-4 text-3xl font-extrabold tracking-tight text-foreground sm:text-4xl">
+                Giao ảnh Zero-Storage — Khách duyệt ảnh tức thì, Studio lọc RAW 30 giây.
               </h2>
-              <p className="mt-3 text-sm leading-6 text-muted-foreground">
+              <p className="mt-4 text-sm leading-7 text-muted-foreground sm:text-base">
                 Tạo album trực tiếp từ Google Drive hoặc upload, gửi link bảo mật cho khách hàng. Khách
                 thả tim và ghi chú ảnh cần sửa trên điện thoại; studio sao chép mã ảnh hoặc lọc file gốc
                 tự động ngay trên máy tính chỉ trong 30 giây.
               </p>
-              <ul className="mt-5 space-y-2.5 text-sm">
+              <ul className="mt-6 space-y-3 text-sm">
                 {[
                   "Link có mật khẩu bảo vệ, hạn dùng và giới hạn lượt tải.",
                   "Quota chọn ảnh linh hoạt, tự tính phụ phí nếu chọn thêm.",
@@ -391,27 +318,27 @@ export default function HomePage() {
                   "Xuất gói ZIP + manifest.csv + danh sách ảnh thiếu.",
                 ].map((item) => (
                   <li key={item} className="flex items-start gap-2.5">
-                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-[var(--success)]" aria-hidden />
-                    <span>{item}</span>
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
+                    <span className="text-foreground/90">{item}</span>
                   </li>
                 ))}
               </ul>
-              <div className="mt-6 flex flex-col gap-2.5 sm:flex-row">
-                <Button asChild className="shadow-md transition-all hover:scale-[1.02] active:scale-[0.98]">
+              <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+                <Button asChild size="lg" className="shadow-md transition-all hover:scale-[1.02] active:scale-[0.98]">
                   <Link href="/share/demo-share-album-01">
-                    Xem album mẫu
+                    Mở album trải nghiệm
                   </Link>
                 </Button>
-                <Button asChild variant="outline">
+                <Button asChild size="lg" variant="outline">
                   <Link href="/guide#photoshare">Khám phá quy trình giao ảnh</Link>
                 </Button>
               </div>
-              <p className="mt-3 text-xs text-muted-foreground">
+              <p className="mt-4 text-xs text-muted-foreground">
                 Hỗ trợ đóng dấu watermark bản quyền, chống tải ảnh gốc khi chưa hoàn tất thanh toán.
               </p>
             </div>
 
-            {/* Interactive PhotoShare Demonstration */}
+            {/* Interactive PhotoShare Demonstration Component */}
             <div>
               <InteractivePhotoShareDemo demoPhotoBase={demoPhotoBase} />
             </div>
@@ -419,62 +346,91 @@ export default function HomePage() {
         </SectionContainer>
       </section>
 
-      {/* Pricing Section */}
-      <section id="pricing" className="scroll-mt-20 border-b border-border bg-background py-16 sm:py-20">
+      {/* =========================================================================
+          SCREENSHOT GALLERY
+          ========================================================================= */}
+      <section className="border-b border-border bg-surface py-16 sm:py-24">
         <SectionContainer>
           <div className="mx-auto max-w-2xl text-center">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">
-              Bảng giá
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">
+              Ảnh chụp màn hình
             </p>
-            <h2 className="mt-2 text-3xl font-semibold tracking-tight">
-              Gói cước phù hợp mọi quy mô studio.
+            <h2 className="mt-2 text-3xl font-extrabold tracking-tight sm:text-4xl text-foreground">
+              Trực quan, tinh gọn &amp; dễ làm quen.
             </h2>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Cam kết giá niêm yết minh bạch, không phí ẩn. Tiết kiệm 20% khi thanh toán 12 tháng.
+            <p className="mt-3 text-sm leading-6 text-muted-foreground sm:text-base">
+              Thiết kế giao diện hiện đại theo tiêu chuẩn Apple VisionOS, thân thiện với cả nhân viên mới
+              và khách hàng.
             </p>
           </div>
-          <div className="mt-8">
+          <div className="mt-12">
+            <ScreenshotGallery />
+          </div>
+        </SectionContainer>
+      </section>
+
+      {/* =========================================================================
+          PRICING SECTION
+          ========================================================================= */}
+      <section id="pricing" className="scroll-mt-20 border-b border-border bg-background py-16 sm:py-24">
+        <SectionContainer>
+          <div className="mx-auto max-w-2xl text-center">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">
+              Bảng giá dịch vụ
+            </p>
+            <h2 className="mt-2 text-3xl font-extrabold tracking-tight sm:text-4xl text-foreground">
+              Gói cước linh hoạt cho mọi quy mô studio.
+            </h2>
+            <p className="mt-3 text-sm leading-6 text-muted-foreground sm:text-base">
+              Cam kết giá niêm yết minh bạch, không phụ phí ẩn. Tiết kiệm 20% khi thanh toán gói năm.
+            </p>
+          </div>
+          <div className="mt-12">
             <PricingSection showComparison />
           </div>
         </SectionContainer>
       </section>
 
-      {/* Testimonials with Spotlight Cards & Star Ratings */}
-      <section className="border-b border-border bg-surface py-16 sm:py-20">
+      {/* =========================================================================
+          TESTIMONIALS: High-Trust Verified Studios
+          ========================================================================= */}
+      <section className="border-b border-border bg-surface py-16 sm:py-24">
         <SectionContainer>
           <div className="mx-auto max-w-2xl text-center">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">
-              Khách hàng đánh giá
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">
+              Đánh giá từ khách hàng
             </p>
-            <h2 className="mt-2 text-3xl font-semibold tracking-tight">
+            <h2 className="mt-2 text-3xl font-extrabold tracking-tight sm:text-4xl text-foreground">
               Studio nói gì về StudioCore?
             </h2>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Hơn 250+ studio ảnh cưới, gia đình và phóng sự đã tin tưởng sử dụng StudioCore để vận hành chuyên nghiệp hơn mỗi ngày.
+            <p className="mt-3 text-sm leading-6 text-muted-foreground sm:text-base">
+              Hơn 250+ studio ảnh cưới, gia đình và phóng sự đã tin tưởng sử dụng StudioCore để vận hành
+              chuyên nghiệp hơn mỗi ngày.
             </p>
           </div>
-          <div className="mt-8 grid gap-4 md:grid-cols-3">
+
+          <div className="mt-12 grid gap-6 md:grid-cols-3">
             {TESTIMONIALS.map((item) => (
-              <SpotlightCard key={item.name} className="flex flex-col justify-between p-6">
+              <SpotlightCard key={item.name} className="flex flex-col justify-between p-7">
                 <div>
-                  <div className="flex items-center gap-1 text-amber-500 mb-3">
+                  <div className="flex items-center gap-1 text-amber-500 mb-4">
                     {[...Array(5)].map((_, i) => (
-                      <Star key={i} className="h-4 w-4 fill-amber-500" />
+                      <Star key={i} className="h-4 w-4 fill-amber-500 text-amber-500" />
                     ))}
                   </div>
-                  <p className="text-sm leading-6 text-muted-foreground italic">“{item.quote}”</p>
+                  <p className="text-sm leading-7 text-muted-foreground italic">“{item.quote}”</p>
                 </div>
-                <div className="mt-5 border-t border-border/60 pt-4 flex items-center justify-between">
+                <div className="mt-6 border-t border-border/60 pt-4 flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <span className="flex h-10 w-10 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-foreground">
+                    <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-tr from-violet-600 to-indigo-600 text-sm font-bold text-white shadow-xs">
                       {item.name.split(" ").slice(0, 2).map((word) => word[0]).join("")}
                     </span>
                     <div>
-                      <p className="text-sm font-semibold text-foreground">{item.name}</p>
+                      <p className="text-sm font-bold text-foreground">{item.name}</p>
                       <p className="text-xs text-muted-foreground">{item.role}</p>
                     </div>
                   </div>
-                  <span className="text-[11px] font-medium text-primary bg-primary/10 rounded-full px-2.5 py-1">
+                  <span className="text-[11px] font-semibold text-primary bg-primary/10 rounded-full px-3 py-1">
                     {item.result}
                   </span>
                 </div>
@@ -484,18 +440,23 @@ export default function HomePage() {
         </SectionContainer>
       </section>
 
-      {/* FAQ Section */}
-      <section id="faq" className="scroll-mt-20 border-b border-border bg-background py-16 sm:py-20">
+      {/* =========================================================================
+          FAQ SECTION
+          ========================================================================= */}
+      <section id="faq" className="scroll-mt-20 border-b border-border bg-background py-16 sm:py-24">
         <SectionContainer>
-          <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr]">
+          <div className="grid gap-10 lg:grid-cols-[0.9fr_1.1fr]">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">FAQ</p>
-              <h2 className="mt-2 text-3xl font-semibold tracking-tight">Câu hỏi thường gặp.</h2>
-              <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                Bạn có câu hỏi khác? Đội ngũ hỗ trợ và chuyên viên tư vấn của StudioCore luôn sẵn sàng giải đáp 24/7 qua Hotline và Zalo.
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">FAQ</p>
+              <h2 className="mt-2 text-3xl font-extrabold tracking-tight sm:text-4xl text-foreground">
+                Câu hỏi thường gặp.
+              </h2>
+              <p className="mt-3 text-sm leading-7 text-muted-foreground">
+                Bạn có câu hỏi khác? Đội ngũ hỗ trợ và chuyên viên tư vấn của StudioCore luôn sẵn sàng giải đáp
+                24/7 qua Hotline và Zalo.
               </p>
-              <Button asChild variant="outline" className="mt-4 transition-all hover:bg-accent">
-                <Link href="/contact">Liên hệ tư vấn</Link>
+              <Button asChild variant="outline" className="mt-6 transition-all hover:bg-accent">
+                <Link href="/contact">Liên hệ tư vấn trực tiếp</Link>
               </Button>
             </div>
             <FaqAccordion />
@@ -503,63 +464,66 @@ export default function HomePage() {
         </SectionContainer>
       </section>
 
-      {/* Guides Section */}
-      <section className="border-b border-border bg-surface py-16 sm:py-20">
+      {/* =========================================================================
+          GUIDES SECTION
+          ========================================================================= */}
+      <section className="border-b border-border bg-surface py-16 sm:py-24">
         <SectionContainer>
           <div className="mx-auto max-w-2xl text-center">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Hướng dẫn</p>
-            <h2 className="mt-2 text-3xl font-semibold tracking-tight">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Hướng dẫn</p>
+            <h2 className="mt-2 text-3xl font-extrabold tracking-tight sm:text-4xl text-foreground">
               Tài liệu hướng dẫn chi tiết.
             </h2>
           </div>
-          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {GUIDES.map((guide) => (
               <Link
                 key={guide.title}
                 href={guide.href}
-                className="group rounded-2xl border border-border bg-background p-5 transition-all duration-300 hover:-translate-y-1 hover:border-primary/40 hover:shadow-md"
+                className="group rounded-3xl border border-border bg-background p-6 transition-all duration-300 hover:-translate-y-1 hover:border-primary/40 hover:shadow-lg"
               >
-                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent text-accent-foreground transition-transform group-hover:scale-110">
+                <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10 text-primary transition-transform group-hover:scale-110">
                   <MarketingIcon name={guide.icon} className="h-5 w-5" />
                 </span>
-                <h3 className="mt-3 text-base font-semibold text-foreground group-hover:text-primary transition-colors">
+                <h3 className="mt-4 text-base font-bold text-foreground group-hover:text-primary transition-colors">
                   {guide.title}
                 </h3>
-                <p className="mt-1 text-sm text-muted-foreground leading-6">{guide.description}</p>
-                <span className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-primary">
+                <p className="mt-2 text-sm text-muted-foreground leading-6">{guide.description}</p>
+                <span className="mt-4 inline-flex items-center gap-1 text-xs font-semibold text-primary">
                   Xem hướng dẫn <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" aria-hidden />
                 </span>
               </Link>
             ))}
           </div>
-          <div className="mt-6 text-center">
+          <div className="mt-8 text-center">
             <Button asChild variant="outline">
-              <Link href="/guide">Xem hướng dẫn đầy đủ</Link>
+              <Link href="/guide">Xem trung tâm hướng dẫn đầy đủ</Link>
             </Button>
           </div>
         </SectionContainer>
       </section>
 
-      {/* Final Call To Action Banner with Ambient Glow */}
-      <section className="relative overflow-hidden bg-primary py-16 text-primary-foreground sm:py-20">
-        <div className="pointer-events-none absolute inset-0 -z-0 opacity-20">
+      {/* =========================================================================
+          FINAL CALL TO ACTION BANNER: Vibrant Royal Violet Aurora
+          ========================================================================= */}
+      <section className="relative overflow-hidden bg-gradient-to-r from-violet-700 via-indigo-700 to-purple-800 py-20 text-white sm:py-24">
+        <div className="pointer-events-none absolute inset-0 -z-0 opacity-25">
           <div className="absolute -left-20 -top-20 h-96 w-96 rounded-full bg-white blur-3xl" />
-          <div className="absolute -right-20 -bottom-20 h-96 w-96 rounded-full bg-sky-300 blur-3xl" />
+          <div className="absolute -right-20 -bottom-20 h-96 w-96 rounded-full bg-pink-400 blur-3xl" />
         </div>
         <SectionContainer>
           <div className="relative z-10 mx-auto max-w-3xl text-center">
-            <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-              Bắt đầu quản lý studio ngay hôm nay.
+            <h2 className="text-3xl font-extrabold tracking-tight sm:text-5xl">
+              Bắt đầu nâng tầm studio ngay hôm nay.
             </h2>
-            <p className="mt-3 text-sm leading-6 text-primary-foreground/85 sm:text-base">
+            <p className="mt-4 text-base leading-7 text-white/85 sm:text-lg">
               Đăng ký dùng thử 30 ngày đầy đủ 100% tính năng. Thiết lập nhanh chóng trong 30 giây, không cần thẻ tín dụng.
             </p>
             <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
               <Button
                 asChild
                 size="lg"
-                variant="secondary"
-                className="shadow-xl transition-all duration-300 hover:scale-105 active:scale-95"
+                className="bg-white text-violet-950 shadow-xl transition-all duration-300 hover:bg-white/95 hover:scale-105 active:scale-95"
               >
                 <Link href="/register">Tạo tài khoản miễn phí</Link>
               </Button>
@@ -569,14 +533,14 @@ export default function HomePage() {
                 variant="outline"
                 className="border-white/40 bg-transparent text-white transition-all hover:bg-white/10 active:scale-95"
               >
-                <Link href="/pricing">Xem gói cước</Link>
+                <Link href="/pricing">Xem bảng giá gói cước</Link>
               </Button>
             </div>
           </div>
         </SectionContainer>
       </section>
 
-      {/* Floating Hotline & Zalo Contact Pill */}
+      {/* Floating Hotline & Zalo Contact Capsule */}
       <FloatingContact />
     </>
   );

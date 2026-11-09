@@ -1,17 +1,13 @@
 import Link from "next/link";
 import { MARKETING_CONTACT } from "@/lib/marketing/content";
+import { BrandLogo } from "@/components/brand/brand-logo";
 
 export function MarketingFooter() {
   return (
     <footer className="border-t border-border bg-surface">
       <div className="mx-auto grid w-full max-w-[1240px] gap-8 px-4 py-12 sm:grid-cols-2 sm:px-6 lg:grid-cols-4 lg:px-8">
         <div>
-          <div className="flex items-center gap-2.5">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-base font-bold text-primary-foreground">
-              S
-            </span>
-            <span className="text-base font-semibold">StudioCore</span>
-          </div>
+          <BrandLogo showTagline={false} />
           <p className="mt-3 text-sm leading-6 text-muted-foreground">
             Nền tảng quản lý studio chụp ảnh &amp; áo cưới hàng đầu Việt Nam: CRM, đơn hàng, lịch chụp, hợp đồng số, PhotoShare và quản trị tài chính toàn diện.
           </p>

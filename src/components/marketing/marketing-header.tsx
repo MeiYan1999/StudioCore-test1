@@ -14,24 +14,7 @@ import {
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { MARKETING_NAV } from "@/lib/marketing/content";
-
-function Brand() {
-  return (
-    <Link href="/" className="flex items-center gap-2.5">
-      <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-base font-bold text-primary-foreground">
-        S
-      </span>
-      <span className="min-w-0">
-        <span className="block text-base font-semibold leading-5 text-foreground">
-          StudioCore
-        </span>
-        <span className="block text-[11px] text-muted-foreground">
-          Quản lý studio chụp ảnh
-        </span>
-      </span>
-    </Link>
-  );
-}
+import { BrandLogo } from "@/components/brand/brand-logo";
 
 export function MarketingHeader() {
   const [scrolled, setScrolled] = useState(false);
@@ -53,7 +36,7 @@ export function MarketingHeader() {
       )}
     >
       <div className="mx-auto flex h-16 w-full max-w-[1240px] items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
-        <Brand />
+        <BrandLogo />
         <nav aria-label="Điều hướng chính" className="hidden items-center gap-1 lg:flex">
           {MARKETING_NAV.map((item) => (
             <Link
