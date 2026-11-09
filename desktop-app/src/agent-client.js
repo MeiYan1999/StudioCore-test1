@@ -158,6 +158,10 @@ class AgentClient {
     }
 
     if (res && res.success) {
+      if (res.publicUrl && res.publicUrl.includes("localhost") && !this.config.serverUrl.includes("localhost")) {
+        res.publicUrl = publicUrl;
+      }
+      res.publicUrl = res.publicUrl || publicUrl;
       res.lanUrl = lanUrl;
       res.localIp = localIp;
       this.config.shares.push({
@@ -165,7 +169,7 @@ class AgentClient {
         title: scan.title,
         localPath: scan.localPath,
         type: scan.type,
-        publicUrl: res.publicUrl || publicUrl,
+        publicUrl: res.publicUrl,
         lanUrl,
         createdAt: new Date().toISOString(),
       });

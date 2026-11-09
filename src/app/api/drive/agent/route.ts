@@ -148,10 +148,17 @@ export async function POST(request: Request) {
 
       const created = createDriveShare(newShare);
 
+      const host =
+        request.headers.get("x-forwarded-host") ||
+        request.headers.get("host");
+      const proto =
+        request.headers.get("x-forwarded-proto") ||
+        (host?.includes("localhost") ? "http" : "https");
+
       const origin =
         process.env.NEXT_PUBLIC_APP_URL ||
         process.env.APP_URL ||
-        new URL(request.url).origin;
+        (host ? `${proto}://${host}` : new URL(request.url).origin);
 
       return NextResponse.json({
         success: true,

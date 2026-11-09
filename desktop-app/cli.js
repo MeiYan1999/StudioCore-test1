@@ -99,26 +99,28 @@ async function handleShareCommand() {
   try {
     const result = await agent.createShare(targetPath, shareType);
     if (result && (result.publicUrl || result.lanUrl)) {
-      const chosenUrl = result.lanUrl || result.publicUrl;
-      // 1. Sao chép link vào clipboard (ưu tiên LAN IP nếu localhost)
+      const isLocalhost = (result.publicUrl || "").includes("localhost") || (result.publicUrl || "").includes("127.0.0.1");
+      const chosenUrl = isLocalhost ? (result.lanUrl || result.publicUrl) : result.publicUrl;
+
+      // 1. Sao chép link vào clipboard
       copyToClipboard(chosenUrl);
       console.log(`\n✅ TẠO LINK CHIA SẺ THÀNH CÔNG!`);
-      console.log(`🔗 Link máy này: ${result.publicUrl}`);
-      if (result.lanUrl && result.lanUrl !== result.publicUrl) {
-        console.log(`📱 Link cho điện thoại / máy khác (cùng Wi-Fi): ${result.lanUrl}`);
+      console.log(`🔗 Link gửi khách: ${chosenUrl}`);
+      if (isLocalhost && result.lanUrl && result.lanUrl !== result.publicUrl) {
+        console.log(`📱 Link nội bộ cùng Wi-Fi: ${result.lanUrl}`);
       }
       console.log(`📋 Đã tự động sao chép link vào clipboard của bạn.`);
 
       // 2. Tự động mở trình duyệt xem thử
-      openBrowser(result.publicUrl);
+      openBrowser(chosenUrl);
 
       // 3. Hiện hộp thoại thông báo hoàn tất trên màn hình
       const title = result.title || path.basename(targetPath);
       let dialogMsg = `ĐÃ TẠO LINK CHIA SẺ THÀNH CÔNG!\n\nThư mục: ${title}\nLink: ${chosenUrl}`;
-      if (result.lanUrl && result.lanUrl !== result.publicUrl) {
+      if (isLocalhost && result.lanUrl && result.lanUrl !== result.publicUrl) {
         dialogMsg += `\n\n📱 Link mở trên điện thoại / máy khác (cùng Wi-Fi):\n${result.lanUrl}`;
       }
-      dialogMsg += `\n\n✓ Đã tự động copy link vào bộ nhớ tạm (Clipboard).\n✓ Lưu ý: Để gửi khách từ xa qua 4G/Internet, chỉ cần cài đặt Tên miền SaaS chính thức.`;
+      dialogMsg += `\n\n✓ Đã tự động copy link vào bộ nhớ tạm (Clipboard).\n✓ Bạn có thể nhấn Ctrl + V để dán ngay vào Zalo hoặc Messenger gửi cho khách!`;
       showDialog("StudioCore Drive — Thành công", dialogMsg, false);
     } else {
       console.error("❌ Không thể tạo link:", result);
