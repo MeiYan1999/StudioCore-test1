@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getActorContext } from "@/lib/auth/session";
 import { hasPermission } from "@/lib/auth/permissions";
+import { resolvePublicUrl } from "@/lib/auth/google-auth-service";
 import {
   buildGoogleAuthUrl,
   createGoogleStateToken,
@@ -13,16 +14,16 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request): Promise<Response> {
   const actor = await getActorContext();
   if (!actor) {
-    return NextResponse.redirect(new URL("/login", request.url));
+    return NextResponse.redirect(resolvePublicUrl("/login", request));
   }
   if (!hasPermission(actor.permissions, "integrations.manage")) {
     return NextResponse.redirect(
-      new URL("/manage/settings/integrations?google=forbidden", request.url),
+      resolvePublicUrl("/manage/settings/integrations?google=forbidden", request),
     );
   }
   if (!getGoogleOAuthConfig().configured) {
     return NextResponse.redirect(
-      new URL("/manage/settings/integrations?google=unconfigured", request.url),
+      resolvePublicUrl("/manage/settings/integrations?google=unconfigured", request),
     );
   }
   const state = await createGoogleStateToken(actor.tenantId, actor.staffId);

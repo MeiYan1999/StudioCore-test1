@@ -18,15 +18,52 @@ export type GoogleLoginConfig = {
   clientSecret: string;
 };
 
+export function resolvePublicUrl(path: string, request?: Request): URL {
+  const env = getEnv();
+
+  if (request) {
+    const forwardedHost = request.headers.get("x-forwarded-host");
+    const forwardedProto = request.headers.get("x-forwarded-proto") || "https";
+    if (
+      forwardedHost &&
+      !forwardedHost.includes("localhost:10000") &&
+      !forwardedHost.includes("0.0.0.0")
+    ) {
+      return new URL(path, `${forwardedProto}://${forwardedHost}`);
+    }
+
+    const host = request.headers.get("host");
+    if (
+      host &&
+      !host.includes("localhost:10000") &&
+      !host.includes("0.0.0.0")
+    ) {
+      const proto = host.includes("localhost") ? "http" : "https";
+      return new URL(path, `${proto}://${host}`);
+    }
+  }
+
+  const siteUrl =
+    env.NEXT_PUBLIC_SITE_URL && !env.NEXT_PUBLIC_SITE_URL.includes("localhost:10000")
+      ? env.NEXT_PUBLIC_SITE_URL
+      : "https://www.studiocore.io.vn";
+
+  return new URL(path, siteUrl);
+}
+
 export function getGoogleLoginConfig(): GoogleLoginConfig {
-  const clientId =
+  const rawClientId =
     process.env.GOOGLE_CLIENT_ID?.trim() ||
     getEnv().GOOGLE_CLIENT_ID?.trim() ||
     "";
-  const clientSecret =
+  const rawClientSecret =
     process.env.GOOGLE_CLIENT_SECRET?.trim() ||
     getEnv().GOOGLE_CLIENT_SECRET?.trim() ||
     "";
+
+  const clientId = rawClientId.replace(/^["']|["']$/g, "").trim();
+  const clientSecret = rawClientSecret.replace(/^["']|["']$/g, "").trim();
+
   return {
     configured: Boolean(clientId && clientSecret),
     clientId,
@@ -39,18 +76,7 @@ export function getGoogleLoginRedirectUri(request?: Request): string {
   if (env.GOOGLE_AUTH_REDIRECT_URI?.trim()) {
     return env.GOOGLE_AUTH_REDIRECT_URI.trim();
   }
-  if (request) {
-    const url = new URL(request.url);
-    const host =
-      request.headers.get("x-forwarded-host") ||
-      request.headers.get("host") ||
-      url.host;
-    const proto =
-      request.headers.get("x-forwarded-proto") ||
-      (host.includes("localhost") ? "http" : "https");
-    return `${proto}://${host}/api/auth/google/callback`;
-  }
-  return `${env.NEXT_PUBLIC_SITE_URL}/api/auth/google/callback`;
+  return resolvePublicUrl("/api/auth/google/callback", request).toString();
 }
 
 function getStateSecret(): Uint8Array {

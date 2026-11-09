@@ -6,6 +6,7 @@ import {
   findStaffByGoogleEmail,
   getGoogleLoginRedirectUri,
   isStudioOwnerOrManager,
+  resolvePublicUrl,
   verifyGoogleLoginStateToken,
 } from "@/lib/auth/google-auth-service";
 import { SESSION_COOKIE } from "@/lib/auth/session";
@@ -24,20 +25,20 @@ export async function GET(request: Request): Promise<Response> {
 
   if (error) {
     return NextResponse.redirect(
-      new URL("/login?error=google_cancelled", request.url),
+      resolvePublicUrl("/login?error=google_cancelled", request),
     );
   }
 
   if (!code || !state) {
     return NextResponse.redirect(
-      new URL("/login?error=invalid_request", request.url),
+      resolvePublicUrl("/login?error=invalid_request", request),
     );
   }
 
   const validState = await verifyGoogleLoginStateToken(state);
   if (!validState) {
     return NextResponse.redirect(
-      new URL("/login?error=invalid_state", request.url),
+      resolvePublicUrl("/login?error=invalid_state", request),
     );
   }
 
@@ -49,7 +50,10 @@ export async function GET(request: Request): Promise<Response> {
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Xác thực thất bại";
     return NextResponse.redirect(
-      new URL(`/login?error=google_failed&message=${encodeURIComponent(msg)}`, request.url),
+      resolvePublicUrl(
+        `/login?error=google_failed&message=${encodeURIComponent(msg)}`,
+        request,
+      ),
     );
   }
 
@@ -59,7 +63,10 @@ export async function GET(request: Request): Promise<Response> {
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Không lấy được thông tin email";
     return NextResponse.redirect(
-      new URL(`/login?error=google_failed&message=${encodeURIComponent(msg)}`, request.url),
+      resolvePublicUrl(
+        `/login?error=google_failed&message=${encodeURIComponent(msg)}`,
+        request,
+      ),
     );
   }
 
@@ -68,25 +75,25 @@ export async function GET(request: Request): Promise<Response> {
 
   if (!row) {
     return NextResponse.redirect(
-      new URL(
+      resolvePublicUrl(
         `/login?error=user_not_found&email=${encodeURIComponent(profile.email)}`,
-        request.url,
+        request,
       ),
     );
   }
 
   if (!row.staff.active || row.staff.archivedAt !== null || row.tenant.status !== "active") {
     return NextResponse.redirect(
-      new URL("/login?error=account_disabled", request.url),
+      resolvePublicUrl("/login?error=account_disabled", request),
     );
   }
 
   // Regular staff members must log in with employee code and PIN
   if (!isStudioOwnerOrManager(row.staff.role)) {
     return NextResponse.redirect(
-      new URL(
+      resolvePublicUrl(
         `/login?error=staff_pin_required&code=${encodeURIComponent(row.staff.code)}&name=${encodeURIComponent(row.staff.name)}`,
-        request.url,
+        request,
       ),
     );
   }
@@ -119,7 +126,7 @@ export async function GET(request: Request): Promise<Response> {
   });
 
   const destination = row.staff.role === "platform_admin" ? "/platform" : "/manage/dashboard";
-  const redirectResponse = NextResponse.redirect(new URL(destination, request.url));
+  const redirectResponse = NextResponse.redirect(resolvePublicUrl(destination, request));
 
   redirectResponse.cookies.set({
     name: SESSION_COOKIE,

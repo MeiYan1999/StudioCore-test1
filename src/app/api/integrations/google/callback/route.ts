@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getActorContext } from "@/lib/auth/session";
 import { hasPermission } from "@/lib/auth/permissions";
+import { resolvePublicUrl } from "@/lib/auth/google-auth-service";
 import { getDb } from "@/lib/db/client";
 import {
   exchangeGoogleCode,
@@ -16,18 +17,16 @@ function redirectWith(
   status: string,
   message?: string,
 ): Response {
-  const url = new URL("/manage/settings/integrations", request.url);
-  url.searchParams.set("google", status);
-  if (message) {
-    url.searchParams.set("message", message.slice(0, 200));
-  }
-  return NextResponse.redirect(url);
+  const path = `/manage/settings/integrations?google=${encodeURIComponent(status)}${
+    message ? `&message=${encodeURIComponent(message.slice(0, 200))}` : ""
+  }`;
+  return NextResponse.redirect(resolvePublicUrl(path, request));
 }
 
 export async function GET(request: Request): Promise<Response> {
   const actor = await getActorContext();
   if (!actor) {
-    return NextResponse.redirect(new URL("/login", request.url));
+    return NextResponse.redirect(resolvePublicUrl("/login", request));
   }
   if (!hasPermission(actor.permissions, "integrations.manage")) {
     return redirectWith(request, "forbidden");

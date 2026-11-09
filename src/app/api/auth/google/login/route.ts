@@ -4,6 +4,7 @@ import {
   createGoogleLoginStateToken,
   getGoogleLoginConfig,
   getGoogleLoginRedirectUri,
+  resolvePublicUrl,
 } from "@/lib/auth/google-auth-service";
 
 export const runtime = "nodejs";
@@ -13,7 +14,7 @@ export async function GET(request: Request): Promise<Response> {
   const config = getGoogleLoginConfig();
   if (!config.configured) {
     return NextResponse.redirect(
-      new URL("/login?error=google_not_configured", request.url),
+      resolvePublicUrl("/login?error=google_not_configured", request),
     );
   }
 

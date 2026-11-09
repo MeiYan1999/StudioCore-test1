@@ -45,6 +45,18 @@ describe("Google Auth Service", () => {
     });
     const calculatedUri = getGoogleLoginRedirectUri(mockRequest);
     expect(calculatedUri).toBe("https://www.studiocore.io.vn/api/auth/google/callback");
+
+    // Khắc phục Render reverse proxy host localhost:10000
+    const renderInternalReq = new Request("http://localhost:10000/api/auth/google/callback", {
+      headers: {
+        host: "localhost:10000",
+        "x-forwarded-host": "www.studiocore.io.vn",
+        "x-forwarded-proto": "https",
+      },
+    });
+    const renderUri = getGoogleLoginRedirectUri(renderInternalReq);
+    expect(renderUri).toBe("https://www.studiocore.io.vn/api/auth/google/callback");
+    expect(renderUri).not.toContain("localhost:10000");
   });
 
   it("xây dựng Google Auth URL với scope openid email profile", () => {
