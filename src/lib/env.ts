@@ -16,6 +16,7 @@ const envSchema = z.object({
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
   GOOGLE_REDIRECT_URI: z.string().optional(),
+  GOOGLE_AUTH_REDIRECT_URI: z.string().optional(),
   AI_PROVIDER: z.enum(["local", "openai", "gemini"]).default("local"),
   AI_API_KEY: z.string().optional(),
   AI_MODEL: z.string().optional(),

@@ -26,9 +26,18 @@ export type GoogleOAuthConfig = {
 
 export function getGoogleOAuthConfig(): GoogleOAuthConfig {
   const env = getEnv();
-  const clientId = env.GOOGLE_CLIENT_ID?.trim() ?? "";
-  const clientSecret = env.GOOGLE_CLIENT_SECRET?.trim() ?? "";
-  const redirectUri = env.GOOGLE_REDIRECT_URI?.trim() ?? "";
+  const clientId =
+    process.env.GOOGLE_CLIENT_ID?.trim() ||
+    env.GOOGLE_CLIENT_ID?.trim() ||
+    "";
+  const clientSecret =
+    process.env.GOOGLE_CLIENT_SECRET?.trim() ||
+    env.GOOGLE_CLIENT_SECRET?.trim() ||
+    "";
+  const redirectUri =
+    process.env.GOOGLE_REDIRECT_URI?.trim() ||
+    env.GOOGLE_REDIRECT_URI?.trim() ||
+    (env.NEXT_PUBLIC_SITE_URL ? `${env.NEXT_PUBLIC_SITE_URL}/api/integrations/google/callback` : "");
   return {
     configured: Boolean(clientId && clientSecret && redirectUri),
     clientId,
