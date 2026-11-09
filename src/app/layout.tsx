@@ -16,6 +16,9 @@ export const metadata: Metadata = {
   icons: {
     icon: "/icon.svg",
   },
+  verification: {
+    google: "Bff_74fIHBnqwX041Uw3yaPMlm6UBhHc8IABKxuefJQ",
+  },
 };
 
 export const viewport: Viewport = {
@@ -45,6 +48,10 @@ export default function RootLayout({
   return (
     <html lang="vi" suppressHydrationWarning data-scroll-behavior="smooth">
       <head>
+        <meta
+          name="google-site-verification"
+          content="Bff_74fIHBnqwX041Uw3yaPMlm6UBhHc8IABKxuefJQ"
+        />
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body className="min-h-screen bg-background text-foreground antialiased">
