@@ -9,6 +9,7 @@ import {
   resolvePublicUrl,
   verifyGoogleLoginStateToken,
 } from "@/lib/auth/google-auth-service";
+import { registerTenant } from "@/lib/services/onboarding-service";
 import { SESSION_COOKIE } from "@/lib/auth/session";
 import { createSession, getAllowedBranches } from "@/lib/auth/session-core";
 import { writeAudit } from "@/lib/audit";
@@ -71,7 +72,37 @@ export async function GET(request: Request): Promise<Response> {
   }
 
   const db = getDb();
-  const row = findStaffByGoogleEmail(db, profile.email);
+  let row = findStaffByGoogleEmail(db, profile.email);
+
+  if (!row) {
+    // Tự động khởi tạo Studio mới cho người dùng Google
+    const cleanName = (profile.name || "").trim();
+    const studioName = cleanName ? `Studio ${cleanName}` : "Studio Mới";
+    const ownerName = cleanName || "Chủ Studio";
+    const initialPassword = crypto.randomUUID();
+
+    try {
+      registerTenant(db, {
+        studioName,
+        ownerName,
+        email: profile.email.toLowerCase().trim(),
+        phone: "",
+        password: initialPassword,
+        branchName: `${studioName} — Cơ sở chính`,
+        branchAddress: "Chưa cập nhật",
+        branchPhone: "",
+      });
+
+      row = findStaffByGoogleEmail(db, profile.email);
+    } catch {
+      return NextResponse.redirect(
+        resolvePublicUrl(
+          `/login?error=user_not_found&email=${encodeURIComponent(profile.email)}`,
+          request,
+        ),
+      );
+    }
+  }
 
   if (!row) {
     return NextResponse.redirect(
