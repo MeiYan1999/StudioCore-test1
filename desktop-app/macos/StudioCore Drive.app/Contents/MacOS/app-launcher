@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin:$PATH"
+
+SCRIPT_DIR="$(cd "$(dirname "$0")/../../.." && pwd)"
+APP_DIR="$HOME/.studiocore-drive/app"
+
+if [ -f "$SCRIPT_DIR/cli.js" ]; then
+    CLI_PATH="$SCRIPT_DIR/cli.js"
+elif [ -f "$APP_DIR/cli.js" ]; then
+    CLI_PATH="$APP_DIR/cli.js"
+else
+    CLI_PATH="$(which studiocore-drive 2>/dev/null)"
+fi
+
+NODE_BIN=""
+if command -v node >/dev/null 2>&1; then
+    NODE_BIN="$(command -v node)"
+elif [ -x "/opt/homebrew/bin/node" ]; then
+    NODE_BIN="/opt/homebrew/bin/node"
+elif [ -x "/usr/local/bin/node" ]; then
+    NODE_BIN="/usr/local/bin/node"
+fi
+
+if [ -z "$NODE_BIN" ]; then
+    osascript -e 'display alert "StudioCore Drive — Thiếu Node.js" message "Vui lòng cài đặt Node.js từ https://nodejs.org để chạy ứng dụng." as warning'
+    open "https://nodejs.org"
+    exit 1
+fi
+
+# Dropped folder or file
+if [ "$#" -gt 0 ]; then
+    for target in "$@"
+    do
+        "$NODE_BIN" "$CLI_PATH" share --path "$target"
+    done
+else
+    # Double clicked
+    "$NODE_BIN" "$CLI_PATH" gui
+fi
