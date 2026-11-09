@@ -329,45 +329,145 @@ const DEFAULT_DEMO_SHARES: DriveShare[] = [
   },
 ];
 
-// Persistent runtime store for demo & studio shares
-let globalShares = [...DEFAULT_DEMO_SHARES];
+// Persistent runtime & disk store for demo & studio shares
+const SHARES_FILE_NAME = "drive-shares.json";
+
+function getStorageFilePath(): string | null {
+  if (typeof window !== "undefined") return null;
+  try {
+    const path = require("node:path");
+    const fs = require("node:fs");
+    const dataDir = path.join(process.cwd(), "data");
+    if (!fs.existsSync(dataDir)) {
+      try {
+        fs.mkdirSync(dataDir, { recursive: true });
+      } catch {
+        return path.join("/tmp", SHARES_FILE_NAME);
+      }
+    }
+    return path.join(dataDir, SHARES_FILE_NAME);
+  } catch {
+    return null;
+  }
+}
+
+function cloneDemoShares(): DriveShare[] {
+  return JSON.parse(JSON.stringify(DEFAULT_DEMO_SHARES));
+}
+
+function isDemoShare(id: string): boolean {
+  return DEFAULT_DEMO_SHARES.some((d) => d.id === id);
+}
+
+function loadPersistedShares(): DriveShare[] | null {
+  const filePath = getStorageFilePath();
+  if (!filePath) return null;
+  try {
+    const fs = require("node:fs");
+    if (fs.existsSync(filePath)) {
+      const data = fs.readFileSync(filePath, "utf8");
+      const parsed = JSON.parse(data);
+      if (Array.isArray(parsed)) {
+        return parsed.filter((s) => !isDemoShare(s.id));
+      }
+    }
+  } catch {
+    // Ignore read error
+  }
+  return null;
+}
+
+function persistSharesToDisk(shares: DriveShare[]): void {
+  const filePath = getStorageFilePath();
+  if (!filePath) return;
+  try {
+    const fs = require("node:fs");
+    const customShares = shares.filter((s) => !isDemoShare(s.id));
+    fs.writeFileSync(filePath, JSON.stringify(customShares, null, 2), "utf8");
+  } catch {
+    // Ignore write error
+  }
+}
+
+const globalForShares = globalThis as unknown as {
+  __STUDIOCORE_DRIVE_SHARES__?: DriveShare[];
+};
+
+function getGlobalShares(): DriveShare[] {
+  if (!globalForShares.__STUDIOCORE_DRIVE_SHARES__) {
+    const customShares = loadPersistedShares() || [];
+    globalForShares.__STUDIOCORE_DRIVE_SHARES__ = [
+      ...customShares,
+      ...cloneDemoShares(),
+    ];
+  }
+  return globalForShares.__STUDIOCORE_DRIVE_SHARES__;
+}
 
 export function listDriveShares(tenantId?: string): DriveShare[] {
-  if (!tenantId) return globalShares;
-  return globalShares.filter((s) => s.tenantId === tenantId || s.tenantId === "tenant-demo");
+  const shares = getGlobalShares();
+  if (!tenantId) return shares;
+  return shares.filter((s) => s.tenantId === tenantId || s.tenantId === "tenant-demo");
 }
 
 export function getDriveShareById(id: string): DriveShare | undefined {
-  return globalShares.find((s) => s.id === id);
+  const shares = getGlobalShares();
+  let found = shares.find((s) => s.id === id);
+  if (!found) {
+    const diskShares = loadPersistedShares();
+    if (diskShares) {
+      for (const s of diskShares) {
+        if (!shares.some((existing) => existing.id === s.id)) {
+          shares.unshift(s);
+        }
+      }
+      found = shares.find((s) => s.id === id);
+    }
+  }
+  return found;
 }
 
 export function createDriveShare(share: Omit<DriveShare, "viewsCount" | "downloadsCount" | "selectedCount">): DriveShare {
+  const shares = getGlobalShares();
   const newShare: DriveShare = {
     ...share,
     viewsCount: 0,
     downloadsCount: 0,
     selectedCount: share.items.filter((i) => i.selected).length,
   };
-  globalShares = [newShare, ...globalShares];
+
+  const existingIdx = shares.findIndex((s) => s.id === newShare.id);
+  if (existingIdx !== -1) {
+    shares[existingIdx] = newShare;
+  } else {
+    shares.unshift(newShare);
+  }
+
+  persistSharesToDisk(shares);
   return newShare;
 }
 
 export function updateDriveShareStatus(id: string, status: DriveShareStatus): boolean {
-  const share = globalShares.find((s) => s.id === id);
+  const shares = getGlobalShares();
+  const share = shares.find((s) => s.id === id);
   if (!share) return false;
   share.status = status;
+  persistSharesToDisk(shares);
   return true;
 }
 
 export function deleteDriveShare(id: string): boolean {
-  const index = globalShares.findIndex((s) => s.id === id);
+  const shares = getGlobalShares();
+  const index = shares.findIndex((s) => s.id === id);
   if (index === -1) return false;
-  globalShares.splice(index, 1);
+  shares.splice(index, 1);
+  persistSharesToDisk(shares);
   return true;
 }
 
 export function toggleDriveItemSelection(shareId: string, itemId: string, note?: string | null): boolean {
-  const share = globalShares.find((s) => s.id === shareId);
+  const shares = getGlobalShares();
+  const share = shares.find((s) => s.id === shareId);
   if (!share) return false;
   const item = share.items.find((i) => i.id === itemId);
   if (!item) return false;
@@ -377,11 +477,13 @@ export function toggleDriveItemSelection(shareId: string, itemId: string, note?:
     item.note = note;
   }
   share.selectedCount = share.items.filter((i) => i.selected).length;
+  persistSharesToDisk(shares);
   return true;
 }
 
 export function addDriveVideoComment(shareId: string, seconds: number, author: string, content: string): DriveVideoComment | null {
-  const share = globalShares.find((s) => s.id === shareId);
+  const shares = getGlobalShares();
+  const share = shares.find((s) => s.id === shareId);
   if (!share) return null;
   if (!share.comments) share.comments = [];
 
@@ -400,19 +502,23 @@ export function addDriveVideoComment(shareId: string, seconds: number, author: s
 
   share.comments.push(comment);
   share.comments.sort((a, b) => a.seconds - b.seconds);
+  persistSharesToDisk(shares);
   return comment;
 }
 
 export function getDriveExportRawCodes(shareId: string): string {
-  const share = globalShares.find((s) => s.id === shareId);
+  const shares = getGlobalShares();
+  const share = shares.find((s) => s.id === shareId);
   if (!share) return "";
   const selectedItems = share.items.filter((i) => i.selected);
   return selectedItems.map((i) => i.filename.replace(/\.[^/.]+$/, "")).join(", ");
 }
 
 export function incrementDriveViews(shareId: string): void {
-  const share = globalShares.find((s) => s.id === shareId);
+  const shares = getGlobalShares();
+  const share = shares.find((s) => s.id === shareId);
   if (share) {
     share.viewsCount += 1;
+    persistSharesToDisk(shares);
   }
 }

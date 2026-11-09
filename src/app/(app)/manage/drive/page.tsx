@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   Apple,
@@ -39,6 +39,17 @@ export default function ManageDrivePage() {
   const [copiedLink, setCopiedLink] = useState<string | null>(null);
   const [copiedRaw, setCopiedRaw] = useState<boolean>(false);
   const [copiedCmd, setCopiedCmd] = useState<boolean>(false);
+
+  useEffect(() => {
+    fetch("/api/drive/agent")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && Array.isArray(data.shares)) {
+          setShares(data.shares);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const connectKey = "sc_drive_live_tenant_demo_984f7b2e1a";
 

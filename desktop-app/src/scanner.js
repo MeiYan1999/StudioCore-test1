@@ -6,6 +6,21 @@ const IMG_EXTS = new Set([".jpg", ".jpeg", ".png", ".webp", ".tiff", ".psd"]);
 const VIDEO_EXTS = new Set([".mp4", ".mov", ".avi", ".mkv", ".m4v"]);
 const DOC_EXTS = new Set([".pdf", ".zip", ".rar", ".7z"]);
 
+const DEMO_PREVIEWS = [
+  { folder: "duoi-ca", name: "anh-001" },
+  { folder: "duoi-ca", name: "anh-002" },
+  { folder: "duoi-ca", name: "anh-003" },
+  { folder: "duoi-ca", name: "anh-004" },
+  { folder: "truyen-thong", name: "anh-005" },
+  { folder: "truyen-thong", name: "anh-006" },
+  { folder: "truyen-thong", name: "anh-007" },
+  { folder: "truyen-thong", name: "anh-008" },
+  { folder: "le-gia-tien", name: "anh-009" },
+  { folder: "le-gia-tien", name: "anh-010" },
+  { folder: "le-gia-tien", name: "anh-011" },
+  { folder: "le-gia-tien", name: "anh-012" },
+];
+
 function formatBytes(bytes) {
   if (bytes === 0) return "0 B";
   const k = 1024;
@@ -90,6 +105,7 @@ function scanFolder(folderPath, maxFiles = 2000) {
         }
 
         totalSizeBytes += fileStat.size;
+        const sample = DEMO_PREVIEWS[items.length % DEMO_PREVIEWS.length];
         items.push({
           id: `item-${items.length + 1}`,
           name: dirent.name,
@@ -99,8 +115,8 @@ function scanFolder(folderPath, maxFiles = 2000) {
           sizeLabel: formatBytes(fileStat.size),
           type: fileType,
           format: ext.replace(".", "").toUpperCase(),
-          thumbnailUrl: `/api/files/tenant-demo/album-demo-01/duoi-ca/anh-00${(items.length % 9) + 1}-thumb.jpg`,
-          previewUrl: `/api/files/tenant-demo/album-demo-01/duoi-ca/anh-00${(items.length % 9) + 1}.jpg`,
+          thumbnailUrl: `/api/files/tenant-demo/album-demo-01/${sample.folder}/${sample.name}-thumb.jpg`,
+          previewUrl: `/api/files/tenant-demo/album-demo-01/${sample.folder}/${sample.name}.jpg`,
           downloadUrl: "#",
         });
       }
