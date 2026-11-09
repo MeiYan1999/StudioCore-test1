@@ -3,7 +3,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const http = require("node:http");
-const { exec, spawn } = require("node:child_process");
+const { exec, spawnSync } = require("node:child_process");
 const { AgentClient, saveConfig } = require("./src/agent-client");
 
 const args = process.argv.slice(2);
@@ -12,32 +12,63 @@ const command = args[0] || "start";
 const agent = new AgentClient();
 
 function openBrowser(url) {
-  const start =
-    process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
-  exec(`${start} "${url}"`, () => {});
-}
-
-// Copy to system clipboard
-function copyToClipboard(text) {
   if (process.platform === "darwin") {
-    const proc = spawn("pbcopy");
-    proc.stdin.write(text);
-    proc.stdin.end();
+    exec(`open "${url}"`, () => {});
   } else if (process.platform === "win32") {
-    const proc = spawn("clip");
-    proc.stdin.write(text);
-    proc.stdin.end();
+    // In Windows cmd, start requires empty title before URL when quoted: start "" "url"
+    exec(`start "" "${url}"`, () => {});
+  } else {
+    exec(`xdg-open "${url}"`, () => {});
   }
 }
 
-// OS Notification
-function notify(title, message) {
-  if (process.platform === "darwin") {
-    exec(`osascript -e 'display notification "${message}" with title "${title}"'`);
-  } else if (process.platform === "win32") {
-    exec(
-      `powershell -Command "[reflection.assembly]::loadwithpartialname('System.Windows.Forms'); [Windows.Forms.MessageBox]::Show('${message}', '${title}')"`,
-    );
+// Copy to system clipboard synchronously
+function copyToClipboard(text) {
+  try {
+    if (process.platform === "darwin") {
+      spawnSync("pbcopy", { input: text });
+    } else if (process.platform === "win32") {
+      spawnSync("clip", { input: text });
+    }
+  } catch {
+    // Ignore clipboard error
+  }
+}
+
+// OS Native Dialog Box
+function showDialog(title, message, isError = false) {
+  if (process.platform === "win32") {
+    const vbsPath = path.join(__dirname, "windows", "dialog.vbs");
+    if (fs.existsSync(vbsPath)) {
+      try {
+        spawnSync("wscript.exe", [vbsPath, title, message, isError ? "error" : "info"], {
+          stdio: "ignore",
+          timeout: 60000,
+        });
+        return;
+      } catch {
+        // Fallback to PowerShell
+      }
+    }
+
+    try {
+      const icon = isError ? "Error" : "Information";
+      const ps = `Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.MessageBox]::Show('${message.replace(/'/g, "''").replace(/\n/g, "`n")}', '${title.replace(/'/g, "''")}', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::${icon})`;
+      spawnSync("powershell", ["-NoProfile", "-NonInteractive", "-Command", ps], {
+        stdio: "ignore",
+        timeout: 60000,
+      });
+    } catch {
+      // Ignore
+    }
+  } else if (process.platform === "darwin") {
+    try {
+      const escaped = message.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+      const script = `display dialog "${escaped}" with title "${title}" buttons {"OK"} default button "OK"${isError ? " with icon stop" : ""}`;
+      spawnSync("osascript", ["-e", script], { stdio: "ignore", timeout: 60000 });
+    } catch {
+      // Ignore
+    }
   }
 }
 
@@ -58,7 +89,9 @@ async function handleShareCommand() {
   }
 
   if (!targetPath) {
-    console.error("Vui lòng cung cấp đường dẫn thư mục: studiocore-drive share <path>");
+    const errMsg = "Vui lòng cung cấp đường dẫn thư mục: studiocore-drive share <path>";
+    console.error(errMsg);
+    showDialog("StudioCore Drive — Lỗi", errMsg, true);
     process.exit(1);
   }
 
@@ -66,16 +99,34 @@ async function handleShareCommand() {
   try {
     const result = await agent.createShare(targetPath, shareType);
     if (result && result.publicUrl) {
+      // 1. Sao chép link vào clipboard
       copyToClipboard(result.publicUrl);
       console.log(`\n✅ TẠO LINK CHIA SẺ THÀNH CÔNG!`);
       console.log(`🔗 Link khách: ${result.publicUrl}`);
       console.log(`📋 Đã tự động sao chép link vào clipboard của bạn.`);
-      notify("StudioCore Drive", `Đã copy link gửi khách: ${result.publicUrl}`);
+
+      // 2. Tự động mở trình duyệt xem thử
+      openBrowser(result.publicUrl);
+
+      // 3. Hiện hộp thoại thông báo hoàn tất trên màn hình
+      const title = result.title || path.basename(targetPath);
+      const dialogMsg = `ĐÃ TẠO LINK CHIA SẺ THÀNH CÔNG!\n\nThư mục: ${title}\nLink: ${result.publicUrl}\n\n✓ Đã tự động copy link vào bộ nhớ tạm (Clipboard).\n✓ Bạn có thể nhấn Ctrl + V để dán ngay vào Zalo hoặc Messenger gửi cho khách!`;
+      showDialog("StudioCore Drive — Thành công", dialogMsg, false);
     } else {
-      console.log("❌ Không thể tạo link:", result);
+      console.error("❌ Không thể tạo link:", result);
+      showDialog(
+        "StudioCore Drive — Lỗi",
+        "Không thể tạo link chia sẻ cho thư mục này. Vui lòng kiểm tra lại quyền truy cập thư mục.",
+        true,
+      );
     }
   } catch (err) {
     console.error("❌ Lỗi:", err.message);
+    showDialog(
+      "StudioCore Drive — Lỗi",
+      `Đã xảy ra lỗi khi tạo link chia sẻ:\n${err.message}`,
+      true,
+    );
   }
 }
 

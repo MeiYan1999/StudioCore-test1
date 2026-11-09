@@ -42,9 +42,14 @@ Sau đó:
 - Link khách sẽ được copy ngay lập tức vào clipboard của bạn!
 
 ### 2. Trên Windows (Explorer Context Menu)
-1. Mở thư mục `desktop-app/windows`.
-2. Nhấp chuột phải vào file `install.bat` và chọn **Run as administrator** (hoặc nhấp đúp vào `register-context-menu.reg`).
-3. Chuột phải vào bất kỳ thư mục nào trong Windows Explorer để chọn **StudioCore Drive** › **Tạo link Album (chọn ảnh)**.
+1. Giải nén file `StudioCore-Drive-Windows.zip`.
+2. Nhấp đúp vào file `windows\install.bat` (hoặc nhấp chuột phải chọn **Run as administrator**).
+   - Hệ thống sẽ tự động cài ứng dụng vào `%USERPROFILE%\.studiocore-drive\app`.
+   - Tự động đăng ký menu chuột phải vào Windows Explorer với hỗ trợ đầy đủ tiếng Việt Unicode.
+3. Chuột phải vào bất kỳ thư mục ảnh hoặc video nào trong Windows Explorer:
+   - Chọn **StudioCore Drive** › **Tạo link Album (chọn ảnh duyệt)** hoặc **Tạo link Thư mục** hoặc **Tạo link Video**.
+   - Trình duyệt sẽ tự động mở xem thử album, link được sao chép vào bộ nhớ tạm (Ctrl+V) và hộp thoại xác nhận sẽ hiện lên màn hình.
+4. Nếu muốn gỡ bỏ menu chuột phải, chỉ cần nhấp đúp vào `windows\uninstall.bat`.
 
 ---
 
