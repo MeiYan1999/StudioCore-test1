@@ -43,6 +43,7 @@ export function setTenantSetting(
 
 export type StudioSettingsInput = {
   name: string;
+  subdomain?: string;
   logoUrl: string;
   address: string;
   phone: string;
@@ -82,8 +83,14 @@ export function saveStudioSettings(
     saturday: input.saturdayHours || "08:00-17:00",
     sunday: input.sundayHours || "closed",
   });
+  const cleanSubdomain = (input.subdomain ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, "");
+
   const entries: [string, string][] = [
     ["studio.name", input.name.trim()],
+    ["studio.subdomain", cleanSubdomain],
     ["studio.logoUrl", input.logoUrl.trim()],
     ["studio.address", input.address.trim()],
     ["studio.phone", input.phone.trim()],

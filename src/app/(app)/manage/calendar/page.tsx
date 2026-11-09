@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CalendarDays, DoorOpen } from "lucide-react";
+import { CalendarDays, DoorOpen, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,9 +9,11 @@ import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ForbiddenState } from "@/components/shared/forbidden-state";
 import { BookingSheet } from "@/components/scheduling/booking-sheet";
+import { GoogleCalendarSyncDialog } from "@/components/scheduling/google-calendar-sync-dialog";
 import { hasPermission } from "@/lib/auth/permissions";
 import { requireActor } from "@/lib/auth/session";
 import { getDb } from "@/lib/db/client";
+import { getOrCreateCalendarFeedToken } from "@/lib/services/ical-service";
 import {
   APPOINTMENT_STATUS_META,
   type AppointmentStatus,
@@ -153,6 +155,8 @@ export default async function CalendarPage({
   const orders = listOrderOptions(getDb(), actor);
   const canManage = hasPermission(actor.permissions, "schedule.manage");
   const defaultBranchId = actor.activeBranchId ?? actor.branches[0]?.id ?? "";
+  const feedToken = getOrCreateCalendarFeedToken(getDb(), actor.tenantId);
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://studiocore.io.vn";
   const currentFilters: SearchParams = {
     date: data.dateKey,
     view: data.view,
@@ -168,6 +172,7 @@ export default async function CalendarPage({
         description={`${data.rangeLabel} · ${data.appointments.length} lịch trong phạm vi xem.`}
         actions={
           <>
+            <GoogleCalendarSyncDialog feedToken={feedToken} siteUrl={siteUrl} />
             {canManage ? (
               <Button asChild variant="outline">
                 <Link href="/manage/settings/rooms">
@@ -313,12 +318,50 @@ export default async function CalendarPage({
             <EmptyState
               icon={<CalendarDays className="h-6 w-6" aria-hidden="true" />}
               title="Chưa có lịch trong ngày"
-              description="Chọn ngày khác hoặc dùng nút Xếp lịch để tạo buổi chụp."
+              description="Chọn ngày khác hoặc bấm vào bên dưới để thêm lịch chụp."
+              action={
+                canManage ? (
+                  <BookingSheet
+                    orders={orders}
+                    rooms={rooms}
+                    assignees={assignees}
+                    branches={actor.branches}
+                    defaultBranchId={defaultBranchId}
+                    defaultDate={data.dateKey}
+                    trigger={
+                      <Button size="sm">
+                        <Plus className="mr-1.5 h-4 w-4" />
+                        Xếp lịch ngày này
+                      </Button>
+                    }
+                  />
+                ) : undefined
+              }
             />
           ) : (
-            data.appointments.map((appointment) => (
-              <EventCard key={appointment.id} appointment={appointment} />
-            ))
+            <>
+              {data.appointments.map((appointment) => (
+                <EventCard key={appointment.id} appointment={appointment} />
+              ))}
+              {canManage ? (
+                <div className="pt-2">
+                  <BookingSheet
+                    orders={orders}
+                    rooms={rooms}
+                    assignees={assignees}
+                    branches={actor.branches}
+                    defaultBranchId={defaultBranchId}
+                    defaultDate={data.dateKey}
+                    trigger={
+                      <Button variant="outline" size="sm" className="gap-1.5">
+                        <Plus className="h-4 w-4" />
+                        Thêm lịch chụp trong ngày
+                      </Button>
+                    }
+                  />
+                </div>
+              ) : null}
+            </>
           )}
         </section>
       ) : null}
@@ -327,25 +370,88 @@ export default async function CalendarPage({
         <div className="overflow-x-auto rounded-xl border border-border bg-surface">
           <div className="grid min-w-[980px] grid-cols-7 divide-x divide-border">
             {data.days.map((day) => (
-              <div key={day.dateKey} className="min-h-64 p-2">
-                <div
-                  className={cn(
-                    "mb-2 flex items-center justify-between rounded-lg px-2 py-1 text-xs",
-                    day.isToday ? "bg-accent text-accent-foreground" : "text-muted-foreground",
-                  )}
-                >
-                  <span className="font-medium">{day.weekdayLabel}</span>
-                  <span className="tabular-nums">{day.label.slice(0, 5)}</span>
+              <div key={day.dateKey} className="min-h-64 p-2 flex flex-col justify-between">
+                <div>
+                  <div
+                    className={cn(
+                      "mb-2 flex items-center justify-between rounded-lg px-2 py-1 text-xs",
+                      day.isToday ? "bg-accent text-accent-foreground font-semibold" : "text-muted-foreground",
+                    )}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-medium">{day.weekdayLabel}</span>
+                      <span className="tabular-nums">{day.label.slice(0, 5)}</span>
+                    </div>
+                    {canManage ? (
+                      <BookingSheet
+                        orders={orders}
+                        rooms={rooms}
+                        assignees={assignees}
+                        branches={actor.branches}
+                        defaultBranchId={defaultBranchId}
+                        defaultDate={day.dateKey}
+                        trigger={
+                          <button
+                            type="button"
+                            className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-surface hover:text-foreground transition-colors"
+                            title={`Thêm lịch ngày ${day.label}`}
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                          </button>
+                        }
+                      />
+                    ) : null}
+                  </div>
+                  <div className="space-y-2">
+                    {day.appointments.length === 0 ? (
+                      canManage ? (
+                        <BookingSheet
+                          orders={orders}
+                          rooms={rooms}
+                          assignees={assignees}
+                          branches={actor.branches}
+                          defaultBranchId={defaultBranchId}
+                          defaultDate={day.dateKey}
+                          trigger={
+                            <button
+                              type="button"
+                              className="w-full flex flex-col items-center justify-center gap-1 py-8 rounded-lg border border-dashed border-border/80 text-xs text-muted-foreground hover:border-primary/50 hover:bg-primary/5 hover:text-primary transition-all group"
+                            >
+                              <Plus className="h-4 w-4 group-hover:scale-125 transition-transform" />
+                              <span>+ Thêm lịch</span>
+                            </button>
+                          }
+                        />
+                      ) : (
+                        <p className="px-1 text-xs text-muted-foreground">Trống</p>
+                      )
+                    ) : (
+                      day.appointments.map((appointment) => (
+                        <EventCard key={appointment.id} appointment={appointment} compact />
+                      ))
+                    )}
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  {day.appointments.length === 0 ? (
-                    <p className="px-1 text-xs text-muted-foreground">Trống</p>
-                  ) : (
-                    day.appointments.map((appointment) => (
-                      <EventCard key={appointment.id} appointment={appointment} compact />
-                    ))
-                  )}
-                </div>
+                {canManage && day.appointments.length > 0 ? (
+                  <div className="pt-2">
+                    <BookingSheet
+                      orders={orders}
+                      rooms={rooms}
+                      assignees={assignees}
+                      branches={actor.branches}
+                      defaultBranchId={defaultBranchId}
+                      defaultDate={day.dateKey}
+                      trigger={
+                        <button
+                          type="button"
+                          className="w-full py-1 rounded border border-dashed border-border/60 text-[11px] text-muted-foreground hover:border-primary/40 hover:text-primary flex items-center justify-center gap-1 transition-colors"
+                        >
+                          <Plus className="h-3 w-3" /> Thêm lịch
+                        </button>
+                      }
+                    />
+                  </div>
+                ) : null}
               </div>
             ))}
           </div>
@@ -366,17 +472,38 @@ export default async function CalendarPage({
               <div
                 key={day.dateKey}
                 className={cn(
-                  "min-h-28 border-b border-r border-border p-1.5",
+                  "group relative min-h-28 border-b border-r border-border p-1.5 transition-colors hover:bg-accent/10",
                   !day.isCurrentMonth && "bg-surface-muted/50 text-muted-foreground",
                   day.isToday && "bg-accent/40",
                 )}
               >
-                <Link
-                  href={buildHref(currentFilters, { view: "day", date: day.dateKey })}
-                  className="mb-1 inline-block rounded px-1 text-xs font-medium tabular-nums hover:text-primary"
-                >
-                  {day.dateKey.slice(8)}
-                </Link>
+                <div className="flex items-center justify-between mb-1">
+                  <Link
+                    href={buildHref(currentFilters, { view: "day", date: day.dateKey })}
+                    className="inline-block rounded px-1 text-xs font-medium tabular-nums hover:text-primary"
+                  >
+                    {day.dateKey.slice(8)}
+                  </Link>
+                  {canManage ? (
+                    <BookingSheet
+                      orders={orders}
+                      rooms={rooms}
+                      assignees={assignees}
+                      branches={actor.branches}
+                      defaultBranchId={defaultBranchId}
+                      defaultDate={day.dateKey}
+                      trigger={
+                        <button
+                          type="button"
+                          className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground opacity-70 hover:opacity-100 hover:bg-surface hover:text-primary transition-all sm:opacity-0 sm:group-hover:opacity-100"
+                          title={`Thêm lịch ngày ${day.dateKey}`}
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                        </button>
+                      }
+                    />
+                  ) : null}
+                </div>
                 <div className="space-y-1">
                   {day.appointments.slice(0, 3).map((appointment) => (
                     <EventCard key={appointment.id} appointment={appointment} compact />

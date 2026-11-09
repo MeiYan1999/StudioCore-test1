@@ -55,6 +55,28 @@ export function StudioSettingsForm({ settings }: { settings: Settings }) {
             <Input id="studio-name" name="name" defaultValue={settings["studio.name"] ?? ""} className="mt-1.5" required />
           </div>
           <div>
+            <Label htmlFor="studio-subdomain">Tên miền phụ (Subdomain của Studio)</Label>
+            <div className="mt-1.5 flex rounded-lg">
+              <Input
+                id="studio-subdomain"
+                name="subdomain"
+                defaultValue={settings["studio.subdomain"] ?? ""}
+                placeholder="manhnguyen"
+                className="font-mono rounded-r-none"
+              />
+              <span className="inline-flex items-center rounded-r-lg border border-l-0 border-border bg-surface-muted px-3 text-xs text-muted-foreground whitespace-nowrap">
+                .studiocore.io.vn
+              </span>
+            </div>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Link PhotoShare sẽ tự đổi thành:{" "}
+              <code className="text-primary font-mono font-medium">
+                https://{settings["studio.subdomain"] || "manhnguyen"}.studiocore.io.vn/share/...
+              </code>{" "}
+              (để trống sẽ lấy domain gốc studiocore.io.vn).
+            </p>
+          </div>
+          <div>
             <Label htmlFor="studio-logo">Logo URL</Label>
             <Input id="studio-logo" name="logoUrl" defaultValue={settings["studio.logoUrl"] ?? ""} className="mt-1.5" placeholder="https://..." />
           </div>

@@ -21,6 +21,7 @@ import {
   createAppointment,
   updateAppointment,
 } from "@/lib/services/appointment-service";
+import { regenerateCalendarFeedToken } from "@/lib/services/ical-service";
 import { createRoom, updateRoom } from "@/lib/services/room-service";
 import { getDb } from "@/lib/db/client";
 import { parseVietnamDateTimeLocal } from "@/lib/utils";
@@ -315,3 +316,20 @@ export async function checkInAppointmentAction(formData: FormData): Promise<void
 export async function checkOutAppointmentAction(formData: FormData): Promise<void> {
   await checkInOutAction(formData, "checkOut");
 }
+
+export async function regenerateCalendarFeedTokenAction(): Promise<{
+  ok: boolean;
+  feedToken?: string;
+  error?: string;
+}> {
+  const actor = await getActorContext();
+  if (!actor) return { ok: false, error: "Phiên đăng nhập đã hết hạn." };
+  try {
+    const newToken = regenerateCalendarFeedToken(getDb(), actor.tenantId);
+    revalidatePath("/manage/calendar");
+    return { ok: true, feedToken: newToken };
+  } catch (error) {
+    return { ok: false, error: errorMessage(error) };
+  }
+}
+

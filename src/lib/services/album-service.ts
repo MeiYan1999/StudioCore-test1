@@ -12,6 +12,7 @@ import {
   paymentRequests,
   photoSelections,
   photos,
+  settings,
   staff,
 } from "../db/schema";
 import type { ActorContext } from "../auth/types";
@@ -786,6 +787,46 @@ export function listAlbums(
   };
 }
 
+export function buildStudioShareUrl(
+  db: AppDb,
+  tenantId: string,
+  rawToken: string,
+): string {
+  const customSubdomain = db
+    .select({ value: settings.value })
+    .from(settings)
+    .where(and(eq(settings.tenantId, tenantId), eq(settings.key, "studio.subdomain")))
+    .get()?.value?.trim().toLowerCase();
+
+  const envUrl = (process.env.NEXT_PUBLIC_SITE_URL || getEnv().NEXT_PUBLIC_SITE_URL || "").trim();
+  let isLocal = false;
+  let protocol = "https:";
+  let baseDomain = "studiocore.io.vn";
+
+  if (envUrl) {
+    try {
+      const parsed = new URL(envUrl);
+      if (parsed.protocol) protocol = parsed.protocol;
+      if (parsed.hostname.includes("localhost") || parsed.hostname.includes("127.0.0.1")) {
+        isLocal = true;
+        baseDomain = parsed.host;
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  if (isLocal) {
+    return `${protocol}//${baseDomain}/share/${rawToken}`;
+  }
+
+  if (customSubdomain) {
+    return `https://${customSubdomain}.${baseDomain}/share/${rawToken}`;
+  }
+
+  return `https://${baseDomain}/share/${rawToken}`;
+}
+
 export function getAlbumDetail(
   db: AppDb,
   actor: ActorContext,
@@ -908,7 +949,7 @@ export function getAlbumDetail(
   const extraCount = Math.max(0, selected.length - row.album.selectionLimit);
   const rawToken = revealShareToken(row.album.tokenEncrypted);
   const shareLink = rawToken
-    ? `${getEnv().NEXT_PUBLIC_SITE_URL.replace(/\/$/, "")}/share/${rawToken}`
+    ? buildStudioShareUrl(db, row.album.tenantId, rawToken)
     : null;
 
   return {
@@ -1323,7 +1364,7 @@ export function rotateAlbumShareToken(
 
   return {
     rawToken: tokenRecord.rawToken,
-    shareLink: `${getEnv().NEXT_PUBLIC_SITE_URL.replace(/\/$/, "")}/share/${tokenRecord.rawToken}`,
+    shareLink: buildStudioShareUrl(db, actor.tenantId, tokenRecord.rawToken),
   };
 }
 

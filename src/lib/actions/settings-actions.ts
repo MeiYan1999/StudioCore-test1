@@ -30,6 +30,7 @@ export async function saveStudioSettingsAction(
   try {
     saveStudioSettings(getDb(), actor, {
       name: getFormString(formData, "name"),
+      subdomain: getFormString(formData, "subdomain"),
       logoUrl: getFormString(formData, "logoUrl"),
       address: getFormString(formData, "address"),
       phone: getFormString(formData, "phone"),

@@ -115,7 +115,7 @@ export function AlbumSharePanel({
             </Button>
             {!shareRevoked ? (
               <Button asChild variant="outline" size="sm">
-                <a href={activeLink.replace(/^https?:\/\/[^/]+/, "")} target="_blank" rel="noreferrer">
+                <a href={activeLink} target="_blank" rel="noreferrer">
                   <ExternalLink className="h-4 w-4" aria-hidden />
                   Mở PhotoShare
                 </a>

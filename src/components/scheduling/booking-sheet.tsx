@@ -47,6 +47,7 @@ export function BookingSheet({
   defaultBranchId,
   defaultDate,
   appointment,
+  trigger,
 }: {
   orders: OrderOption[];
   rooms: RoomItem[];
@@ -59,6 +60,7 @@ export function BookingSheet({
   defaultBranchId: string;
   defaultDate: string;
   appointment?: AppointmentDetail;
+  trigger?: React.ReactNode;
 }) {
   const isEdit = Boolean(appointment);
   const [open, setOpen] = useState(false);
@@ -144,20 +146,26 @@ export function BookingSheet({
         setOpen(nextOpen);
         if (nextOpen && !isEdit) {
           setIdempotencyKey(crypto.randomUUID());
+          setStartAt(`${defaultDate}T09:00`);
+          setEndAt(`${defaultDate}T11:00`);
         }
       }}
     >
       <SheetTrigger asChild>
-        <Button variant={isEdit ? "outline" : "primary"} size={isEdit ? "sm" : "default"}>
-          {isEdit ? (
-            "Sửa lịch"
-          ) : (
-            <>
-              <CalendarPlus className="h-4 w-4" aria-hidden="true" />
-              Xếp lịch
-            </>
-          )}
-        </Button>
+        {trigger ? (
+          trigger
+        ) : (
+          <Button variant={isEdit ? "outline" : "primary"} size={isEdit ? "sm" : "default"}>
+            {isEdit ? (
+              "Sửa lịch"
+            ) : (
+              <>
+                <CalendarPlus className="h-4 w-4" aria-hidden="true" />
+                Xếp lịch
+              </>
+            )}
+          </Button>
+        )}
       </SheetTrigger>
       <SheetContent className="max-w-2xl">
         <SheetHeader>

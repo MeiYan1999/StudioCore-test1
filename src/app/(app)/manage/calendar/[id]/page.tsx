@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, CalendarClock, DoorOpen, MapPin, UserRound } from "lucide-react";
+import { ArrowLeft, Calendar, CalendarClock, DoorOpen, MapPin, UserRound } from "lucide-react";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,7 @@ import {
 import { formatDateKey, getVietnamDateKey } from "@/lib/scheduling/time";
 import { formatDateTime } from "@/lib/utils";
 import { getAppointmentDetail } from "@/lib/services/appointment-service";
+import { buildGoogleCalendarEventUrl } from "@/lib/services/ical-service";
 import { listOrderOptions, orderAssigneeOptions } from "@/lib/services/order-service";
 import { listRooms } from "@/lib/services/room-service";
 
@@ -62,6 +63,18 @@ export default async function AppointmentDetailPage({
   const orders = listOrderOptions(getDb(), actor);
   const assignees = orderAssigneeOptions(getDb(), actor);
 
+  const googleCalendarEventUrl = buildGoogleCalendarEventUrl({
+    orderCode: appointment.orderCode,
+    customerName: appointment.customerName,
+    customerPhone: appointment.customerPhone,
+    startAt: appointment.startAt,
+    endAt: appointment.endAt,
+    branchName: appointment.branchName,
+    roomName: appointment.roomName ?? undefined,
+    photographerName: appointment.photographer?.name,
+    notes: appointment.notes ?? undefined,
+  });
+
   return (
     <div>
       <PageHeader
@@ -74,6 +87,16 @@ export default async function AppointmentDetailPage({
                 <ArrowLeft className="h-4 w-4" aria-hidden="true" />
                 Về lịch
               </Link>
+            </Button>
+            <Button asChild variant="outline">
+              <a
+                href={googleCalendarEventUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <Calendar className="h-4 w-4 text-primary" aria-hidden="true" />
+                Thêm vào Google Calendar
+              </a>
             </Button>
             {canManage && appointment.status === "scheduled" ? (
               <BookingSheet

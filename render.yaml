@@ -14,7 +14,7 @@ services:
       - key: TOKEN_ENCRYPTION_KEY
         value: 0123456789abcdef0123456789abcdef
       - key: NEXT_PUBLIC_SITE_URL
-        value: https://studiocore-test1.onrender.com
+        value: https://studiocore.io.vn
       - key: UPLOAD_ROOT
         value: /app/data/uploads
       - key: STORAGE_PROVIDER
