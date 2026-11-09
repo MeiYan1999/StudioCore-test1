@@ -8,6 +8,7 @@ export const MARKETING_CONTACT = {
 };
 
 export const MARKETING_NAV = [
+  { href: "/studiocore-drive", label: "StudioCore Drive" },
   { href: "/#features", label: "Tính năng" },
   { href: "/pricing", label: "Gói cước" },
   { href: "/blog", label: "Blog" },

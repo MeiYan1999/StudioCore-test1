@@ -18,6 +18,7 @@ export function MarketingFooter() {
         <div>
           <h2 className="text-sm font-semibold">Sản phẩm</h2>
           <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
+            <li><Link href="/studiocore-drive" className="hover:text-primary font-medium text-primary">StudioCore Drive (PC/Mac)</Link></li>
             <li><Link href="/phan-mem-quan-ly-studio" className="hover:text-primary">Quản lý studio</Link></li>
             <li><Link href="/crm-studio-chup-anh" className="hover:text-primary">CRM studio</Link></li>
             <li><Link href="/#features" className="hover:text-primary">Tính năng</Link></li>

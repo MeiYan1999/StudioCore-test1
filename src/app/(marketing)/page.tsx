@@ -74,14 +74,17 @@ export default function HomePage() {
         <SectionContainer>
           <div className="mx-auto max-w-4xl text-center">
             {/* Shimmer Pill Badge with Live Beacon */}
-            <div className="inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/5 px-4 py-1.5 text-xs font-semibold text-primary shadow-xs backdrop-blur-md transition-all duration-300 hover:scale-105 hover:bg-primary/10">
+            <Link
+              href="/studiocore-drive"
+              className="inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/5 px-4 py-1.5 text-xs font-semibold text-primary shadow-xs backdrop-blur-md transition-all duration-300 hover:scale-105 hover:bg-primary/10"
+            >
               <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
               </span>
-              <span>StudioCore 2.0 • Nền tảng Điều hành Studio Đột phá</span>
-              <Sparkles className="h-3.5 w-3.5 text-amber-500" />
-            </div>
+              <span>Đột phá: StudioCore Drive · Gửi ảnh &amp; video thẳng từ PC không cần Google Drive</span>
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
 
             {/* Display Typography */}
             <h1 className="mt-6 text-4xl font-extrabold tracking-tight text-foreground sm:text-5xl lg:text-6xl sm:leading-[1.12]">
@@ -115,7 +118,7 @@ export default function HomePage() {
                 variant="outline"
                 className="w-full border-border/80 bg-surface/80 backdrop-blur-md transition-all duration-300 hover:bg-accent/60 active:scale-[0.98] sm:w-auto"
               >
-                <Link href="#photoshare">Trải nghiệm PhotoShare</Link>
+                <Link href="/studiocore-drive">Khám phá StudioCore Drive</Link>
               </Button>
             </div>
 

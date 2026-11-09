@@ -16,6 +16,7 @@ import {
   ClipboardList,
   DoorOpen,
   FileText,
+  HardDrive,
   Images,
   LayoutDashboard,
   ListFilter,
@@ -78,6 +79,7 @@ export type NavIcon =
   | "calendar"
   | "rooms"
   | "photos"
+  | "drive"
   | "filter"
   | "ai"
   | "integrations"
@@ -143,6 +145,7 @@ const ICONS: Record<NavIcon, LucideIcon> = {
   calendar: CalendarDays,
   rooms: DoorOpen,
   photos: Images,
+  drive: HardDrive,
   filter: ListFilter,
   ai: BrainCircuit,
   integrations: Plug,
@@ -184,6 +187,7 @@ const SEGMENT_LABELS: Record<string, string> = {
   ai: "AI Hub",
   integrations: "Tích hợp",
   share: "PhotoShare",
+  drive: "StudioCore Drive",
   finance: "Sổ quỹ",
   invoices: "Hóa đơn",
   debts: "Công nợ",

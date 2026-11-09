@@ -144,6 +144,7 @@ export default async function ManageLayout({
     }
     productionGroup.items.push(
       { href: "/manage/photos", label: "Album ảnh", icon: "photos" },
+      { href: "/manage/drive", label: "StudioCore Drive", icon: "drive" as const },
       { href: "/manage/photos/filter", label: "Lọc ảnh khách chọn", icon: "filter" },
     );
   }
