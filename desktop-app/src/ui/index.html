@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StudioCore Drive — Desktop Agent</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="dark">
+  <div class="app-layout">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-icon">
+          <svg viewBox="0 0 32 32" fill="none" class="aperture-svg">
+            <circle cx="16" cy="16" r="13.5" stroke="currentColor" stroke-width="2" stroke-opacity="0.4" />
+            <path d="M16 2.5 L20.8 11.8 M29.5 9.8 L21.2 16 M27 24.2 L16.2 19.8 M16 29.5 L11.2 20.2 M2.5 22.2 L10.8 16 M5 7.8 L15.8 12.2" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
+            <circle cx="16" cy="16" r="3.2" fill="currentColor" />
+          </svg>
+        </div>
+        <div>
+          <h2>Studio<span>Core</span> Drive</h2>
+          <p class="tag">Desktop Agent v1.0</p>
+        </div>
+      </div>
+
+      <nav class="nav-links">
+        <a href="#shares" class="active" id="navShares">Thư mục chia sẻ</a>
+        <a href="#dropzone" id="navNew">Tạo link mới</a>
+        <a href="#settings" id="navSettings">Cài đặt kết nối</a>
+      </nav>
+
+      <div class="agent-status-card">
+        <div class="status-indicator">
+          <span class="pulse-dot"></span>
+          <span class="status-text" id="statusText">Đang kết nối SaaS...</span>
+        </div>
+        <p class="host-info" id="hostInfo">Máy: --</p>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      <header class="top-bar">
+        <div>
+          <h1 id="pageTitle">Thư mục &amp; Video đang chia sẻ</h1>
+          <p class="subtitle">Khách nhận link xem tức thì không cần Google Drive</p>
+        </div>
+        <div class="top-actions">
+          <button id="btnRefresh" class="btn btn-outline">Làm mới</button>
+          <button id="btnQuickShare" class="btn btn-primary">+ Chia sẻ thư mục</button>
+        </div>
+      </header>
+
+      <!-- Drag & Drop Zone -->
+      <section class="dropzone-section" id="dropzoneSection">
+        <div class="dropzone" id="dropArea">
+          <div class="drop-icon">📁</div>
+          <h3>Kéo thả thư mục ảnh hoặc video vào đây</h3>
+          <p>Tự động quét file RAW (.CR3, .ARW, .NEF) và tạo link khách trong 3 giây</p>
+          <div class="drop-actions">
+            <button class="btn btn-secondary" id="btnSelectFolder">Hoặc Chọn thư mục từ máy tính</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Active Shares List -->
+      <section class="shares-section" id="sharesSection">
+        <div class="shares-grid" id="sharesList">
+          <!-- Dynamically populated -->
+        </div>
+      </section>
+
+      <!-- Settings Section -->
+      <section class="settings-section hidden" id="settingsSection">
+        <div class="card settings-card">
+          <h3>Cài đặt kết nối StudioCore SaaS</h3>
+          <form id="settingsForm">
+            <div class="form-group">
+              <label for="serverUrl">Địa chỉ máy chủ SaaS (Server URL):</label>
+              <input type="text" id="serverUrl" value="http://localhost:3000">
+            </div>
+
+            <div class="form-group">
+              <label for="connectKey">Khóa kết nối (Studio Connect Key):</label>
+              <input type="text" id="connectKey" value="sc_drive_live_tenant_demo_984f7b2e1a">
+            </div>
+
+            <div class="form-group-checkbox">
+              <input type="checkbox" id="autoFilterRaw" checked>
+              <label for="autoFilterRaw">Tự động copy file RAW khách chốt vào thư mục <code>Retouch_Final</code></label>
+            </div>
+
+            <div class="form-group-checkbox">
+              <input type="checkbox" id="chimeSound" checked>
+              <label for="chimeSound">Phát âm thanh chuông báo khi khách chốt album</label>
+            </div>
+
+            <button type="submit" class="btn btn-primary">Lưu cấu hình</button>
+          </form>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Notification Toast -->
+  <div class="toast" id="toast"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

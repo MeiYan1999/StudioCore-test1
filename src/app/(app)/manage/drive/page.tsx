@@ -316,15 +316,15 @@ export default function ManageDrivePage() {
 
           <div className="flex flex-col gap-2.5 sm:flex-row shrink-0">
             <Button asChild size="sm" className="shadow-md">
-              <a href="#download-win">
+              <a href="/downloads/StudioCore-Drive-Windows.zip" download="StudioCore-Drive-Windows.zip">
                 <Monitor className="h-4 w-4 mr-1.5" />
-                Tải StudioCore-Drive.exe
+                Tải StudioCore-Drive (Windows)
               </a>
             </Button>
             <Button asChild size="sm" variant="outline">
-              <a href="#download-mac">
+              <a href="/downloads/StudioCore-Drive-macOS.zip" download="StudioCore-Drive-macOS.zip">
                 <Apple className="h-4 w-4 mr-1.5" />
-                Tải StudioCore-Drive.dmg
+                Tải StudioCore-Drive (macOS)
               </a>
             </Button>
           </div>

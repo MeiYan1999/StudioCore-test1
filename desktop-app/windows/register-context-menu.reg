@@ -1,0 +1,40 @@
+Windows Registry Editor Version 5.00
+
+; ====================================================================
+; StudioCore Drive — Windows Explorer Context Menu
+; Cho phep chuot phai vao thu muc de tao link gui khach tuc thi
+; ====================================================================
+
+; Menu chuot phai tren Thu muc (Directory)
+[HKEY_CLASSES_ROOT\Directory\shell\StudioCoreDrive]
+"MUIVerb"="StudioCore Drive"
+"SubCommands"=""
+"Icon"="imageres.dll,-1001"
+
+[HKEY_CLASSES_ROOT\Directory\shell\StudioCoreDrive\shell]
+
+[HKEY_CLASSES_ROOT\Directory\shell\StudioCoreDrive\shell\cmd1]
+"MUIVerb"="Tạo link Album (chọn ảnh duyệt)"
+[HKEY_CLASSES_ROOT\Directory\shell\StudioCoreDrive\shell\cmd1\command]
+@="node \"%USERPROFILE%\\.studiocore-drive\\app\\cli.js\" share --path \"%1\" --type album"
+
+[HKEY_CLASSES_ROOT\Directory\shell\StudioCoreDrive\shell\cmd2]
+"MUIVerb"="Tạo link Thư mục (xem & tải .zip)"
+[HKEY_CLASSES_ROOT\Directory\shell\StudioCoreDrive\shell\cmd2\command]
+@="node \"%USERPROFILE%\\.studiocore-drive\\app\\cli.js\" share --path \"%1\" --type folder"
+
+[HKEY_CLASSES_ROOT\Directory\shell\StudioCoreDrive\shell\cmd3]
+"MUIVerb"="Mở bảng điều khiển StudioCore Drive"
+[HKEY_CLASSES_ROOT\Directory\shell\StudioCoreDrive\shell\cmd3\command]
+@="node \"%USERPROFILE%\\.studiocore-drive\\app\\cli.js\" gui"
+
+; Menu chuot phai tren file Video (*.mp4, *.mov)
+[HKEY_CLASSES_ROOT\SystemFileAssociations\.mp4\shell\StudioCoreDriveVideo]
+"MUIVerb"="StudioCore Drive: Tạo link Video (góp ý theo giây)"
+[HKEY_CLASSES_ROOT\SystemFileAssociations\.mp4\shell\StudioCoreDriveVideo\command]
+@="node \"%USERPROFILE%\\.studiocore-drive\\app\\cli.js\" share --path \"%1\" --type video"
+
+[HKEY_CLASSES_ROOT\SystemFileAssociations\.mov\shell\StudioCoreDriveVideo]
+"MUIVerb"="StudioCore Drive: Tạo link Video (góp ý theo giây)"
+[HKEY_CLASSES_ROOT\SystemFileAssociations\.mov\shell\StudioCoreDriveVideo\command]
+@="node \"%USERPROFILE%\\.studiocore-drive\\app\\cli.js\" share --path \"%1\" --type video"

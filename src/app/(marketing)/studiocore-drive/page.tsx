@@ -78,7 +78,7 @@ export default function StudioCoreDrivePage() {
                 size="lg"
                 className="w-full shadow-xl shadow-primary/25 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] sm:w-auto"
               >
-                <a href="#download">
+                <a href="/downloads/StudioCore-Drive-Windows.zip" download="StudioCore-Drive-Windows.zip">
                   <Monitor className="h-4 w-4 mr-2" />
                   Tải cho Windows (64-bit)
                 </a>
@@ -89,7 +89,7 @@ export default function StudioCoreDrivePage() {
                 variant="outline"
                 className="w-full border-border/80 bg-surface/80 backdrop-blur-md transition-all duration-300 hover:bg-accent/60 active:scale-[0.98] sm:w-auto"
               >
-                <a href="#download">
+                <a href="/downloads/StudioCore-Drive-macOS.zip" download="StudioCore-Drive-macOS.zip">
                   <Apple className="h-4 w-4 mr-2" />
                   Tải cho macOS (Apple &amp; Intel)
                 </a>
@@ -632,10 +632,10 @@ export default function StudioCoreDrivePage() {
                 size="lg"
                 className="bg-white text-violet-950 shadow-xl transition-all hover:bg-white/95 hover:scale-105 active:scale-95"
               >
-                <Link href="/manage/drive">
+                <a href="/downloads/StudioCore-Drive-Windows.zip" download="StudioCore-Drive-Windows.zip">
                   <Monitor className="h-4 w-4 mr-2" />
                   Tải cho Windows (Installer)
-                </Link>
+                </a>
               </Button>
               <Button
                 asChild
@@ -643,10 +643,10 @@ export default function StudioCoreDrivePage() {
                 variant="outline"
                 className="border-white/40 bg-transparent text-white transition-all hover:bg-white/10 active:scale-95"
               >
-                <Link href="/manage/drive">
+                <a href="/downloads/StudioCore-Drive-macOS.zip" download="StudioCore-Drive-macOS.zip">
                   <Apple className="h-4 w-4 mr-2" />
-                  Tải cho macOS (.dmg)
-                </Link>
+                  Tải cho macOS (Apple &amp; Intel)
+                </a>
               </Button>
             </div>
             <p className="mt-4 text-xs text-white/60">

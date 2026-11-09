@@ -1,0 +1,27 @@
+{
+  "name": "studiocore-drive-desktop",
+  "version": "1.0.0",
+  "description": "StudioCore Drive Desktop Agent cho Windows & macOS — Gửi ảnh & video cho khách thẳng từ máy tính",
+  "main": "cli.js",
+  "bin": {
+    "studiocore-drive": "./cli.js"
+  },
+  "scripts": {
+    "start": "node cli.js start",
+    "gui": "node cli.js gui",
+    "daemon": "node cli.js daemon",
+    "install:context": "node cli.js install-context",
+    "uninstall:context": "node cli.js uninstall-context"
+  },
+  "keywords": [
+    "studiocore",
+    "drive",
+    "zero-cloud",
+    "photobooth",
+    "photography",
+    "raw-filter",
+    "lightroom"
+  ],
+  "author": "StudioCore Team",
+  "license": "MIT"
+}

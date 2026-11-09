@@ -12,6 +12,7 @@ const config = [
       "data/**",
       "public/uploads/**",
       "coverage/**",
+      "desktop-app/**",
       "next-env.d.ts",
     ],
   },
