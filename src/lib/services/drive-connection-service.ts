@@ -264,21 +264,90 @@ async function refreshAccessToken(
   return payload.access_token;
 }
 
-async function driveFetch(url: string, accessToken: string): Promise<Response> {
+export type GoogleDriveAuth =
+  | { type: "api_key"; key: string }
+  | { type: "bearer"; token: string };
+
+export async function resolveGoogleDriveAuth(
+  db: AppDb,
+  tenantId?: string,
+): Promise<GoogleDriveAuth> {
+  const apiKey =
+    process.env.GOOGLE_API_KEY?.trim() ||
+    getEnv().GOOGLE_API_KEY?.trim();
+  if (apiKey) {
+    return { type: "api_key", key: apiKey };
+  }
+
+  if (tenantId) {
+    const currentConn = getGoogleConnection(db, tenantId);
+    if (currentConn && currentConn.status === "connected") {
+      try {
+        const token = await refreshAccessToken(db, tenantId);
+        return { type: "bearer", token };
+      } catch {
+        // Fallback to other connections if current refresh fails
+      }
+    }
+  }
+
+  const anyConn = db
+    .select()
+    .from(driveConnections)
+    .where(
+      and(
+        eq(driveConnections.provider, "google"),
+        eq(driveConnections.status, "connected"),
+      ),
+    )
+    .limit(1)
+    .get();
+
+  if (anyConn) {
+    try {
+      const token = await refreshAccessToken(db, anyConn.tenantId);
+      return { type: "bearer", token };
+    } catch {
+      // Continue to error
+    }
+  }
+
+  throw new ValidationError(
+    "Chưa cấu hình GOOGLE_API_KEY hoặc chưa kết nối Google Drive. Vui lòng thêm GOOGLE_API_KEY vào biến môi trường (hoặc vào mục Tích hợp để kết nối Google Drive) để quét link Drive công khai.",
+  );
+}
+
+async function driveFetch(url: string, auth: GoogleDriveAuth): Promise<Response> {
+  let targetUrl = url;
+  const headers: Record<string, string> = {};
+
+  if (auth.type === "api_key") {
+    const parsed = new URL(targetUrl);
+    parsed.searchParams.set("key", auth.key);
+    targetUrl = parsed.toString();
+  } else {
+    headers["Authorization"] = `Bearer ${auth.token}`;
+  }
+
   let lastError: unknown = null;
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
-      const response = await fetch(url, {
-        headers: { Authorization: `Bearer ${accessToken}` },
+      const response = await fetch(targetUrl, {
+        headers,
         signal: AbortSignal.timeout(25_000),
       });
       if (response.ok) return response;
       if (response.status === 401) {
-        throw new AuthorizationError("Google access token hết hạn.");
+        throw new AuthorizationError("Google access token hoặc API key không hợp lệ.");
+      }
+      if (response.status === 404) {
+        throw new ValidationError(
+          "Không tìm thấy thư mục trên Google Drive. Vui lòng kiểm tra lại đường link đã nhập.",
+        );
       }
       if (response.status === 403) {
-        throw new AuthorizationError(
-          "Google Drive từ chối quyền truy cập hoặc hết quota. Kiểm tra kết nối.",
+        throw new ValidationError(
+          "Không có quyền truy cập thư mục Google Drive này. Hãy mở thư mục trên Google Drive, bấm 'Chia sẻ' và chọn 'Bất kỳ ai có đường liên kết đều có thể xem'.",
         );
       }
       if (response.status !== 429 && response.status < 500) {
@@ -286,6 +355,9 @@ async function driveFetch(url: string, accessToken: string): Promise<Response> {
       }
       lastError = new Error(`Google Drive HTTP ${response.status}`);
     } catch (error) {
+      if (error instanceof ValidationError || error instanceof AuthorizationError) {
+        throw error;
+      }
       lastError = error;
     }
     await new Promise((resolve) => setTimeout(resolve, 600 * (attempt + 1)));
@@ -334,10 +406,18 @@ type DriveApiFile = {
   imageMediaMetadata?: { width?: number; height?: number };
 };
 
-const IMAGE_MIME = /^image\/(jpeg|png|webp)$/i;
+const IMAGE_MIME = /^image\/(jpeg|png|webp|gif|avif)$/i;
+const PHOTO_EXTENSIONS = /\.(jpe?g|png|webp|avif|gif|bmp|tiff?|cr2|cr3|nef|arw|dng|raw|raf)$/i;
+
+function isImageOrPhoto(file: DriveApiFile): boolean {
+  if (IMAGE_MIME.test(file.mimeType)) return true;
+  if (file.mimeType.startsWith("image/")) return true;
+  if (PHOTO_EXTENSIONS.test(file.name)) return true;
+  return false;
+}
 
 async function listFolderChildren(
-  accessToken: string,
+  auth: GoogleDriveAuth,
   folderId: string,
 ): Promise<DriveApiFile[]> {
   const results: DriveApiFile[] = [];
@@ -354,7 +434,7 @@ async function listFolderChildren(
     if (pageToken) params.set("pageToken", pageToken);
     const response = await driveFetch(
       `${GOOGLE_DRIVE_API}/files?${params.toString()}`,
-      accessToken,
+      auth,
     );
     if (!response.ok) {
       throw new ValidationError(
@@ -385,11 +465,36 @@ export async function scanGoogleDriveFolder(
     return { ...cached.scan, fromCache: true };
   }
 
-  const accessToken = await refreshAccessToken(db, actor.tenantId);
-  const rootFiles = await listFolderChildren(accessToken, folderId);
-  const rootName =
-    rootFiles.find((file) => file.mimeType === "application/vnd.google-apps.folder")
-      ?.name ?? "Google Drive";
+  const auth = await resolveGoogleDriveAuth(db, actor.tenantId);
+
+  let rootName = "Google Drive";
+  try {
+    const metaResponse = await driveFetch(
+      `${GOOGLE_DRIVE_API}/files/${encodeURIComponent(folderId)}?fields=id,name,mimeType&supportsAllDrives=true`,
+      auth,
+    );
+    if (metaResponse.ok) {
+      const meta = (await metaResponse.json()) as {
+        id: string;
+        name: string;
+        mimeType: string;
+      };
+      if (meta.mimeType && meta.mimeType !== "application/vnd.google-apps.folder") {
+        throw new ValidationError(
+          `Link vừa nhập là tập tin có tên "${meta.name}", không phải là một thư mục Google Drive. Vui lòng dán link thư mục chứa ảnh.`,
+        );
+      }
+      if (meta.name) {
+        rootName = meta.name;
+      }
+    }
+  } catch (error) {
+    if (error instanceof ValidationError || error instanceof AuthorizationError) {
+      throw error;
+    }
+  }
+
+  const rootFiles = await listFolderChildren(auth, folderId);
   const folders: GoogleDriveScan["folders"] = [];
   const files: GoogleDriveFile[] = [];
 
@@ -408,7 +513,7 @@ export async function scanGoogleDriveFolder(
     const children =
       current.depth === 0
         ? rootFiles
-        : await listFolderChildren(accessToken, current.id);
+        : await listFolderChildren(auth, current.id);
     for (const child of children) {
       if (child.mimeType === "application/vnd.google-apps.folder") {
         const relativePath = current.relativePath
@@ -425,7 +530,7 @@ export async function scanGoogleDriveFolder(
         }
         continue;
       }
-      if (!IMAGE_MIME.test(child.mimeType)) {
+      if (!isImageOrPhoto(child)) {
         continue;
       }
       const relativePath = current.relativePath
@@ -438,15 +543,23 @@ export async function scanGoogleDriveFolder(
         size: Number(child.size ?? 0),
         md5Checksum: child.md5Checksum ?? null,
         sourceFileId: `google:${child.id}`,
-        checksum: child.md5Checksum ?? "",
-        width: child.imageMediaMetadata?.width ?? 0,
-        height: child.imageMediaMetadata?.height ?? 0,
+        checksum: child.md5Checksum ?? child.id,
+        width: child.imageMediaMetadata?.width ?? 1200,
+        height: child.imageMediaMetadata?.height ?? 800,
         folderId: current.depth === 0 ? folderId : current.id,
         folderName: current.depth === 0 ? rootName : current.name,
         relativePath,
-        thumbnailLink: child.thumbnailLink ?? null,
+        thumbnailLink:
+          child.thumbnailLink ??
+          `https://drive.google.com/thumbnail?id=${child.id}&sz=w800`,
       });
     }
+  }
+
+  if (files.length === 0 && folders.length === 0) {
+    throw new ValidationError(
+      `Thư mục "${rootName}" không có ảnh nào hợp lệ (JPG, PNG, WebP...) hoặc chưa bật quyền chia sẻ. Vui lòng kiểm tra lại.`,
+    );
   }
 
   const scan: GoogleDriveScan = {
@@ -470,10 +583,10 @@ export async function downloadGoogleFile(
   tenantId: string,
   fileId: string,
 ): Promise<Buffer> {
-  const accessToken = await refreshAccessToken(db, tenantId);
+  const auth = await resolveGoogleDriveAuth(db, tenantId);
   const response = await driveFetch(
     `${GOOGLE_DRIVE_API}/files/${encodeURIComponent(fileId)}?alt=media&supportsAllDrives=true`,
-    accessToken,
+    auth,
   );
   if (!response.ok) {
     throw new ValidationError(

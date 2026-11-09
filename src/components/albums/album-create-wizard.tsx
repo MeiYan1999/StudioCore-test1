@@ -61,6 +61,9 @@ export function AlbumCreateWizard({
     "https://drive.google.com/drive/folders/demo-folder-1",
   );
   const [sourceUrls, setSourceUrls] = useState("");
+  const [albumTitle, setAlbumTitle] = useState(
+    state.values?.title ?? "Album Cưới Demo",
+  );
   const [branchId, setBranchId] = useState(defaultBranchId);
   const [customerId, setCustomerId] = useState("");
   const [orderId, setOrderId] = useState("");
@@ -96,6 +99,12 @@ export function AlbumCreateWizard({
       return;
     }
     setPreview(result.data);
+    if (result.data.folders.length > 0) {
+      const first = result.data.folders[0]?.name;
+      if (first && first !== "Google Drive" && (!albumTitle || albumTitle === "Album Cưới Demo")) {
+        setAlbumTitle(first);
+      }
+    }
   };
 
   const goNext = () => {
@@ -109,9 +118,7 @@ export function AlbumCreateWizard({
       return;
     }
     if (step === 2) {
-      const title = (document.getElementById("album-title") as HTMLInputElement | null)
-        ?.value;
-      if (!title?.trim()) {
+      if (!albumTitle.trim()) {
         setPreviewError("Nhập tiêu đề album trước khi tiếp tục.");
         return;
       }
@@ -170,10 +177,14 @@ export function AlbumCreateWizard({
       </ol>
 
       <div className={cn("rounded-xl border border-border bg-surface p-4 sm:p-5", step !== 1 && "hidden")}>
-        <h2 className="text-base font-semibold text-foreground">Nguồn ảnh</h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-base font-semibold text-foreground">Nguồn ảnh</h2>
+          <span className="text-xs text-muted-foreground">
+            ⚡ Hoạt động mượt mà với thư mục chứa tới 2000 ảnh
+          </span>
+        </div>
         <p className="mt-1 text-sm text-muted-foreground">
-          Album demo dùng adapter local đọc thư mục synthetic. Google Drive thật
-          cần cấu hình OAuth; nếu chưa cấu hình, hệ thống báo rõ thay vì giả lập.
+          Hỗ trợ link Google Drive từ <strong>bất kỳ tài khoản nào</strong> (nhiếp ảnh, freelancer, khách hàng...). Chỉ cần thư mục được bật quyền <em>&ldquo;Bất kỳ ai có đường liên kết đều có thể xem&rdquo;</em> (chuẩn giống s2.io.vn).
         </p>
 
         <div className="mt-4 flex flex-wrap gap-2">
@@ -205,25 +216,40 @@ export function AlbumCreateWizard({
         {sourceType === "drive" ? (
           <div className="mt-4 space-y-3">
             <div>
-              <Label htmlFor="album-source-url">Link thư mục Google Drive/NAS</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="album-source-url">Link thư mục Google Drive</Label>
+                <a
+                  href="https://support.google.com/drive/answer/2494822"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-primary hover:underline"
+                >
+                  Cách bật quyền xem link trên Drive ↗
+                </a>
+              </div>
               <Input
                 id="album-source-url"
                 value={sourceUrl}
                 onChange={(event) => setSourceUrl(event.target.value)}
-                placeholder="https://drive.google.com/drive/folders/..."
-                className="mt-1.5"
+                placeholder="https://drive.google.com/drive/folders/1Y_iq_9JTzaQOIZ_1LxTOnd6aVJWcVjQQ?usp=sharing"
+                className="mt-1.5 font-mono text-sm"
               />
-              <p className="mt-1 text-xs text-muted-foreground">
-                Demo có sẵn folder <code className="rounded bg-surface-muted px-1">demo-folder-1</code> với 3 thư mục con.
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                Mẹo: Bạn có thể dán toàn bộ đường link trình duyệt hoặc ID thư mục. Thử nghiệm nhanh có sẵn folder <code className="rounded bg-surface-muted px-1">demo-folder-1</code>.
               </p>
             </div>
-            <Button type="button" onClick={() => void handleScan()} disabled={scanning}>
+            <Button type="button" onClick={() => void handleScan()} disabled={scanning} className="w-full sm:w-auto">
               {scanning ? (
-                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                  Đang quét ảnh từ Google Drive...
+                </>
               ) : (
-                <FolderSearch className="h-4 w-4" aria-hidden />
+                <>
+                  <FolderSearch className="h-4 w-4" aria-hidden />
+                  Quét ảnh
+                </>
               )}
-              Quét ảnh
             </Button>
           </div>
         ) : null}
@@ -300,8 +326,9 @@ export function AlbumCreateWizard({
             <Input
               id="album-title"
               name="title"
-              defaultValue={state.values?.title ?? "Album Cưới Demo"}
-              placeholder="Ví dụ: Album cưới chị Trang"
+              value={albumTitle}
+              onChange={(e) => setAlbumTitle(e.target.value)}
+              placeholder="Ví dụ: Album cưới Tuấn & Lan"
               className="mt-1.5"
               maxLength={160}
             />

@@ -195,6 +195,7 @@ export function StudioPhotoGallery({
                       width={480}
                       height={320}
                       unoptimized
+                      referrerPolicy="no-referrer"
                       loading="lazy"
                       className="h-full w-full object-cover"
                     />
@@ -311,6 +312,7 @@ export function StudioPhotoGallery({
                   width={1440}
                   height={960}
                   unoptimized
+                  referrerPolicy="no-referrer"
                   className="max-h-[62vh] w-auto max-w-full object-contain"
                 />
               </div>

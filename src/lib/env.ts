@@ -16,6 +16,7 @@ const envSchema = z.object({
   R2_BUCKET_NAME: z.string().optional(),
   R2_PUBLIC_URL: z.string().optional(),
   TOKEN_ENCRYPTION_KEY: z.string().optional(),
+  GOOGLE_API_KEY: z.string().optional(),
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
   GOOGLE_REDIRECT_URI: z.string().optional(),

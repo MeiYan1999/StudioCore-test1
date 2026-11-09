@@ -55,6 +55,9 @@ export function readStorageBuffer(key: string): Buffer {
 }
 
 export function publicUploadUrl(key: string): string {
+  if (key.startsWith("http://") || key.startsWith("https://")) {
+    return key;
+  }
   return `/api/files/${key.split("/").map(encodeURIComponent).join("/")}`;
 }
 

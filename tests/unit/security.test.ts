@@ -3,7 +3,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { assertSameOrigin } from "@/lib/http/security";
 import { parseDriveFolderLink } from "@/lib/adapters/drive";
-import { resolveStoragePath } from "@/lib/storage/local-storage";
+import { publicUploadUrl, resolveStoragePath } from "@/lib/storage/local-storage";
 
 describe("security Phase 7", () => {
   it("CSRF origin guard chặn origin lạ, cho same-origin", () => {
@@ -29,6 +29,24 @@ describe("security Phase 7", () => {
     expect(parseDriveFolderLink("https://drive.google.com/drive/folders/real-folder-123")?.provider).toBe(
       "google",
     );
+    expect(
+      parseDriveFolderLink(
+        "https://drive.google.com/drive/folders/1Y_iq_9JTzaQOIZ_1LxTOnd6aVJWcVjQQ?usp=sharing",
+      )?.folderId,
+    ).toBe("1Y_iq_9JTzaQOIZ_1LxTOnd6aVJWcVjQQ");
+    expect(
+      parseDriveFolderLink(
+        "https://drive.google.com/drive/u/1/folders/1Y_iq_9JTzaQOIZ_1LxTOnd6aVJWcVjQQ",
+      )?.folderId,
+    ).toBe("1Y_iq_9JTzaQOIZ_1LxTOnd6aVJWcVjQQ");
+    expect(
+      parseDriveFolderLink(
+        "https://drive.google.com/folderview?id=1Y_iq_9JTzaQOIZ_1LxTOnd6aVJWcVjQQ",
+      )?.folderId,
+    ).toBe("1Y_iq_9JTzaQOIZ_1LxTOnd6aVJWcVjQQ");
+    expect(
+      parseDriveFolderLink("1Y_iq_9JTzaQOIZ_1LxTOnd6aVJWcVjQQ")?.folderId,
+    ).toBe("1Y_iq_9JTzaQOIZ_1LxTOnd6aVJWcVjQQ");
   });
 
   it("path traversal bị chặn", () => {
@@ -43,5 +61,13 @@ describe("security Phase 7", () => {
     );
     expect(markup).not.toContain("<script>");
     expect(markup).toContain("&lt;script&gt;");
+  });
+
+  it("publicUploadUrl giữ nguyên HTTP/HTTPS URL trực tiếp của Google CDN", () => {
+    const cdnUrl = "https://drive.google.com/thumbnail?id=123&sz=w800";
+    expect(publicUploadUrl(cdnUrl)).toBe(cdnUrl);
+    expect(publicUploadUrl("tenant/album/photo-thumb.jpg")).toBe(
+      "/api/files/tenant/album/photo-thumb.jpg",
+    );
   });
 });

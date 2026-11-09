@@ -7,6 +7,7 @@ import {
   albumSources,
   branches,
   customers,
+  driveConnections,
   orders,
   paymentRequests,
   photoSelections,
@@ -429,16 +430,32 @@ export async function previewAlbumSource(
 }
 
 function ensureGoogleDriveReady(db: AppDb, actor: ActorContext): void {
-  if (!googleDriveConfigured()) {
-    throw new ValidationError(
-      "Google Drive OAuth chưa được cấu hình. Dùng link demo-folder-1 hoặc đặt GOOGLE_CLIENT_ID/SECRET/REDIRECT_URI.",
-    );
+  if (process.env.GOOGLE_API_KEY?.trim()) {
+    return;
   }
-  if (!getGoogleConnection(db, actor.tenantId)) {
-    throw new ValidationError(
-      "Chưa kết nối Google Drive. Vào Tích hợp Drive/NAS để cấp quyền OAuth.",
-    );
+  if (getGoogleConnection(db, actor.tenantId)) {
+    return;
   }
+  const anyConn = db
+    .select({ id: driveConnections.id })
+    .from(driveConnections)
+    .where(
+      and(
+        eq(driveConnections.provider, "google"),
+        eq(driveConnections.status, "connected"),
+      ),
+    )
+    .limit(1)
+    .get();
+  if (anyConn) {
+    return;
+  }
+  if (googleDriveConfigured()) {
+    return;
+  }
+  throw new ValidationError(
+    "Chưa cấu hình GOOGLE_API_KEY hoặc chưa kết nối Google Drive. Vui lòng thêm GOOGLE_API_KEY vào biến môi trường hoặc kết nối tài khoản Google trong Tích hợp Drive/NAS để quét link Drive công khai.",
+  );
 }
 
 type PreparedPhoto = {
@@ -572,17 +589,16 @@ async function prepareDemoImport(
 }
 
 async function prepareGoogleImport(
-  db: AppDb,
+  _db: AppDb,
   scans: GoogleScanEntry[],
-  tenantId: string,
-  albumId: string,
+  _tenantId: string,
+  _albumId: string,
 ): Promise<PreparedImport> {
   const usedCodes = new Set<string>();
   const seenSourceIds = new Set<string>();
   const seenChecksums = new Set<string>();
   const preparedPhotos: PreparedPhoto[] = [];
   const folders: PreparedImport["folders"] = [];
-  const storage = getStorageAdapter();
 
   for (const [sourceIndex, item] of scans.entries()) {
     const countedFolders = new Map<string, number>();
@@ -623,45 +639,33 @@ async function prepareGoogleImport(
       seenSourceIds.add(file.sourceFileId);
       if (file.checksum) seenChecksums.add(file.checksum);
 
-      let buffer: Buffer;
-      try {
-        buffer = await downloadGoogleFile(db, tenantId, file.id);
-      } catch (error) {
-        throw new ValidationError(
-          `Không tải được "${file.name}" từ Google Drive: ${
-            error instanceof Error ? error.message : "lỗi không xác định"
-          }`,
-        );
-      }
-      let processed;
-      try {
-        processed = await storage.processImage(
-          buffer,
-          `${tenantId}/${albumId}/google-${file.id}`,
-        );
-      } catch (error) {
-        throw new ValidationError(
-          `Ảnh "${file.name}" không hợp lệ hoặc quá lớn: ${
-            error instanceof Error ? error.message : "không xử lý được"
-          }`,
-        );
-      }
+      const fileId = file.id;
+      const baseCode = file.name.replace(/\.[^.]+$/, "");
+      const code = uniqueCode(baseCode, usedCodes);
+
+      // Lưu trữ trực tiếp Cloud Google Drive CDN URLs:
+      // storageKey: direct Google Drive download URL
+      // thumbnailKey: 800px width thumbnail
+      // previewKey: 1600px width thumbnail
+      const storageKey = `https://drive.google.com/uc?id=${fileId}&export=download`;
+      const thumbnailKey = `https://drive.google.com/thumbnail?id=${fileId}&sz=w800`;
+      const previewKey = `https://drive.google.com/thumbnail?id=${fileId}&sz=w1600`;
 
       preparedPhotos.push({
         folderKey: file.folderId,
         folderExternalId: file.folderId,
-        code: uniqueCode(file.name.replace(/\.[^.]+$/, ""), usedCodes),
+        code,
         filename: file.name,
         relativePath: file.relativePath,
-        storageKey: processed.storageKey,
-        thumbnailKey: processed.thumbnailKey,
-        previewKey: processed.previewKey,
+        storageKey,
+        thumbnailKey,
+        previewKey,
         sourceFileId: file.sourceFileId,
-        width: processed.width || file.width,
-        height: processed.height || file.height,
-        size: processed.size,
+        width: file.width || 1200,
+        height: file.height || 800,
+        size: file.size,
         isRaw: false,
-        checksum: file.checksum || processed.checksum,
+        checksum: file.checksum || fileId,
         sortOrder: preparedPhotos.length,
       });
     }

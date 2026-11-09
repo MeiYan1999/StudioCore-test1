@@ -18,6 +18,7 @@ export const dynamic = "force-dynamic";
 export const metadata = {
   title: "Album ảnh",
   robots: { index: false, follow: false },
+  referrer: "no-referrer",
 };
 
 function ShareUnavailable({

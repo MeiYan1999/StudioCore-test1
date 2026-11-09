@@ -655,6 +655,7 @@ export function ShareGallery({
                         width={480}
                         height={320}
                         unoptimized
+                        referrerPolicy="no-referrer"
                         priority={index === 0}
                         loading={index === 0 ? "eager" : "lazy"}
                         className="h-full w-full object-cover"
@@ -841,6 +842,7 @@ export function ShareGallery({
                   width={1440}
                   height={960}
                   unoptimized
+                  referrerPolicy="no-referrer"
                   className="max-h-[62vh] w-auto max-w-full object-contain"
                 />
               </div>

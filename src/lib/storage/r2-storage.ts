@@ -185,6 +185,9 @@ export function createR2Adapter(): StorageAdapter {
     },
 
     publicUrl(key: string): string {
+      if (key.startsWith("http://") || key.startsWith("https://")) {
+        return key;
+      }
       const cleanKey = key.replace(/^\/+/, "");
       if (cfg.publicUrl) {
         return `${cfg.publicUrl}/${cleanKey}`;

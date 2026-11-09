@@ -69,6 +69,20 @@ export function parseDriveFolderLink(input: string): ParsedDriveLink | null {
     };
   }
 
+  if (
+    !value.includes("/") &&
+    !value.includes(".") &&
+    value.length >= 25 &&
+    DRIVE_FILE_PATTERN.test(value)
+  ) {
+    return {
+      provider: "google",
+      folderId: value,
+      normalizedUrl: `https://drive.google.com/drive/folders/${value}`,
+      demo: false,
+    };
+  }
+
   let url: URL;
   try {
     url = new URL(value);
@@ -85,7 +99,11 @@ export function parseDriveFolderLink(input: string): ParsedDriveLink | null {
   const foldersIndex = segments.lastIndexOf("folders");
   if (foldersIndex >= 0 && segments[foldersIndex + 1]) {
     folderId = segments[foldersIndex + 1] ?? null;
-  } else if (url.pathname === "/open") {
+  } else if (
+    url.pathname === "/open" ||
+    url.pathname === "/folderview" ||
+    url.searchParams.has("id")
+  ) {
     folderId = url.searchParams.get("id");
   }
 
@@ -104,18 +122,17 @@ export function parseDriveFolderLink(input: string): ParsedDriveLink | null {
 
 export function googleDriveConfigured(): boolean {
   return Boolean(
-    process.env.GOOGLE_CLIENT_ID?.trim() &&
-      process.env.GOOGLE_CLIENT_SECRET?.trim() &&
-      process.env.GOOGLE_REDIRECT_URI?.trim(),
+    process.env.GOOGLE_API_KEY?.trim() ||
+      (process.env.GOOGLE_CLIENT_ID?.trim() &&
+        process.env.GOOGLE_CLIENT_SECRET?.trim() &&
+        process.env.GOOGLE_REDIRECT_URI?.trim()),
   );
 }
 
 export function driveProviderLabel(provider: string): string {
   if (provider === "local_demo") return "Drive demo (local adapter)";
   if (provider === "google") {
-    return googleDriveConfigured()
-      ? "Google Drive (đã cấu hình OAuth)"
-      : "Google Drive (chưa cấu hình OAuth)";
+    return "Google Drive (Link công khai hoặc OAuth)";
   }
   return provider;
 }

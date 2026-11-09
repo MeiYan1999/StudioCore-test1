@@ -32,6 +32,12 @@ export async function GET(
 
   try {
     const result = authorizeShareDownload(db, token, passwordVerified, photoId);
+    if (
+      result.photo.storageKey.startsWith("http://") ||
+      result.photo.storageKey.startsWith("https://")
+    ) {
+      return Response.redirect(result.photo.storageKey, 302);
+    }
     const buffer = await getStorageAdapter().read(result.photo.storageKey);
     return new Response(new Uint8Array(buffer), {
       headers: {

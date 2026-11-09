@@ -1408,8 +1408,14 @@ export function CodeFilterTool({
                     {item.thumbnailKey ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
-                        src={`/api/files/${encodeURIComponent(item.thumbnailKey)}`}
+                        src={
+                          item.thumbnailKey.startsWith("http://") ||
+                          item.thumbnailKey.startsWith("https://")
+                            ? item.thumbnailKey
+                            : `/api/files/${encodeURIComponent(item.thumbnailKey)}`
+                        }
                         alt={item.code}
+                        referrerPolicy="no-referrer"
                         className="h-full w-full object-cover"
                         onError={(e) => {
                           // Fallback to icon
