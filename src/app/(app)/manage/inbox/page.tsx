@@ -199,7 +199,7 @@ export default async function InboxPage({
               <div className="mt-3 max-h-[45vh] space-y-2 overflow-y-auto rounded-lg bg-surface-muted p-3">
                 {detail.messages.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
-                    Chưa có tin nhắn. Mô phỏng tin khách bên dưới.
+                    Chưa có tin nhắn trong hội thoại này.
                   </p>
                 ) : (
                   detail.messages.map((message) => (
@@ -231,7 +231,9 @@ export default async function InboxPage({
               {canManage ? (
                 <>
                   <MessageComposer conversationId={detail.conversation.id} />
-                  <SimulateInboundForm conversationId={detail.conversation.id} />
+                  {process.env.NODE_ENV !== "production" ? (
+                    <SimulateInboundForm conversationId={detail.conversation.id} />
+                  ) : null}
                 </>
               ) : (
                 <p className="mt-3 flex items-center gap-1 text-xs text-muted-foreground">

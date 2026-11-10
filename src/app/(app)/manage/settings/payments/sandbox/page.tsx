@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { ArrowLeft, CreditCard } from "lucide-react";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +24,10 @@ export const metadata = {
 };
 
 export default async function PaymentSandboxPage() {
+  if (process.env.NODE_ENV === "production") {
+    redirect("/manage/finance");
+  }
+
   const actor = await requireActor();
   if (!hasPermission(actor.permissions, "finance.view")) {
     return (

@@ -266,12 +266,6 @@ export default async function FinancePage({
                 Hoa hồng
               </Link>
             </Button>
-            <Button asChild variant="outline" size="sm">
-              <Link href="/manage/settings/payments/sandbox">
-                <CreditCard className="h-4 w-4" aria-hidden />
-                Sandbox
-              </Link>
-            </Button>
             {canManage ? (
               <>
                 <TransactionSheet branches={actor.branches} defaultBranchId={defaultBranchId} />

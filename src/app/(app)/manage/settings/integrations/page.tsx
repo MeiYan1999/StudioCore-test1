@@ -208,9 +208,6 @@ export default async function IntegrationsPage({
                   <Link href="/manage/settings/sepay">Cấu hình SePay</Link>
                 </Button>
                 <Button asChild variant="outline" size="sm">
-                  <Link href="/manage/settings/payments/sandbox">Sandbox thanh toán</Link>
-                </Button>
-                <Button asChild variant="outline" size="sm">
                   <Link href="/manage/inbox">Hộp thoại tin nhắn</Link>
                 </Button>
               </div>

@@ -52,12 +52,6 @@ export default async function StudioSettingsPage() {
               </Link>
             </Button>
             <Button asChild variant="outline" size="sm">
-              <Link href="/manage/settings/payments/sandbox">
-                <Percent className="h-4 w-4" aria-hidden />
-                Sandbox
-              </Link>
-            </Button>
-            <Button asChild variant="outline" size="sm">
               <Link href="/manage/settings/ai">
                 <Sparkles className="h-4 w-4" aria-hidden />
                 AI Hub
