@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   Bell,
   BookOpen,
+  Bot,
   BrainCircuit,
   Building,
   Building2,
@@ -127,6 +128,15 @@ export default async function SettingsHubPage() {
       icon: BrainCircuit,
       iconBg: "bg-fuchsia-500/10 dark:bg-fuchsia-500/20",
       iconColor: "text-fuchsia-600 dark:text-fuchsia-400",
+    },
+    {
+      id: "ai-assistant",
+      title: "Trợ lý AI soạn tin",
+      description: "Bật/tắt bản nháp từ agent bên ngoài, webhook gom cụm và khóa draft_writer.",
+      href: "/manage/settings/ai-assistant",
+      icon: Bot,
+      iconBg: "bg-indigo-500/10 dark:bg-indigo-500/20",
+      iconColor: "text-indigo-600 dark:text-indigo-400",
     },
     {
       id: "payments",
