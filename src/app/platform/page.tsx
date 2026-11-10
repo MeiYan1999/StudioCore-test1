@@ -30,6 +30,7 @@ import {
   ResetOwnerPasswordModal,
   ExtendTenantPlanModal,
   CreateTenantModal,
+  DeleteTenantModal,
 } from "./tenant-row-controls";
 import { PlatformBillingCard } from "./platform-billing-card";
 
@@ -438,6 +439,10 @@ export default async function PlatformPage({
                             {owner ? (
                               <ResetOwnerPasswordModal tenantId={tenant.id} ownerName={owner.name} />
                             ) : null}
+                            <DeleteTenantModal
+                              tenantId={tenant.id}
+                              tenantName={tenant.name}
+                            />
                           </div>
                         </td>
                       </tr>

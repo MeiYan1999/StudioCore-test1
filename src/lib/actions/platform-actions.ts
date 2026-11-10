@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { requireActor } from "@/lib/auth/session";
 import { hasPermission } from "@/lib/auth/permissions";
 import { getDb } from "@/lib/db/client";
@@ -208,5 +208,97 @@ export async function extendTenantPlanAction(formData: FormData): Promise<{
   return {
     success: true,
     message: `Đã gia hạn thành công gói ${targetPlan.toUpperCase()} thêm ${months} tháng cho studio "${tenant.name}"!`,
+  };
+}
+
+export async function deleteTenantFromPlatformAction(formData: FormData): Promise<{
+  success: boolean;
+  message?: string;
+  error?: string;
+}> {
+  const actor = await requireActor();
+  if (!hasPermission(actor.permissions, "tenants.manage")) {
+    throw new AuthorizationError("Chỉ platform admin mới có quyền xóa tài khoản studio.");
+  }
+
+  const tenantId = String(formData.get("tenantId") ?? "").trim();
+  if (!tenantId) return { success: false, error: "Thiếu tenantId." };
+
+  const db = getDb();
+  const tenant = db.select().from(tenants).where(eq(tenants.id, tenantId)).get();
+  if (!tenant) return { success: false, error: "Không tìm thấy studio cần xóa." };
+
+  const tables = [
+    "activity_logs",
+    "branches",
+    "customers",
+    "notifications",
+    "password_reset_tokens",
+    "role_permissions",
+    "services",
+    "sessions",
+    "settings",
+    "staff",
+    "staff_branches",
+    "wardrobe_items",
+    "customer_interactions",
+    "order_items",
+    "order_status_history",
+    "orders",
+    "payments",
+    "products",
+    "service_addons",
+    "vouchers",
+    "appointments",
+    "equipment",
+    "equipment_usages",
+    "leave_requests",
+    "rooms",
+    "staff_shifts",
+    "wardrobe_rentals",
+    "ai_jobs",
+    "album_folders",
+    "album_sources",
+    "albums",
+    "drive_connections",
+    "payment_requests",
+    "photo_filter_items",
+    "photo_filter_jobs",
+    "photo_selections",
+    "photos",
+    "attendance",
+    "budgets",
+    "campaigns",
+    "commission_rules",
+    "commissions",
+    "conversations",
+    "documents",
+    "expenses",
+    "invoices",
+    "messages",
+    "payment_webhook_events",
+    "payrolls",
+    "task_comments",
+    "tasks",
+    "transactions",
+    "platform_subscriptions",
+  ];
+
+  db.run(sql`PRAGMA foreign_keys = OFF`);
+  try {
+    for (const table of tables) {
+      db.run(sql.raw(`DELETE FROM ${table} WHERE tenant_id = '${tenantId}'`));
+    }
+    db.run(sql.raw(`DELETE FROM tenants WHERE id = '${tenantId}'`));
+  } catch (err: any) {
+    return { success: false, error: err?.message || "Lỗi xóa studio." };
+  } finally {
+    db.run(sql`PRAGMA foreign_keys = ON`);
+  }
+
+  revalidatePath("/platform");
+  return {
+    success: true,
+    message: `Đã xóa vĩnh viễn Studio "${tenant.name}" và toàn bộ tài khoản liên quan.`,
   };
 }

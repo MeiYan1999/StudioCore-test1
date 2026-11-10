@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Building2, CalendarPlus, Check, KeyRound, Plus, X } from "lucide-react";
+import { Building2, CalendarPlus, Check, KeyRound, Plus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   updateTenantPlanAction,
@@ -10,6 +10,7 @@ import {
   resetTenantOwnerPasswordAction,
   createTenantFromPlatformAction,
   extendTenantPlanAction,
+  deleteTenantFromPlatformAction,
 } from "@/lib/actions/platform-actions";
 
 export function TenantPlanSelect({
@@ -420,5 +421,81 @@ export function CreateTenantModal() {
         </div>
       )}
     </>
+  );
+}
+
+export function DeleteTenantModal({
+  tenantId,
+  tenantName,
+}: {
+  tenantId: string;
+  tenantName: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [isPending, setIsPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  return (
+    <div className="relative inline-block">
+      {!open ? (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          title={`Xóa vĩnh viễn Studio ${tenantName}`}
+          className="inline-flex items-center gap-1 rounded border border-rose-200 bg-rose-50/70 px-2 py-0.5 text-[11px] font-medium text-rose-700 hover:bg-rose-100 hover:text-rose-800 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-400"
+        >
+          <Trash2 className="h-3 w-3 text-rose-600" />
+          Xóa
+        </button>
+      ) : (
+        <div className="absolute right-0 top-full z-50 mt-1 w-72 rounded-xl border border-rose-200 bg-surface p-3.5 shadow-2xl dark:border-rose-900">
+          <p className="text-xs font-bold text-rose-600 dark:text-rose-400 flex items-center gap-1.5">
+            <Trash2 className="h-3.5 w-3.5" />
+            Xác nhận xóa vĩnh viễn?
+          </p>
+          <p className="mt-1.5 text-[11px] text-muted-foreground leading-relaxed">
+            Studio <strong className="text-foreground">{tenantName}</strong> cùng toàn bộ tài khoản nhân sự, đơn hàng và dữ liệu sẽ bị xóa hoàn toàn. Hành động này không thể hoàn tác!
+          </p>
+
+          {error && <p className="mt-1 text-[11px] text-rose-600">{error}</p>}
+
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              setIsPending(true);
+              setError(null);
+              const fd = new FormData();
+              fd.set("tenantId", tenantId);
+              const res = await deleteTenantFromPlatformAction(fd);
+              setIsPending(false);
+              if (res.success) {
+                setOpen(false);
+              } else {
+                setError(res.error || "Lỗi xóa studio.");
+              }
+            }}
+            className="mt-3 flex items-center justify-end gap-2"
+          >
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="h-6 px-2 text-[11px]"
+              onClick={() => setOpen(false)}
+            >
+              Hủy
+            </Button>
+            <Button
+              type="submit"
+              disabled={isPending}
+              size="sm"
+              className="h-6 px-2 text-[11px] bg-rose-600 hover:bg-rose-700 text-white font-bold"
+            >
+              {isPending ? "Đang xóa..." : "Xác nhận xóa"}
+            </Button>
+          </form>
+        </div>
+      )}
+    </div>
   );
 }

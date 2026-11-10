@@ -20,10 +20,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatVnd } from "@/lib/utils";
-import {
-  checkSubscriptionStatusAction,
-  simulateSubscriptionPaymentAction,
-} from "@/lib/actions/subscription-actions";
+import { checkSubscriptionStatusAction } from "@/lib/actions/subscription-actions";
 import type { CreateSubscriptionResult } from "@/lib/services/subscription-service";
 
 interface SubscriptionCheckoutModalProps {
@@ -94,24 +91,6 @@ export function SubscriptionCheckoutModal({
 
     return () => clearInterval(interval);
   }, [data.subscriptionId, status, onSuccess]);
-
-  // Test mode simulator
-  const handleSimulatePayment = () => {
-    startTransition(async () => {
-      try {
-        const res = await simulateSubscriptionPaymentAction(data.subscriptionId);
-        if (res.success) {
-          setStatus("completed");
-          setNewExpiry(new Date(Date.now() + 30 * 86400000).toLocaleDateString("vi-VN"));
-          if (onSuccess) {
-            onSuccess();
-          }
-        }
-      } catch (err: any) {
-        alert(err?.message || "Lỗi giả lập thanh toán.");
-      }
-    });
-  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs animate-in fade-in duration-200">
@@ -308,28 +287,16 @@ export function SubscriptionCheckoutModal({
               </div>
             </div>
 
-            {/* Test Simulation Tool in Footer (Helpful for demo/testing) */}
+            {/* Footer with transaction code and security notice */}
             <div className="mt-5 pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs">
               <span className="text-slate-400">
-                Mã đơn: <strong className="font-mono text-slate-600">{data.code}</strong>
+                Mã giao dịch: <strong className="font-mono text-slate-700 dark:text-slate-300">{data.code}</strong>
               </span>
 
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleSimulatePayment}
-                disabled={isPending}
-                className="text-emerald-700 border-emerald-300 hover:bg-emerald-50 dark:text-emerald-400 dark:border-emerald-800"
-                title="Bấm để mô phỏng Webhook ngân hàng bắn về tự động duyệt"
-              >
-                {isPending ? (
-                  <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                ) : (
-                  <Zap className="h-3 w-3 mr-1 text-emerald-600" />
-                )}
-                ⚡ Thử nghiệm duyệt tự động (Test Mode)
-              </Button>
+              <span className="text-[11px] text-slate-400 flex items-center gap-1">
+                <ShieldCheck className="h-3.5 w-3.5 text-blue-500" />
+                Hệ thống Napas247 tự động kích hoạt sau khi nhận tiền
+              </span>
             </div>
           </div>
         )}

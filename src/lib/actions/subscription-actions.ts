@@ -62,6 +62,13 @@ export async function checkSubscriptionStatusAction(subscriptionId: string) {
 }
 
 export async function simulateSubscriptionPaymentAction(subscriptionId: string) {
+  const actor = await getActorContext();
+  if (!actor || actor.role !== "platform_admin") {
+    return {
+      success: false,
+      error: "Tính năng này chỉ dành cho Quản trị viên Nền tảng (Platform SuperAdmin).",
+    };
+  }
   const db = getDb();
   const result = simulateDevSubscriptionPayment(db, subscriptionId);
   revalidatePath("/manage");
