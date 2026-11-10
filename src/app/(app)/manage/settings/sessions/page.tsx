@@ -1,7 +1,9 @@
-import { MonitorSmartphone } from "lucide-react";
+import Link from "next/link";
+import { ArrowLeft, MonitorSmartphone } from "lucide-react";
 import { revokeSessionAction } from "@/lib/actions/staff-actions";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/shared/page-header";
 import { ConfirmActionButton } from "@/components/shared/confirm-action-button";
 import { DataTable, type DataTableColumn } from "@/components/shared/data-table";
@@ -107,6 +109,14 @@ export default async function SessionsPage({
       <PageHeader
         title="Phiên đăng nhập"
         description="Chỉ hiển thị các phiên còn hiệu lực. Phiên hết hạn tự động không còn trong danh sách."
+        actions={
+          <Button asChild variant="outline" size="sm">
+            <Link href="/manage/settings">
+              <ArrowLeft className="h-4 w-4" aria-hidden />
+              Cài đặt
+            </Link>
+          </Button>
+        }
       />
 
       {revoked ? (

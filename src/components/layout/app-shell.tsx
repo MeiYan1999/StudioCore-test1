@@ -31,6 +31,7 @@ import {
   ReceiptText,
   Scale,
   ScrollText,
+  Settings,
   Settings2,
   ShieldCheck,
   Shirt,
@@ -101,7 +102,8 @@ export type NavIcon =
   | "staff"
   | "audit"
   | "studio"
-  | "branches";
+  | "branches"
+  | "settings";
 
 export type NavItem = {
   href: string;
@@ -168,6 +170,7 @@ const ICONS: Record<NavIcon, LucideIcon> = {
   audit: ScrollText,
   studio: Settings2,
   branches: Building2,
+  settings: Settings,
 };
 
 const SEGMENT_LABELS: Record<string, string> = {
@@ -212,7 +215,7 @@ const SEGMENT_LABELS: Record<string, string> = {
   equipment: "Thiết bị",
   contract: "Hợp đồng",
   receipt: "Phiếu thu",
-  settings: "Hệ thống",
+  settings: "Cài đặt",
   users: "Người dùng",
   roles: "Vai trò & quyền",
   sessions: "Phiên đăng nhập",

@@ -7,6 +7,7 @@ import { formatDateTime } from "@/lib/utils";
 import {
   AppShell,
   type NavGroup,
+  type NavItem,
   type NotificationView,
 } from "@/components/layout/app-shell";
 
@@ -149,40 +150,36 @@ export default async function ManageLayout({
     );
   }
 
-  if (hasPermission(actor.permissions, "settings.manage")) {
-    groups.push({
-      label: "Hệ thống",
-      items: [
-        { href: "/manage/settings/users", label: "Người dùng", icon: "users" },
-        { href: "/manage/settings/roles", label: "Vai trò & quyền", icon: "roles" },
-        {
-          href: "/manage/settings/sessions",
-          label: "Phiên đăng nhập",
-          icon: "sessions",
-        },
-        { href: "/manage/settings/ai", label: "AI Hub", icon: "ai" },
-        {
-          href: "/manage/settings/integrations",
-          label: "Tích hợp",
-          icon: "integrations",
-        },
-        { href: "/manage/settings/studio", label: "Cài đặt studio", icon: "studio" },
-        { href: "/manage/settings/branches", label: "Chi nhánh", icon: "branches" },
-      ],
-    });
-  }
+  const canManageSettings =
+    hasPermission(actor.permissions, "settings.manage") ||
+    hasPermission(actor.permissions, "settings.view");
+  const canViewAudit = hasPermission(actor.permissions, "audit.view");
 
-  if (hasPermission(actor.permissions, "audit.view")) {
-    let systemGroup = groups.find((group) => group.label === "Hệ thống");
-    if (!systemGroup) {
-      systemGroup = { label: "Hệ thống", items: [] };
-      groups.push(systemGroup);
+  if (canManageSettings || canViewAudit) {
+    const systemItems: NavItem[] = [];
+
+    if (canViewAudit) {
+      systemItems.push({
+        href: "/manage/activity-log",
+        label: "Nhật ký hoạt động",
+        icon: "audit",
+      });
     }
-    systemGroup.items.push({
-      href: "/manage/activity-log",
-      label: "Nhật ký hoạt động",
-      icon: "audit",
-    });
+
+    if (canManageSettings) {
+      systemItems.push({
+        href: "/manage/settings",
+        label: "Cài đặt",
+        icon: "settings",
+      });
+    }
+
+    if (systemItems.length > 0) {
+      groups.push({
+        label: "Hệ thống",
+        items: systemItems,
+      });
+    }
   }
 
   const notifications: NotificationView[] = notificationSummary.items.map((item) => ({

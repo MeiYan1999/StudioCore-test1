@@ -1,6 +1,7 @@
 import Link from "next/link";
 import {
   AlertTriangle,
+  ArrowLeft,
   CheckCircle2,
   Cloud,
   HardDrive,
@@ -71,12 +72,20 @@ export default async function IntegrationsPage({
         title="Tích hợp Drive/NAS"
         description="Google Drive dùng OAuth scope tối thiểu; refresh token được mã hóa. NAS chưa cấu hình sẽ hiển thị trung thực, không giả đọc ổ đĩa."
         actions={
-          <Button asChild variant="outline" size="sm">
-            <Link href="/manage/photos">
-              <Images className="h-4 w-4" aria-hidden />
-              Album ảnh
-            </Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button asChild variant="outline" size="sm">
+              <Link href="/manage/settings">
+                <ArrowLeft className="h-4 w-4" aria-hidden />
+                Cài đặt
+              </Link>
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/manage/photos">
+                <Images className="h-4 w-4" aria-hidden />
+                Album ảnh
+              </Link>
+            </Button>
+          </div>
         }
       />
 

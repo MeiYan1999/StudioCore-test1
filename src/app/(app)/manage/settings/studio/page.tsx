@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Building2, CalendarClock, Percent, ShieldCheck, Sparkles, Users } from "lucide-react";
+import { ArrowLeft, Building2, CalendarClock, Percent, ShieldCheck, Sparkles, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/shared/page-header";
 import { ForbiddenState } from "@/components/shared/forbidden-state";
@@ -27,6 +27,12 @@ export default async function StudioSettingsPage() {
         description="Thông tin studio, ngân hàng/VietQR, giờ làm và mẫu thông báo. Các mục khác liên kết bên dưới."
         actions={
           <>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/manage/settings">
+                <ArrowLeft className="h-4 w-4" aria-hidden />
+                Cài đặt
+              </Link>
+            </Button>
             <Button asChild variant="outline" size="sm">
               <Link href="/manage/settings/branches">
                 <Building2 className="h-4 w-4" aria-hidden />

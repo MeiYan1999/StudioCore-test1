@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BrainCircuit, Images } from "lucide-react";
+import { ArrowLeft, BrainCircuit, Images } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/shared/page-header";
@@ -38,12 +38,20 @@ export default async function AiSettingsPage() {
         title="AI Hub"
         description="Local heuristic mặc định, không gửi ảnh ra ngoài. Provider live cần consent, API key, ngân sách và được ghi log."
         actions={
-          <Button asChild variant="outline" size="sm">
-            <Link href="/manage/photos">
-              <Images className="h-4 w-4" aria-hidden />
-              Album ảnh
-            </Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button asChild variant="outline" size="sm">
+              <Link href="/manage/settings">
+                <ArrowLeft className="h-4 w-4" aria-hidden />
+                Cài đặt
+              </Link>
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/manage/photos">
+                <Images className="h-4 w-4" aria-hidden />
+                Album ảnh
+              </Link>
+            </Button>
+          </div>
         }
       />
 

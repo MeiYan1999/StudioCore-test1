@@ -1,5 +1,7 @@
-import { Building2 } from "lucide-react";
+import Link from "next/link";
+import { ArrowLeft, Building2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable, type DataTableColumn } from "@/components/shared/data-table";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -65,7 +67,17 @@ export default async function BranchesSettingsPage() {
       <PageHeader
         title="Chi nhánh"
         description="Tên, địa chỉ, SĐT, trạng thái chi nhánh; phòng chụp và dịch vụ quản lý ở màn hình riêng."
-        actions={<BranchSheet />}
+        actions={
+          <div className="flex items-center gap-2">
+            <Button asChild variant="outline" size="sm">
+              <Link href="/manage/settings">
+                <ArrowLeft className="h-4 w-4" aria-hidden />
+                Cài đặt
+              </Link>
+            </Button>
+            <BranchSheet />
+          </div>
+        }
       />
       <DataTable
         columns={columns}

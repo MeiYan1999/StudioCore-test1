@@ -42,12 +42,19 @@ export default async function PaymentSandboxPage() {
         title="Sandbox thanh toán"
         description="Tạo VietQR NAPAS, kiểm tra payload và gửi mock webhook có chữ ký để xác nhận thanh toán gắn đơn."
         actions={
-          <Button asChild variant="outline" size="sm">
-            <Link href="/manage/finance">
-              <ArrowLeft className="h-4 w-4" aria-hidden />
-              Sổ quỹ
-            </Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button asChild variant="outline" size="sm">
+              <Link href="/manage/settings">
+                <ArrowLeft className="h-4 w-4" aria-hidden />
+                Cài đặt
+              </Link>
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/manage/finance">
+                Sổ quỹ
+              </Link>
+            </Button>
+          </div>
         }
       />
 

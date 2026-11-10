@@ -1,6 +1,9 @@
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 import { updateRolePermissionsAction } from "@/lib/actions/staff-actions";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/shared/page-header";
 import { ForbiddenState } from "@/components/shared/forbidden-state";
@@ -46,6 +49,14 @@ export default async function RolesPage({
       <PageHeader
         title="Vai trò & quyền"
         description="Quyền được lưu theo tenant và kiểm tra lại ở server cho mọi thao tác. Vai trò chủ studio và quản trị nền tảng không chỉnh sửa tại đây."
+        actions={
+          <Button asChild variant="outline" size="sm">
+            <Link href="/manage/settings">
+              <ArrowLeft className="h-4 w-4" aria-hidden />
+              Cài đặt
+            </Link>
+          </Button>
+        }
       />
 
       {saved ? (

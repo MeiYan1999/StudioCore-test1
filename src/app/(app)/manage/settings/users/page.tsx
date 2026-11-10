@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Users } from "lucide-react";
+import { ArrowLeft, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/shared/page-header";
@@ -93,7 +93,15 @@ export default async function UsersPage() {
         title="Người dùng"
         description={`${staff.length} tài khoản trong studio. Quyền được kiểm tra ở server, không dựa vào menu.`}
         actions={
-          <StaffCreateSheet branches={actor.branches} roleOptions={roleOptions} />
+          <div className="flex items-center gap-2">
+            <Button asChild variant="outline" size="sm">
+              <Link href="/manage/settings">
+                <ArrowLeft className="h-4 w-4" aria-hidden />
+                Cài đặt
+              </Link>
+            </Button>
+            <StaffCreateSheet branches={actor.branches} roleOptions={roleOptions} />
+          </div>
         }
       />
 

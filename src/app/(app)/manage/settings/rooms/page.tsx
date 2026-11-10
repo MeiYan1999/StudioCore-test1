@@ -1,5 +1,7 @@
-import { DoorOpen } from "lucide-react";
+import Link from "next/link";
+import { ArrowLeft, DoorOpen } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable, type DataTableColumn } from "@/components/shared/data-table";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -74,7 +76,17 @@ export default async function RoomsPage() {
       <PageHeader
         title="Phòng chụp"
         description="Phòng thuộc chi nhánh và tham gia kiểm tra xung đột lịch."
-        actions={canManage ? <RoomSheet branches={actor.branches} /> : null}
+        actions={
+          <div className="flex items-center gap-2">
+            <Button asChild variant="outline" size="sm">
+              <Link href="/manage/settings">
+                <ArrowLeft className="h-4 w-4" aria-hidden />
+                Cài đặt
+              </Link>
+            </Button>
+            {canManage ? <RoomSheet branches={actor.branches} /> : null}
+          </div>
+        }
       />
       <DataTable
         columns={columns}
