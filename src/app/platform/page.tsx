@@ -1,6 +1,17 @@
 import Link from "next/link";
 import { count, desc, eq, like, or, and } from "drizzle-orm";
-import { Building2, DollarSign, Mail, Phone, Search, ShieldCheck, Users } from "lucide-react";
+import {
+  Building2,
+  Clock,
+  DollarSign,
+  Download,
+  Mail,
+  Phone,
+  Search,
+  ShieldCheck,
+  Sparkles,
+  Users,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +28,8 @@ import {
   TenantStatusSelect,
   ContactRequestStatusSelect,
   ResetOwnerPasswordModal,
+  ExtendTenantPlanModal,
+  CreateTenantModal,
 } from "./tenant-row-controls";
 import { PlatformBillingCard } from "./platform-billing-card";
 
@@ -66,6 +79,14 @@ export default async function PlatformPage({
   const estimatedMrr = allTenants
     .filter((t) => t.status === "active")
     .reduce((sum, t) => sum + (PLAN_PRICES[t.plan] ?? 0), 0);
+
+  const allCompletedSubs = db
+    .select({ amount: platformSubscriptions.amount })
+    .from(platformSubscriptions)
+    .where(eq(platformSubscriptions.status, "completed"))
+    .all();
+
+  const totalRevenueCollected = allCompletedSubs.reduce((sum, s) => sum + s.amount, 0);
 
   // Filtered tenants for display
   const conditions = [];
@@ -167,7 +188,14 @@ export default async function PlatformPage({
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <CreateTenantModal />
+            <Button asChild variant="outline" size="sm">
+              <a href="/api/exports/platform-backup" download>
+                <Download className="mr-1.5 h-3.5 w-3.5" />
+                Sao lưu hệ thống
+              </a>
+            </Button>
             <Button asChild variant="outline" size="sm">
               <Link href="/">Xem website</Link>
             </Button>
@@ -199,7 +227,7 @@ export default async function PlatformPage({
         </div>
 
         {/* Metric Cards */}
-        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           <div className="rounded-xl border border-border bg-surface p-4">
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium uppercase text-muted-foreground">Tổng Studio</span>
@@ -223,6 +251,14 @@ export default async function PlatformPage({
             </div>
             <p className="mt-2 text-2xl font-bold text-blue-500">{trialTenants}</p>
             <p className="text-xs text-muted-foreground">Trial 30 ngày</p>
+          </div>
+          <div className="rounded-xl border border-border bg-surface p-4">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium uppercase text-muted-foreground">Đã thu qua VietQR</span>
+              <Sparkles className="h-4 w-4 text-emerald-500" />
+            </div>
+            <p className="mt-2 text-2xl font-bold text-emerald-600">{formatVnd(totalRevenueCollected)}</p>
+            <p className="text-xs text-muted-foreground">{allCompletedSubs.length} đơn hoàn tất</p>
           </div>
           <div className="rounded-xl border border-border bg-surface p-4">
             <div className="flex items-center justify-between">
@@ -301,12 +337,13 @@ export default async function PlatformPage({
             </h2>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[980px] text-sm">
+            <table className="w-full min-w-[1040px] text-sm">
               <thead className="bg-surface-muted text-left text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
                   <th className="px-4 py-3">Studio (Tenant)</th>
                   <th className="px-4 py-3">Chủ Studio (Owner)</th>
                   <th className="px-4 py-3">Gói dịch vụ</th>
+                  <th className="px-4 py-3">Hạn gói cước</th>
                   <th className="px-4 py-3">Trạng thái</th>
                   <th className="px-4 py-3 text-right">Chi nhánh</th>
                   <th className="px-4 py-3 text-right">Nhân sự</th>
@@ -317,13 +354,19 @@ export default async function PlatformPage({
               <tbody className="divide-y divide-border">
                 {tenantRows.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">
+                    <td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">
                       Không tìm thấy studio nào phù hợp với bộ lọc.
                     </td>
                   </tr>
                 ) : (
                   tenantRows.map((tenant) => {
                     const owner = ownerMap.get(tenant.id);
+                    const nowMs = Date.now();
+                    const expiresAt = tenant.planExpiresAt;
+                    const daysRemaining = expiresAt
+                      ? Math.ceil((expiresAt.getTime() - nowMs) / (1000 * 60 * 60 * 24))
+                      : null;
+
                     return (
                       <tr key={tenant.id} className="transition-colors hover:bg-accent/30">
                         <td className="px-4 py-3 font-medium">
@@ -357,6 +400,26 @@ export default async function PlatformPage({
                         <td className="px-4 py-3">
                           <TenantPlanSelect tenantId={tenant.id} currentPlan={tenant.plan} />
                         </td>
+                        <td className="px-4 py-3 text-xs">
+                          {daysRemaining !== null ? (
+                            daysRemaining > 0 ? (
+                              <div>
+                                <span className="font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                                  <Clock className="h-3 w-3" />
+                                  Còn {daysRemaining} ngày
+                                </span>
+                                <p className="text-[11px] text-muted-foreground">{formatDateTime(expiresAt!)}</p>
+                              </div>
+                            ) : (
+                              <div>
+                                <span className="font-semibold text-rose-600 dark:text-rose-400">Hết hạn</span>
+                                <p className="text-[11px] text-muted-foreground">{formatDateTime(expiresAt!)}</p>
+                              </div>
+                            )
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </td>
                         <td className="px-4 py-3">
                           <TenantStatusSelect tenantId={tenant.id} currentStatus={tenant.status} />
                         </td>
@@ -366,9 +429,16 @@ export default async function PlatformPage({
                           {formatDateTime(tenant.createdAt)}
                         </td>
                         <td className="px-4 py-3 text-center">
-                          {owner ? (
-                            <ResetOwnerPasswordModal tenantId={tenant.id} ownerName={owner.name} />
-                          ) : null}
+                          <div className="flex items-center justify-center gap-1.5">
+                            <ExtendTenantPlanModal
+                              tenantId={tenant.id}
+                              tenantName={tenant.name}
+                              currentPlan={tenant.plan}
+                            />
+                            {owner ? (
+                              <ResetOwnerPasswordModal tenantId={tenant.id} ownerName={owner.name} />
+                            ) : null}
+                          </div>
                         </td>
                       </tr>
                     );
