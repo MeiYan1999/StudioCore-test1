@@ -119,6 +119,42 @@ describe("Subscription & Automated VietQR Billing Service", () => {
     expect(current?.tenant.planExpiresAt!.getTime()).toBeGreaterThan(Date.now());
   });
 
+  it("Webhook xác thực chính xác API Key SePay (Apikey studiocore_platform_secret)", () => {
+    const invoice = createSubscriptionInvoice(
+      db,
+      TEST_TENANT_ID,
+      "pro",
+      "monthly",
+    );
+
+    // 1. Sai API Key -> Bị từ chối
+    const failResult = processPlatformBillingWebhook(
+      db,
+      {
+        gateway: "MBBank",
+        transferType: "in",
+        transferAmount: 499_000,
+        content: `TT ${invoice.code}`,
+      },
+      "Apikey sai_api_key_123",
+    );
+    expect(failResult.success).toBe(false);
+    expect(failResult.message).toContain("API Key xác thực Webhook không hợp lệ");
+
+    // 2. Đúng API Key -> Thành công
+    const successResult = processPlatformBillingWebhook(
+      db,
+      {
+        gateway: "MBBank",
+        transferType: "in",
+        transferAmount: 499_000,
+        content: `TT ${invoice.code}`,
+      },
+      "Apikey studiocore_platform_secret",
+    );
+    expect(successResult.success).toBe(true);
+  });
+
   it("chức năng giả lập thanh toán (Dev / Test Mode) kích hoạt gói thành công ngay lập tức", () => {
     const invoice = createSubscriptionInvoice(
       db,
