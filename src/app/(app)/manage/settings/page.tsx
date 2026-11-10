@@ -1,6 +1,7 @@
 import Link from "next/link";
 import {
   ArrowLeft,
+  Bell,
   BookOpen,
   BrainCircuit,
   Building,
@@ -163,6 +164,15 @@ export default async function SettingsHubPage() {
       iconBg: "bg-emerald-500/10 dark:bg-emerald-500/20",
       iconColor: "text-emerald-600 dark:text-emerald-400",
       external: true,
+    },
+    {
+      id: "notifications",
+      title: "Thông báo đẩy (Web Push)",
+      description: "Bật thông báo trên điện thoại / desktop để nhận tin nhắn, đơn mới, lịch chụp...",
+      href: "/manage/settings/notifications",
+      icon: Bell,
+      iconBg: "bg-blue-500/10 dark:bg-blue-500/20",
+      iconColor: "text-blue-600 dark:text-blue-400",
     },
   ];
 
