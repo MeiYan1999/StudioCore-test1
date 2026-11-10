@@ -123,11 +123,11 @@ export default async function SettingsHubPage() {
     {
       id: "ai",
       title: "Quản lý AI (API Keys & Tính năng)",
-      description: "Cấu hình OpenAI, Gemini, Local AI Hub và ngân sách hàng tháng.",
+      description: "Pool API Key dùng chung + auto-fallback,...",
       href: "/manage/settings/ai",
-      icon: BrainCircuit,
-      iconBg: "bg-fuchsia-500/10 dark:bg-fuchsia-500/20",
-      iconColor: "text-fuchsia-600 dark:text-fuchsia-400",
+      icon: KeyRound,
+      iconBg: "bg-blue-500/10 dark:bg-blue-500/20",
+      iconColor: "text-blue-600 dark:text-blue-400",
     },
     {
       id: "ai-assistant",
