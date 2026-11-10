@@ -6,7 +6,7 @@ services:
     region: singapore
     dockerfilePath: ./Dockerfile
     dockerContext: .
-    healthCheckPath: /login
+    healthCheckPath: /api/health
     autoDeploy: true
     envVars:
       - key: AUTH_SECRET
