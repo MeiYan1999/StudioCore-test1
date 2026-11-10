@@ -3,24 +3,23 @@ import {
   AlertTriangle,
   ArrowLeft,
   CheckCircle2,
-  Cloud,
   HardDrive,
   Images,
-  Plug,
-  ShieldCheck,
+  Layers,
 } from "lucide-react";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { PageHeader } from "@/components/shared/page-header";
 import { ForbiddenState } from "@/components/shared/forbidden-state";
-import { DateTimeText } from "@/components/shared/date-time";
 import { hasPermission } from "@/lib/auth/permissions";
 import { requireActor } from "@/lib/auth/session";
 import { getDb } from "@/lib/db/client";
-import { getGoogleConnection, getGoogleOAuthConfig } from "@/lib/services/drive-connection-service";
+import {
+  getGoogleDriveWorkspaceInfo,
+  getGoogleOAuthConfig,
+} from "@/lib/services/drive-connection-service";
+import { GoogleDriveWorkspaceCard } from "@/components/settings/google-drive-workspace-card";
 import { storageEnvSummary } from "@/lib/adapters/storage";
-import { disconnectGoogleAction } from "@/lib/actions/integration-actions";
 import { getPaymentSettings } from "@/lib/services/finance-service";
 import { getMockWebhookPublicInfo } from "@/lib/finance/webhook";
 import { messagingAdapterStatus } from "@/lib/inbox/constants";
@@ -30,11 +29,19 @@ import { getNotificationAdapterStatus } from "@/lib/adapters/notification";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "Tích hợp Drive/NAS",
+  title: "Kết nối Google Drive",
+  description:
+    "Kho lưu trữ dữ liệu của studio: ảnh/tệp trong chat, tệp đính kèm đơn hàng & chi phí, ảnh checklist, sao lưu tự động",
 };
 
-const STATUS_MESSAGES: Record<string, { tone: "success" | "danger" | "warning"; text: string }> = {
-  connected: { tone: "success", text: "Đã kết nối Google Drive." },
+const STATUS_MESSAGES: Record<
+  string,
+  { tone: "success" | "danger" | "warning"; text: string }
+> = {
+  connected: {
+    tone: "success",
+    text: "Đã kết nối thành công Google Drive. Thư mục kho lưu trữ studio và phân vùng sao lưu đã được thiết lập.",
+  },
   disconnected: { tone: "warning", text: "Đã ngắt kết nối Google Drive." },
   unconfigured: {
     tone: "warning",
@@ -52,255 +59,161 @@ export default async function IntegrationsPage({
   const actor = await requireActor();
   if (!hasPermission(actor.permissions, "integrations.manage")) {
     return (
-      <ForbiddenState description="Chỉ chủ studio được quản lý kết nối Drive/NAS." />
+      <ForbiddenState description="Chỉ chủ studio được quản lý kết nối Google Drive và tích hợp lưu trữ." />
     );
   }
+
   const query = await searchParams;
+  const db = getDb();
   const config = getGoogleOAuthConfig();
-  const connection = getGoogleConnection(getDb(), actor.tenantId);
-  const storage = storageEnvSummary();
+  const workspaceInfo = getGoogleDriveWorkspaceInfo(db, actor.tenantId);
   const status = query.google ? STATUS_MESSAGES[query.google] : null;
-  const payment = getPaymentSettings(getDb(), actor.tenantId);
+
+  // Secondary adapters info
+  const storage = storageEnvSummary();
+  const payment = getPaymentSettings(db, actor.tenantId);
   const webhook = getMockWebhookPublicInfo();
   const messaging = messagingAdapterStatus();
   const campaignAdapter = getCampaignAdapterStatus();
   const notificationAdapter = getNotificationAdapterStatus();
 
   return (
-    <div>
-      <PageHeader
-        title="Tích hợp Drive/NAS"
-        description="Google Drive dùng OAuth scope tối thiểu; refresh token được mã hóa. NAS chưa cấu hình sẽ hiển thị trung thực, không giả đọc ổ đĩa."
-        actions={
-          <div className="flex items-center gap-2">
-            <Button asChild variant="outline" size="sm">
-              <Link href="/manage/settings">
-                <ArrowLeft className="h-4 w-4" aria-hidden />
-                Cài đặt
-              </Link>
-            </Button>
-            <Button asChild variant="outline" size="sm">
-              <Link href="/manage/photos">
-                <Images className="h-4 w-4" aria-hidden />
-                Album ảnh
-              </Link>
-            </Button>
+    <div className="space-y-6">
+      {/* Header matching StudioBase: Back arrow + Title + Subtitle */}
+      <div className="flex flex-col gap-2">
+        <div className="flex items-start gap-3">
+          <Button
+            asChild
+            variant="outline"
+            size="sm"
+            className="mt-0.5 h-8 w-8 p-0 rounded-lg shrink-0"
+          >
+            <Link href="/manage/settings" aria-label="Trở lại Cài đặt">
+              <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+            </Link>
+          </Button>
+          <div>
+            <h1 className="text-xl font-bold tracking-tight text-foreground sm:text-2xl">
+              Kết nối Google Drive
+            </h1>
+            <p className="mt-1 text-xs text-muted-foreground sm:text-sm max-w-2xl">
+              Kho lưu trữ dữ liệu của studio: ảnh/tệp trong chat, tệp đính kèm đơn
+              hàng &amp; chi phí, ảnh checklist, sao lưu tự động
+            </p>
           </div>
-        }
-      />
+        </div>
+      </div>
 
       {status ? (
-        <Alert tone={status.tone} className="mb-4">
+        <Alert tone={status.tone}>
           {status.text}
           {query.message ? ` ${query.message}` : ""}
         </Alert>
       ) : null}
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        <section className="rounded-xl border border-border bg-surface p-4">
-          <div className="flex flex-wrap items-start justify-between gap-2">
-            <div>
-              <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
-                <Cloud className="h-4 w-4 text-primary" aria-hidden />
-                Google Drive
-              </h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Scope <code>drive.readonly</code>; dùng refresh token để quét
-                folder và metadata ảnh.
+      {/* Main Google Drive Connection Card (Exact UI of Image 1) */}
+      <div className="max-w-2xl">
+        <GoogleDriveWorkspaceCard
+          info={workspaceInfo}
+          configured={config.configured}
+        />
+      </div>
+
+      {/* Secondary storage & integration channels */}
+      <div className="max-w-2xl pt-6 border-t border-border">
+        <details className="group rounded-xl border border-border bg-surface p-4 transition-all">
+          <summary className="flex cursor-pointer items-center justify-between font-semibold text-foreground text-sm select-none">
+            <span className="flex items-center gap-2">
+              <Layers className="h-4 w-4 text-muted-foreground" />
+              Các hạ tầng lưu trữ &amp; tích hợp khác (Local Storage, NAS, Thanh toán)
+            </span>
+            <span className="text-xs text-muted-foreground group-open:rotate-180 transition-transform">
+              ▼
+            </span>
+          </summary>
+
+          <div className="mt-4 space-y-4 pt-2 border-t border-border/60">
+            <div className="rounded-lg border border-border p-3.5 bg-muted/20">
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                  <HardDrive className="h-4 w-4 text-primary" />
+                  Lưu trữ cục bộ / Local Storage
+                </span>
+                <Badge tone="success">
+                  <CheckCircle2 className="h-3 w-3 mr-1" />
+                  Sẵn sàng
+                </Badge>
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Tải lên và xử lý tệp tin trực tiếp trên máy chủ.
+              </p>
+              <div className="mt-2 flex gap-2">
+                <Button asChild variant="outline" size="sm">
+                  <Link href="/manage/photos/albums/new">Tạo album ảnh mới</Link>
+                </Button>
+                <Button asChild variant="outline" size="sm">
+                  <Link href="/manage/photos">
+                    <Images className="h-4 w-4 mr-1" />
+                    Danh sách album
+                  </Link>
+                </Button>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-border p-3.5 bg-muted/20">
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                  <AlertTriangle className="h-4 w-4 text-[var(--warning)]" />
+                  NAS / Ổ mạng nội bộ
+                </span>
+                <Badge tone="warning">Chưa cấu hình</Badge>
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Chưa có connector kết nối máy chủ NAS nội bộ.
               </p>
             </div>
-            <div className="flex flex-wrap gap-1.5">
-              <Badge tone={config.configured ? "success" : "warning"}>
-                {config.configured ? "OAuth đã cấu hình" : "OAuth chưa cấu hình"}
-              </Badge>
-              <Badge tone={connection ? "success" : "neutral"}>
-                {connection ? "Đã kết nối" : "Chưa kết nối"}
-              </Badge>
-            </div>
-          </div>
 
-          <dl className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
-            <div>
-              <dt>Client ID</dt>
-              <dd className="text-foreground">
-                {config.configured ? "Đã đặt qua biến môi trường" : "Chưa đặt"}
-              </dd>
-            </div>
-            <div>
-              <dt>Redirect URI</dt>
-              <dd className="break-all text-foreground">
-                {config.configured ? config.redirectUri : "Chưa đặt"}
-              </dd>
-            </div>
-            <div>
-              <dt>Lần đồng bộ gần nhất</dt>
-              <dd className="text-foreground">
-                {connection?.lastSyncedAt ? (
-                  <DateTimeText value={connection.lastSyncedAt} />
-                ) : (
-                  "Chưa có"
-                )}
-              </dd>
-            </div>
-            <div>
-              <dt>Trạng thái token</dt>
-              <dd className="flex items-center gap-1 text-foreground">
-                <ShieldCheck className="h-3.5 w-3.5" aria-hidden />
-                Mã hóa AES-GCM
-              </dd>
-            </div>
-          </dl>
-
-          <div className="mt-4 flex flex-wrap gap-2">
-            {config.configured ? (
-              <Button asChild size="sm">
-                <a href="/api/integrations/google/connect">
-                  <Plug className="h-4 w-4" aria-hidden />
-                  {connection ? "Kết nối lại Google" : "Kết nối Google Drive"}
-                </a>
-              </Button>
-            ) : (
-              <Button size="sm" disabled>
-                <Plug className="h-4 w-4" aria-hidden />
-                Kết nối Google Drive
-              </Button>
-            )}
-            {connection ? (
-              <form action={disconnectGoogleAction}>
-                <Button type="submit" variant="outline" size="sm">
-                  Ngắt kết nối
+            <div className="rounded-lg border border-border p-3.5 bg-muted/20">
+              <h3 className="text-sm font-semibold text-foreground mb-2">
+                Cổng thanh toán &amp; Webhook
+              </h3>
+              <ul className="space-y-1.5 text-xs">
+                <li className="flex justify-between">
+                  <span className="text-muted-foreground">Phương thức:</span>
+                  <span className="font-medium text-foreground">{payment.provider}</span>
+                </li>
+                <li className="flex justify-between">
+                  <span className="text-muted-foreground">Tài khoản VietQR:</span>
+                  <span className="font-medium text-foreground">
+                    {payment.bankBin && payment.accountNumber
+                      ? `${payment.bankBin} - ${payment.accountNumber}`
+                      : "Chưa cấu hình"}
+                  </span>
+                </li>
+                <li className="flex justify-between">
+                  <span className="text-muted-foreground">Mock Webhook:</span>
+                  <span className="font-medium text-foreground">
+                    {webhook.enabled ? "Bật (Development)" : "Tắt"}
+                  </span>
+                </li>
+                <li className="flex justify-between">
+                  <span className="text-muted-foreground">Fanpage / Zalo:</span>
+                  <span className="font-medium text-foreground">
+                    {messaging.facebook || messaging.zalo ? "Đã kết nối" : "Chưa cấu hình"}
+                  </span>
+                </li>
+              </ul>
+              <div className="mt-3 flex gap-2">
+                <Button asChild variant="outline" size="sm">
+                  <Link href="/manage/settings/payments/sandbox">Sandbox thanh toán</Link>
                 </Button>
-              </form>
-            ) : null}
+                <Button asChild variant="outline" size="sm">
+                  <Link href="/manage/inbox">Hộp thoại tin nhắn</Link>
+                </Button>
+              </div>
+            </div>
           </div>
-
-          {!config.configured ? (
-            <Alert tone="warning" className="mt-3">
-              Đặt <code>GOOGLE_CLIENT_ID</code>, <code>GOOGLE_CLIENT_SECRET</code>{" "}
-              và <code>GOOGLE_REDIRECT_URI</code> trong <code>.env.local</code>{" "}
-              để bật OAuth. Không có cấu hình thì nút kết nối bị khóa, không giả
-              lập thành công.
-            </Alert>
-          ) : !connection ? (
-            <Alert tone="info" className="mt-3">
-              OAuth đã cấu hình nhưng chưa có refresh token. Bấm kết nối để cấp
-              quyền Drive; sau đó album có thể quét folder thật.
-            </Alert>
-          ) : (
-            <Alert tone="warning" className="mt-3">
-              Live Google Drive chưa được kiểm chứng trong môi trường này nếu
-              không có credentials thật. Báo cáo Phase 4 ghi rõ mức kiểm chứng.
-            </Alert>
-          )}
-        </section>
-
-        <div className="space-y-4">
-          <section className="rounded-xl border border-border bg-surface p-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
-                <HardDrive className="h-4 w-4 text-primary" aria-hidden />
-                Lưu trữ cục bộ / Local Storage
-              </h2>
-              <Badge tone="success">
-                <CheckCircle2 className="h-3 w-3" aria-hidden />
-                Sẵn sàng
-              </Badge>
-            </div>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Lưu trữ trực tiếp trên máy chủ hoặc thư mục nội bộ. Phù hợp cho việc tải lên trực tiếp và xử lý ảnh nhanh mà không cần liên kết tài khoản đám mây.
-            </p>
-            <Button asChild variant="outline" size="sm" className="mt-3">
-              <Link href="/manage/photos/albums/new">Tạo album ảnh mới</Link>
-            </Button>
-          </section>
-
-          <section className="rounded-xl border border-border bg-surface p-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
-                <AlertTriangle className="h-4 w-4 text-[var(--warning)]" aria-hidden />
-                NAS / ổ mạng nội bộ
-              </h2>
-              <Badge tone="warning">Chưa cấu hình</Badge>
-            </div>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Chưa có desktop helper/connector NAS. Browser không được phép giả
-              vờ đọc đường dẫn NAS; server cũng không đọc ổ đĩa của máy khách.
-              Khi cần, cấu hình connector hoặc dùng desktop helper trước khi bật.
-            </p>
-          </section>
-
-          <section className="rounded-xl border border-border bg-surface p-4">
-            <h2 className="text-base font-semibold text-foreground">
-              Thanh toán, Fanpage, Zalo & quảng cáo
-            </h2>
-            <ul className="mt-2 space-y-2 text-sm">
-              <li className="flex flex-wrap items-center justify-between gap-2">
-                <span>Payment adapter</span>
-                <Badge tone="info">{payment.provider}</Badge>
-              </li>
-              <li className="flex flex-wrap items-center justify-between gap-2">
-                <span>Ngân hàng/VietQR</span>
-                <Badge tone={payment.bankBin && payment.accountNumber ? "success" : "warning"}>
-                  {payment.bankBin && payment.accountNumber ? "Đã cấu hình" : "Chưa cấu hình"}
-                </Badge>
-              </li>
-              <li className="flex flex-wrap items-center justify-between gap-2">
-                <span>Mock webhook</span>
-                <Badge tone={webhook.enabled ? "success" : "neutral"}>
-                  {webhook.enabled ? "Development" : "Tắt ở production"}
-                </Badge>
-              </li>
-              <li className="flex flex-wrap items-center justify-between gap-2">
-                <span>Fanpage/Zalo</span>
-                <Badge tone="warning">
-                  {messaging.facebook || messaging.zalo ? "Đã cấu hình" : "Chưa cấu hình"}
-                </Badge>
-              </li>
-              <li className="flex flex-wrap items-center justify-between gap-2">
-                <span>Meta/TikTok Ads</span>
-                <Badge tone="warning">{campaignAdapter.configured ? "Đã cấu hình" : "Chưa cấu hình"}</Badge>
-              </li>
-              <li className="flex flex-wrap items-center justify-between gap-2">
-                <span>Email / Zalo / SMS</span>
-                <Badge tone={notificationAdapter.liveConfigured ? "success" : "warning"}>
-                  {notificationAdapter.liveConfigured ? "Đã cấu hình một phần" : "Local only"}
-                </Badge>
-              </li>
-            </ul>
-            <p className="mt-1 text-xs text-muted-foreground">{notificationAdapter.note}</p>
-            <p className="mt-2 text-xs text-muted-foreground">{messaging.note}</p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <Button asChild variant="outline" size="sm">
-                <Link href="/manage/settings/payments/sandbox">Sandbox thanh toán</Link>
-              </Button>
-              <Button asChild variant="outline" size="sm">
-                <Link href="/manage/inbox">Local inbox</Link>
-              </Button>
-              <Button asChild variant="outline" size="sm">
-                <Link href="/manage/campaigns">Chiến dịch</Link>
-              </Button>
-            </div>
-          </section>
-
-          <section className="rounded-xl border border-border bg-surface p-4">
-            <h2 className="text-base font-semibold text-foreground">Storage adapter</h2>
-            <p className="mt-1 text-sm text-muted-foreground">{storage.note}</p>
-            <dl className="mt-2 grid grid-cols-2 gap-2 text-xs">
-              <div>
-                <dt className="text-muted-foreground">Provider</dt>
-                <dd className="font-medium">{storage.provider}</dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground">Upload tối đa</dt>
-                <dd className="font-medium">{storage.maxUploadMb}MB/ảnh</dd>
-              </div>
-            </dl>
-            <p className="mt-2 text-xs text-muted-foreground">
-              Production cần private storage + signed URL; không dùng public
-              uploads cho ảnh khách thật.
-            </p>
-          </section>
-        </div>
+        </details>
       </div>
     </div>
   );

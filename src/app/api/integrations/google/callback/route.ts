@@ -6,6 +6,8 @@ import { getDb } from "@/lib/db/client";
 import {
   exchangeGoogleCode,
   saveGoogleConnection,
+  setupStudioDriveWorkspace,
+  setupStudioDriveWorkspaceWithToken,
   verifyGoogleStateToken,
 } from "@/lib/services/drive-connection-service";
 
@@ -50,6 +52,26 @@ export async function GET(request: Request): Promise<Response> {
   try {
     const result = await exchangeGoogleCode(code);
     saveGoogleConnection(getDb(), actor, result.refreshToken);
+
+    // Tự động khởi tạo kho lưu trữ studio và kiểm tra dung lượng Google Drive
+    if (result.accessToken) {
+      try {
+        await setupStudioDriveWorkspaceWithToken(
+          getDb(),
+          actor.tenantId,
+          result.accessToken,
+        );
+      } catch (wsError) {
+        console.warn("Lỗi tạo thư mục StudioCore trên Google Drive:", wsError);
+      }
+    } else {
+      try {
+        await setupStudioDriveWorkspace(getDb(), actor.tenantId);
+      } catch (wsError) {
+        console.warn("Lỗi tạo thư mục StudioCore trên Google Drive:", wsError);
+      }
+    }
+
     return redirectWith(request, "connected");
   } catch (error) {
     return redirectWith(

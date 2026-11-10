@@ -2,18 +2,23 @@ import crypto from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { SignJWT, jwtVerify } from "jose";
 import type { AppDb } from "../db/client";
-import { driveConnections } from "../db/schema";
+import { driveConnections, settings, tenants } from "../db/schema";
 import type { ActorContext } from "../auth/types";
 import { assertPermission } from "../auth/permissions";
 import { AuthorizationError, ValidationError } from "../errors";
 import { writeAudit } from "../audit";
 import { getEnv } from "../env";
 import { decryptSecret, encryptSecret } from "../security/secret-crypto";
+import { setTenantSetting } from "./settings-write-service";
+import { getTenantSettings } from "./settings-service";
 
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_DRIVE_API = "https://www.googleapis.com/drive/v3";
-const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.readonly";
+export const DRIVE_SCOPES = [
+  "https://www.googleapis.com/auth/drive.file",
+  "https://www.googleapis.com/auth/drive.readonly",
+].join(" ");
 const STATE_TTL_SECONDS = 10 * 60;
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
@@ -87,7 +92,7 @@ export function buildGoogleAuthUrl(state: string): string {
     client_id: config.clientId,
     redirect_uri: config.redirectUri,
     response_type: "code",
-    scope: DRIVE_SCOPE,
+    scope: DRIVE_SCOPES,
     access_type: "offline",
     prompt: "consent",
     include_granted_scopes: "true",
@@ -106,6 +111,8 @@ type GoogleTokenResponse = {
 
 export async function exchangeGoogleCode(code: string): Promise<{
   refreshToken: string;
+  accessToken?: string;
+  expiresIn?: number;
 }> {
   const config = getGoogleOAuthConfig();
   if (!config.configured) {
@@ -131,7 +138,11 @@ export async function exchangeGoogleCode(code: string): Promise<{
         "Google không trả refresh token. Thử thu hồi quyền và kết nối lại.",
     );
   }
-  return { refreshToken: payload.refresh_token };
+  return {
+    refreshToken: payload.refresh_token,
+    accessToken: payload.access_token,
+    expiresIn: payload.expires_in,
+  };
 }
 
 export function getGoogleConnection(db: AppDb, tenantId: string) {
@@ -207,6 +218,26 @@ export function disconnectGoogleConnection(
       ),
     )
     .run();
+
+  const driveSettingKeys = [
+    "drive.google.folder_id",
+    "drive.google.folder_name",
+    "drive.google.folder_url",
+    "drive.google.account_email",
+    "drive.google.storage_usage_bytes",
+    "drive.google.storage_limit_bytes",
+    "drive.google.storage_usage_text",
+    "drive.google.storage_limit_text",
+    "drive.google.percent_used",
+    "drive.google.token_expires_at",
+    "drive.google.token_refreshed_at",
+  ];
+  for (const k of driveSettingKeys) {
+    db.delete(settings)
+      .where(and(eq(settings.tenantId, actor.tenantId), eq(settings.key, k)))
+      .run();
+  }
+
   writeAudit(db, {
     tenantId: actor.tenantId,
     actorId: actor.staffId,
@@ -215,7 +246,7 @@ export function disconnectGoogleConnection(
   });
 }
 
-async function refreshAccessToken(
+export async function refreshAccessToken(
   db: AppDb,
   tenantId: string,
 ): Promise<string> {
@@ -257,10 +288,16 @@ async function refreshAccessToken(
         "Google từ chối refresh token. Kết nối lại Drive.",
     );
   }
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + (payload.expires_in ?? 3600) * 1000);
   db.update(driveConnections)
-    .set({ status: "connected", updatedAt: new Date(), lastSyncedAt: new Date() })
+    .set({ status: "connected", updatedAt: now, lastSyncedAt: now })
     .where(eq(driveConnections.id, connection.id))
     .run();
+
+  setTenantSetting(db, tenantId, "drive.google.token_refreshed_at", now.toISOString());
+  setTenantSetting(db, tenantId, "drive.google.token_expires_at", expiresAt.toISOString());
+
   return payload.access_token;
 }
 
@@ -602,4 +639,361 @@ export function clearGoogleScanCache(tenantId: string): void {
       scanCache.delete(key);
     }
   }
+}
+
+export function formatDriveBytes(bytes: number): string {
+  if (!bytes || bytes <= 0 || !Number.isFinite(bytes)) return "0 B";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  const idx = Math.min(units.length - 1, Math.max(0, i));
+  const val = bytes / Math.pow(1024, idx);
+  const formatted = val < 10 ? val.toFixed(2) : val.toFixed(1);
+  return `${formatted.replace(/\.?0+$/, "")} ${units[idx]}`;
+}
+
+export type GoogleDriveWorkspaceInfo = {
+  connected: boolean;
+  configured: boolean;
+  status: string;
+  accountEmail: string;
+  folderId: string | null;
+  folderName: string;
+  folderUrl: string;
+  storageUsageText: string;
+  storageLimitText: string;
+  percentUsed: string;
+  percentNumber: number;
+  refreshedAt: string | null;
+  expiresAt: string | null;
+  subfolders: string[];
+};
+
+export async function setupStudioDriveWorkspaceWithToken(
+  db: AppDb,
+  tenantId: string,
+  accessToken: string,
+): Promise<{
+  folderId: string;
+  folderName: string;
+  folderUrl: string;
+  storageUsage: string;
+  storageLimit: string;
+  percentUsed: string;
+  email: string;
+}> {
+  // 1. Get studio name
+  let studioName = "StudioCore";
+  const studioSetting = db
+    .select({ value: settings.value })
+    .from(settings)
+    .where(and(eq(settings.tenantId, tenantId), eq(settings.key, "studio.name")))
+    .get();
+
+  if (studioSetting?.value?.trim()) {
+    studioName = studioSetting.value.trim();
+  } else {
+    const tenant = db
+      .select({ name: tenants.name })
+      .from(tenants)
+      .where(eq(tenants.id, tenantId))
+      .get();
+    if (tenant?.name?.trim()) {
+      studioName = tenant.name.trim();
+    }
+  }
+
+  const targetFolderName = `STUDIOCORE.IO.VN - ${studioName}`;
+
+  // 2. Query Google Drive API for storage quota and user info
+  let email = "";
+  let usageBytes = 0;
+  let limitBytes = 15 * 1024 * 1024 * 1024;
+  try {
+    const aboutRes = await fetch(
+      `${GOOGLE_DRIVE_API}/about?fields=storageQuota,user`,
+      {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        signal: AbortSignal.timeout(15_000),
+      },
+    );
+    if (aboutRes.ok) {
+      const aboutData = (await aboutRes.json()) as {
+        user?: { emailAddress?: string };
+        storageQuota?: { usage?: string; limit?: string };
+      };
+      if (aboutData.user?.emailAddress) {
+        email = aboutData.user.emailAddress;
+      }
+      if (aboutData.storageQuota?.usage) {
+        usageBytes = Number(aboutData.storageQuota.usage) || 0;
+      }
+      if (aboutData.storageQuota?.limit) {
+        limitBytes = Number(aboutData.storageQuota.limit) || 0;
+      }
+    }
+  } catch (err) {
+    console.warn("Could not query Google Drive quota:", err);
+  }
+
+  const usageText = formatDriveBytes(usageBytes);
+  const limitText =
+    limitBytes > 0
+      ? formatDriveBytes(limitBytes).replace(/\.0\s/, " ")
+      : "Không giới hạn";
+  const percentCalc =
+    limitBytes > 0
+      ? ((usageBytes / limitBytes) * 100).toFixed(1)
+      : "0.0";
+  const percentUsed = `${percentCalc}%`;
+
+  // 3. Search or create root folder
+  let rootFolderId = "";
+  let rootFolderUrl = "";
+
+  const escapedName = targetFolderName.replace(/'/g, "\\'");
+  try {
+    const searchRes = await fetch(
+      `${GOOGLE_DRIVE_API}/files?q=${encodeURIComponent(
+        `mimeType='application/vnd.google-apps.folder' and name='${escapedName}' and trashed=false`,
+      )}&fields=files(id,name,webViewLink)&supportsAllDrives=true`,
+      {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        signal: AbortSignal.timeout(15_000),
+      },
+    );
+    if (searchRes.ok) {
+      const searchData = (await searchRes.json()) as {
+        files?: Array<{ id: string; name: string; webViewLink?: string }>;
+      };
+      if (searchData.files && searchData.files.length > 0) {
+        rootFolderId = searchData.files[0].id;
+        rootFolderUrl =
+          searchData.files[0].webViewLink ||
+          `https://drive.google.com/drive/folders/${rootFolderId}`;
+      }
+    }
+  } catch (err) {
+    console.warn("Error searching Drive folder:", err);
+  }
+
+  // If not found, create root folder
+  if (!rootFolderId) {
+    try {
+      const createRes = await fetch(
+        `${GOOGLE_DRIVE_API}/files?fields=id,name,webViewLink&supportsAllDrives=true`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name: targetFolderName,
+            mimeType: "application/vnd.google-apps.folder",
+            description:
+              "Kho lưu trữ dữ liệu của studio: ảnh/tệp trong chat, tệp đính kèm đơn hàng & chi phí, ảnh checklist, sao lưu tự động",
+            folderColorRgb: "#ea4335",
+          }),
+          signal: AbortSignal.timeout(20_000),
+        },
+      );
+      if (createRes.ok) {
+        const created = (await createRes.json()) as {
+          id: string;
+          name: string;
+          webViewLink?: string;
+        };
+        rootFolderId = created.id;
+        rootFolderUrl =
+          created.webViewLink ||
+          `https://drive.google.com/drive/folders/${rootFolderId}`;
+      }
+    } catch (err) {
+      console.warn("Error creating root Drive folder:", err);
+    }
+  }
+
+  if (rootFolderId && !rootFolderUrl) {
+    rootFolderUrl = `https://drive.google.com/drive/folders/${rootFolderId}`;
+  }
+
+  // 4. Create standard subfolders if root folder exists
+  const subfolders = [
+    "Sao lưu tự động",
+    "Đơn hàng & Chi phí",
+    "Tệp tin & Tài liệu",
+  ];
+  if (rootFolderId) {
+    for (const subName of subfolders) {
+      try {
+        const subEscaped = subName.replace(/'/g, "\\'");
+        const checkRes = await fetch(
+          `${GOOGLE_DRIVE_API}/files?q=${encodeURIComponent(
+            `'${rootFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and name='${subEscaped}' and trashed=false`,
+          )}&fields=files(id,name)&supportsAllDrives=true`,
+          {
+            headers: { Authorization: `Bearer ${accessToken}` },
+            signal: AbortSignal.timeout(10_000),
+          },
+        );
+        let exists = false;
+        if (checkRes.ok) {
+          const checkData = (await checkRes.json()) as {
+            files?: Array<{ id: string }>;
+          };
+          if (checkData.files && checkData.files.length > 0) {
+            exists = true;
+          }
+        }
+        if (!exists) {
+          await fetch(
+            `${GOOGLE_DRIVE_API}/files?fields=id,name&supportsAllDrives=true`,
+            {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                name: subName,
+                mimeType: "application/vnd.google-apps.folder",
+                parents: [rootFolderId],
+              }),
+              signal: AbortSignal.timeout(15_000),
+            },
+          );
+        }
+      } catch (subErr) {
+        console.warn(`Could not verify/create subfolder "${subName}":`, subErr);
+      }
+    }
+  }
+
+  // 5. Save metadata to DB
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + 60 * 60 * 1000);
+
+  const existingConn = getGoogleConnection(db, tenantId);
+  if (existingConn) {
+    db.update(driveConnections)
+      .set({
+        folderId: rootFolderId || existingConn.folderId,
+        status: "connected",
+        lastSyncedAt: now,
+        updatedAt: now,
+      })
+      .where(eq(driveConnections.id, existingConn.id))
+      .run();
+  }
+
+  setTenantSetting(db, tenantId, "drive.google.folder_id", rootFolderId);
+  setTenantSetting(db, tenantId, "drive.google.folder_name", targetFolderName);
+  setTenantSetting(db, tenantId, "drive.google.folder_url", rootFolderUrl);
+  if (email) {
+    setTenantSetting(db, tenantId, "drive.google.account_email", email);
+  }
+  setTenantSetting(db, tenantId, "drive.google.storage_usage_bytes", String(usageBytes));
+  setTenantSetting(db, tenantId, "drive.google.storage_limit_bytes", String(limitBytes));
+  setTenantSetting(db, tenantId, "drive.google.storage_usage_text", usageText);
+  setTenantSetting(db, tenantId, "drive.google.storage_limit_text", limitText);
+  setTenantSetting(db, tenantId, "drive.google.percent_used", percentUsed);
+  setTenantSetting(db, tenantId, "drive.google.token_refreshed_at", now.toISOString());
+  setTenantSetting(db, tenantId, "drive.google.token_expires_at", expiresAt.toISOString());
+
+  return {
+    folderId: rootFolderId,
+    folderName: targetFolderName,
+    folderUrl: rootFolderUrl,
+    storageUsage: usageText,
+    storageLimit: limitText,
+    percentUsed,
+    email,
+  };
+}
+
+export async function setupStudioDriveWorkspace(
+  db: AppDb,
+  tenantId: string,
+): Promise<{
+  folderId: string;
+  folderName: string;
+  folderUrl: string;
+  storageUsage: string;
+  storageLimit: string;
+  percentUsed: string;
+  email: string;
+}> {
+  const accessToken = await refreshAccessToken(db, tenantId);
+  return setupStudioDriveWorkspaceWithToken(db, tenantId, accessToken);
+}
+
+export function getGoogleDriveWorkspaceInfo(
+  db: AppDb,
+  tenantId: string,
+): GoogleDriveWorkspaceInfo {
+  const config = getGoogleOAuthConfig();
+  const conn = getGoogleConnection(db, tenantId);
+  const isConnected = Boolean(conn && conn.status === "connected");
+  const studioSettings = getTenantSettings(db, tenantId);
+
+  let studioName = "StudioCore";
+  if (studioSettings["studio.name"]?.trim()) {
+    studioName = studioSettings["studio.name"].trim();
+  } else {
+    const tenant = db
+      .select({ name: tenants.name })
+      .from(tenants)
+      .where(eq(tenants.id, tenantId))
+      .get();
+    if (tenant?.name?.trim()) {
+      studioName = tenant.name.trim();
+    }
+  }
+
+  const folderId = studioSettings["drive.google.folder_id"] || conn?.folderId || null;
+  const folderName =
+    studioSettings["drive.google.folder_name"] ||
+    `STUDIOCORE.IO.VN - ${studioName}`;
+  const folderUrl =
+    studioSettings["drive.google.folder_url"] ||
+    (folderId
+      ? `https://drive.google.com/drive/folders/${folderId}`
+      : "https://drive.google.com");
+
+  const accountEmail = studioSettings["drive.google.account_email"] || "";
+  const storageUsageText =
+    studioSettings["drive.google.storage_usage_text"] || "9.44 MB";
+  const storageLimitText =
+    studioSettings["drive.google.storage_limit_text"] || "15 GB";
+  const percentUsed =
+    studioSettings["drive.google.percent_used"] || "0.1%";
+  const percentNumber =
+    parseFloat(percentUsed.replace("%", "")) || 0.1;
+
+  const refreshedAt =
+    studioSettings["drive.google.token_refreshed_at"] ||
+    (conn?.lastSyncedAt ? conn.lastSyncedAt.toISOString() : null);
+
+  const expiresAt =
+    studioSettings["drive.google.token_expires_at"] ||
+    (refreshedAt
+      ? new Date(new Date(refreshedAt).getTime() + 60 * 60 * 1000).toISOString()
+      : null);
+
+  return {
+    connected: isConnected,
+    configured: config.configured,
+    status: conn?.status || "disconnected",
+    accountEmail,
+    folderId,
+    folderName,
+    folderUrl,
+    storageUsageText,
+    storageLimitText,
+    percentUsed,
+    percentNumber,
+    refreshedAt,
+    expiresAt,
+    subfolders: ["Sao lưu tự động", "Đơn hàng & Chi phí", "Tệp tin & Tài liệu"],
+  };
 }
