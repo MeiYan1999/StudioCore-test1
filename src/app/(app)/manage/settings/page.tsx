@@ -129,9 +129,9 @@ export default async function SettingsHubPage() {
     },
     {
       id: "payments",
-      title: "Kết nối SePay & Biến động số dư",
-      description: "Nhận biến động số dư ngân hàng qua VietQR, SePay và Webhook.",
-      href: "/manage/settings/payments/sandbox",
+      title: "Kết nối SePay (Biến động số dư)",
+      description: "Nhận biến động số dư ngân hàng qua SePay Webhook tự động.",
+      href: "/manage/settings/sepay",
       icon: CreditCard,
       iconBg: "bg-emerald-500/10 dark:bg-emerald-500/20",
       iconColor: "text-emerald-600 dark:text-emerald-400",

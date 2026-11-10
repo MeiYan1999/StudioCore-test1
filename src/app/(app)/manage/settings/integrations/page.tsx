@@ -203,7 +203,10 @@ export default async function IntegrationsPage({
                   </span>
                 </li>
               </ul>
-              <div className="mt-3 flex gap-2">
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button asChild size="sm">
+                  <Link href="/manage/settings/sepay">Cấu hình SePay</Link>
+                </Button>
                 <Button asChild variant="outline" size="sm">
                   <Link href="/manage/settings/payments/sandbox">Sandbox thanh toán</Link>
                 </Button>
