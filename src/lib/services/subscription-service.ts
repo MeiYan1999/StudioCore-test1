@@ -11,6 +11,7 @@ import {
 } from "../db/schema";
 import { buildVietQrPayload, sanitizeTransferContent } from "../finance/vietqr";
 import { getEnv } from "../env";
+import { setTenantSetting } from "./settings-write-service";
 
 export type SubscriptionPlanKey = "trial" | "basic" | "pro" | "enterprise";
 export type BillingCycle = "monthly" | "yearly";
@@ -63,7 +64,8 @@ export function getPlatformBillingConfig(db: AppDb): PlatformBillingConfig {
     const row = db
       .select({ value: settings.value })
       .from(settings)
-      .where(and(eq(settings.key, k), eq(settings.tenantId, "platform_admin")))
+      .where(eq(settings.key, k))
+      .limit(1)
       .get();
     return row?.value || "";
   };
@@ -92,6 +94,26 @@ export function getPlatformBillingConfig(db: AppDb): PlatformBillingConfig {
       "studiocore_platform_secret",
     webhookUrl: `${siteUrl}/api/webhooks/platform-billing`,
   };
+}
+
+export function savePlatformBillingConfig(
+  db: AppDb,
+  tenantId: string,
+  config: {
+    bankBin?: string;
+    bankName?: string;
+    accountNumber?: string;
+    accountName?: string;
+    sepayApiKey?: string;
+  },
+): PlatformBillingConfig {
+  if (config.bankBin) setTenantSetting(db, tenantId, "platform.bank_bin", config.bankBin);
+  if (config.bankName) setTenantSetting(db, tenantId, "platform.bank_name", config.bankName);
+  if (config.accountNumber) setTenantSetting(db, tenantId, "platform.bank_account", config.accountNumber);
+  if (config.accountName) setTenantSetting(db, tenantId, "platform.account_name", config.accountName);
+  if (config.sepayApiKey) setTenantSetting(db, tenantId, "platform.sepay_api_key", config.sepayApiKey);
+
+  return getPlatformBillingConfig(db);
 }
 
 export function generateTransferCode(): string {
@@ -381,6 +403,12 @@ export function processPlatformBillingWebhook(
   // 2. Tìm mã nạp dạng SCxxxxx trong nội dung
   const codeMatch = rawContent.match(/SC[0-9]{4,6}/i) || rawContent.match(/SC[A-Z0-9]{4,8}/i);
   if (!codeMatch) {
+    if (!rawContent || rawContent.includes("TEST") || rawContent.includes("THU NGHIEM")) {
+      return {
+        success: true,
+        message: "StudioCore Platform Billing Webhook nhận tín hiệu thử nghiệm SePay thành công! (HTTP 200 OK)",
+      };
+    }
     return {
       success: false,
       message: "Không tìm thấy mã thanh toán hợp lệ (dạng SCxxxxx) trong nội dung chuyển khoản.",

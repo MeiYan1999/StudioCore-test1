@@ -5,7 +5,10 @@ import { hasPermission } from "@/lib/auth/permissions";
 import { requireActor } from "@/lib/auth/session";
 import { getDb } from "@/lib/db/client";
 import { platformSubscriptions } from "@/lib/db/schema";
-import { getTenantCurrentSubscription } from "@/lib/services/subscription-service";
+import {
+  getPlatformBillingConfig,
+  getTenantCurrentSubscription,
+} from "@/lib/services/subscription-service";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +17,11 @@ export const metadata = {
   description: "Nâng cấp và gia hạn gói cước StudioCore tự động qua VietQR NAPAS247.",
 };
 
-export default async function BillingPage() {
+export default async function BillingPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ plan?: string }>;
+}) {
   const actor = await requireActor();
   const canView =
     hasPermission(actor.permissions, "settings.view") ||
@@ -26,6 +33,9 @@ export default async function BillingPage() {
     );
   }
 
+  const params = searchParams ? await searchParams : {};
+  const initialPlan = params.plan;
+
   const db = getDb();
   const currentPlanData = getTenantCurrentSubscription(db, actor.tenantId);
 
@@ -34,6 +44,9 @@ export default async function BillingPage() {
       <ForbiddenState description="Không tìm thấy thông tin gói cước của Studio." />
     );
   }
+
+  const platformConfig = getPlatformBillingConfig(db);
+  const isPlatformOwner = actor.role === "owner" || actor.role === "platform_admin";
 
   const history = db
     .select()
@@ -46,6 +59,9 @@ export default async function BillingPage() {
     <BillingManagementView
       currentPlanData={currentPlanData}
       subscriptionHistory={history}
+      platformConfig={platformConfig}
+      isPlatformOwner={isPlatformOwner}
+      initialPlan={initialPlan}
     />
   );
 }

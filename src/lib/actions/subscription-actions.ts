@@ -6,6 +6,7 @@ import { getDb } from "@/lib/db/client";
 import {
   createSubscriptionInvoice,
   getSubscriptionById,
+  savePlatformBillingConfig,
   simulateDevSubscriptionPayment,
   type BillingCycle,
   type SubscriptionPlanKey,
@@ -67,4 +68,40 @@ export async function simulateSubscriptionPaymentAction(subscriptionId: string) 
   revalidatePath("/manage/settings/billing");
   revalidatePath("/pricing");
   return result;
+}
+
+export async function savePlatformBillingConfigAction(formData: FormData) {
+  const actor = await getActorContext();
+  if (!actor || (actor.role !== "owner" && actor.role !== "platform_admin")) {
+    return {
+      success: false,
+      error: "Chỉ chủ studio hoặc quản trị viên mới có quyền cấu hình thanh toán nền tảng.",
+    };
+  }
+
+  const bankBin = String(formData.get("bankBin") || "").trim();
+  const bankName = String(formData.get("bankName") || "").trim();
+  const accountNumber = String(formData.get("accountNumber") || "").trim();
+  const accountName = String(formData.get("accountName") || "").trim();
+  const sepayApiKey = String(formData.get("sepayApiKey") || "").trim();
+
+  if (!accountNumber) {
+    return { success: false, error: "Vui lòng nhập Số tài khoản ngân hàng." };
+  }
+
+  const db = getDb();
+  savePlatformBillingConfig(db, actor.tenantId, {
+    bankBin,
+    bankName,
+    accountNumber,
+    accountName,
+    sepayApiKey,
+  });
+
+  revalidatePath("/manage/settings/billing");
+  revalidatePath("/platform");
+  return {
+    success: true,
+    message: "Đã lưu thông tin tài khoản nhận tiền nền tảng thành công!",
+  };
 }

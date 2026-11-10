@@ -37,6 +37,14 @@ export async function POST(request: Request): Promise<Response> {
 
   const result = processPlatformBillingWebhook(getDb(), payload, rawKey);
 
+  // Nếu sai API Key thì trả 401 Unauthorized, ngược lại trả về 200 OK cho SePay
+  // để SePay không báo lỗi đỏ khi thử nghiệm (test) hoặc nhận giao dịch không có mã SC
+  const statusCode = result.success
+    ? 200
+    : result.message.includes("API Key")
+      ? 401
+      : 200;
+
   return NextResponse.json(
     {
       success: result.success,
@@ -44,6 +52,6 @@ export async function POST(request: Request): Promise<Response> {
       subscriptionId: result.subscriptionId,
       plan: result.plan,
     },
-    { status: result.success ? 200 : 400 },
+    { status: statusCode },
   );
 }
