@@ -5,10 +5,7 @@ import { hasPermission } from "@/lib/auth/permissions";
 import { requireActor } from "@/lib/auth/session";
 import { getDb } from "@/lib/db/client";
 import { platformSubscriptions } from "@/lib/db/schema";
-import {
-  getPlatformBillingConfig,
-  getTenantCurrentSubscription,
-} from "@/lib/services/subscription-service";
+import { getTenantCurrentSubscription } from "@/lib/services/subscription-service";
 
 export const dynamic = "force-dynamic";
 
@@ -45,9 +42,6 @@ export default async function BillingPage({
     );
   }
 
-  const platformConfig = getPlatformBillingConfig(db);
-  const isPlatformOwner = actor.role === "owner" || actor.role === "platform_admin";
-
   const history = db
     .select()
     .from(platformSubscriptions)
@@ -59,8 +53,6 @@ export default async function BillingPage({
     <BillingManagementView
       currentPlanData={currentPlanData}
       subscriptionHistory={history}
-      platformConfig={platformConfig}
-      isPlatformOwner={isPlatformOwner}
       initialPlan={initialPlan}
     />
   );

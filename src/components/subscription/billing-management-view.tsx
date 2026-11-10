@@ -6,50 +6,25 @@ import {
   ArrowLeft,
   Calendar,
   Check,
-  Copy,
   CreditCard,
   Crown,
   History,
-  KeyRound,
   Loader2,
-  QrCode,
-  Save,
-  ShieldCheck,
   Sparkles,
   Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { formatVnd } from "@/lib/utils";
 import { DateTimeText } from "@/components/shared/date-time";
-import {
-  createSubscriptionInvoiceAction,
-  savePlatformBillingConfigAction,
-} from "@/lib/actions/subscription-actions";
+import { createSubscriptionInvoiceAction } from "@/lib/actions/subscription-actions";
 import { SubscriptionCheckoutModal } from "./subscription-checkout-modal";
 import {
   SUBSCRIPTION_PLANS,
   type BillingCycle,
   type CreateSubscriptionResult,
-  type PlatformBillingConfig,
   type SubscriptionPlanKey,
 } from "@/lib/services/subscription-service";
-
-const POPULAR_BANKS = [
-  { bin: "970422", name: "MBBank (Ngân hàng Quân Đội)" },
-  { bin: "970436", name: "Vietcombank (Ngoại Thương Việt Nam)" },
-  { bin: "970407", name: "Techcombank (Kỹ Thương Việt Nam)" },
-  { bin: "970416", name: "ACB (Á Châu)" },
-  { bin: "970423", name: "TPBank (Tiên Phong)" },
-  { bin: "970432", name: "VPBank (Việt Nam Thịnh Vượng)" },
-  { bin: "970418", name: "BIDV (Đầu tư và Phát triển VN)" },
-  { bin: "970415", name: "VietinBank (Công Thương VN)" },
-  { bin: "970405", name: "Agribank (Nông nghiệp và PTNT)" },
-  { bin: "970448", name: "OCB (Phương Đông)" },
-  { bin: "970403", name: "Sacombank (Sài Gòn Thương Tín)" },
-];
 
 interface BillingManagementViewProps {
   currentPlanData: {
@@ -70,41 +45,18 @@ interface BillingManagementViewProps {
     isTrial: boolean;
   };
   subscriptionHistory: any[];
-  platformConfig?: PlatformBillingConfig;
-  isPlatformOwner?: boolean;
   initialPlan?: string;
 }
 
 export function BillingManagementView({
   currentPlanData,
   subscriptionHistory,
-  platformConfig,
-  isPlatformOwner = false,
   initialPlan,
 }: BillingManagementViewProps) {
   const [billingCycle, setBillingCycle] = useState<BillingCycle>("monthly");
   const [checkoutData, setCheckoutData] = useState<CreateSubscriptionResult | null>(null);
   const [isCreating, startTransition] = useTransition();
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  // Platform billing config state
-  const [savedSuccessMsg, setSavedSuccessMsg] = useState<string | null>(null);
-  const [copiedField, setCopiedField] = useState<string | null>(null);
-  const [selectedBankBin, setSelectedBankBin] = useState(
-    platformConfig?.bankBin || "970422",
-  );
-  const [bankAccount, setBankAccount] = useState(
-    platformConfig?.accountNumber || "",
-  );
-  const [accountName, setAccountName] = useState(
-    platformConfig?.accountName || "",
-  );
-
-  const copyToClipboard = (text: string, field: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedField(field);
-    setTimeout(() => setCopiedField(null), 2000);
-  };
 
   const autoOpenedRef = useRef(false);
   useEffect(() => {
@@ -134,31 +86,6 @@ export function BillingManagementView({
     });
   };
 
-  const handleSavePlatformConfig = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setSavedSuccessMsg(null);
-    const form = e.currentTarget;
-    const formData = new FormData(form);
-
-    const bankObj = POPULAR_BANKS.find((b) => b.bin === selectedBankBin);
-    formData.set("bankBin", selectedBankBin);
-    formData.set("bankName", bankObj?.name || "MBBank");
-
-    startTransition(async () => {
-      try {
-        const res = await savePlatformBillingConfigAction(formData);
-        if (res.success) {
-          setSavedSuccessMsg(res.message || "Đã lưu thành công!");
-          setTimeout(() => setSavedSuccessMsg(null), 4000);
-        } else {
-          setErrorMsg(res.error || "Không thể lưu cấu hình.");
-        }
-      } catch (err: any) {
-        setErrorMsg(err?.message || "Lỗi lưu cấu hình.");
-      }
-    });
-  };
-
   const daysRemaining = currentPlanData.tenant.planExpiresAt
     ? Math.max(
         0,
@@ -183,7 +110,7 @@ export function BillingManagementView({
           </Link>
           <div className="h-4 w-px bg-slate-300 dark:bg-slate-700" />
           <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-            Quản lý gói cước & Dịch vụ
+            Quản lý gói cước &amp; Dịch vụ
           </h1>
         </div>
       </div>
@@ -192,166 +119,6 @@ export function BillingManagementView({
         <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/50 dark:text-rose-300">
           {errorMsg}
         </div>
-      )}
-
-      {/* SPECIAL CARD: DÀNH CHO CHỦ NỀN TẢNG (PLATFORM OWNER) */}
-      {isPlatformOwner && platformConfig && (
-        <section className="rounded-2xl border-2 border-indigo-500/30 bg-gradient-to-br from-indigo-50/70 via-white to-purple-50/50 p-6 shadow-sm dark:border-indigo-800/60 dark:from-indigo-950/40 dark:via-slate-900 dark:to-slate-900 space-y-5">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-indigo-100/80 pb-3 dark:border-indigo-900/50">
-            <div className="flex items-center gap-2.5">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-xs">
-                <Crown className="h-5 w-5" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
-                    Cấu hình SePay &amp; Tài khoản nhận tiền Nền tảng
-                  </h2>
-                  <Badge tone="info">Dành cho Chủ web</Badge>
-                </div>
-                <p className="text-xs text-slate-500">
-                  Cấu hình số tài khoản của bạn để nhận tiền khi các chủ studio khác quét mã mua gói cước (399k, 499k...).
-                </p>
-              </div>
-            </div>
-
-            {savedSuccessMsg && (
-              <span className="rounded-lg bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 animate-in fade-in">
-                {savedSuccessMsg}
-              </span>
-            )}
-          </div>
-
-          {/* 1. Webhook URL & Secret to paste into SePay */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="rounded-xl border border-slate-200/90 bg-white p-3.5 shadow-2xs dark:border-slate-800 dark:bg-slate-800/60">
-              <span className="block text-xs font-bold text-slate-700 dark:text-slate-300">
-                1. Webhook URL (Dán vào ô URL trên SePay)
-              </span>
-              <div className="relative mt-1.5 flex items-center">
-                <input
-                  type="text"
-                  readOnly
-                  value={platformConfig.webhookUrl}
-                  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-mono text-slate-800 pr-10 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
-                />
-                <button
-                  type="button"
-                  onClick={() => copyToClipboard(platformConfig.webhookUrl, "platform_webhook")}
-                  className="absolute right-1.5 rounded p-1.5 text-slate-500 hover:text-blue-600"
-                  title="Sao chép"
-                >
-                  {copiedField === "platform_webhook" ? (
-                    <Check className="h-4 w-4 text-emerald-600" />
-                  ) : (
-                    <Copy className="h-4 w-4" />
-                  )}
-                </button>
-              </div>
-              <p className="mt-1 text-[11px] text-slate-400">
-                *Khi tạo Webhook trên SePay, dán URL này vào mục &quot;URL nhận Webhook&quot;.
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-slate-200/90 bg-white p-3.5 shadow-2xs dark:border-slate-800 dark:bg-slate-800/60">
-              <span className="block text-xs font-bold text-slate-700 dark:text-slate-300">
-                2. API Key Bảo mật (Dán vào ô API Key trên SePay)
-              </span>
-              <div className="relative mt-1.5 flex items-center">
-                <input
-                  type="text"
-                  readOnly
-                  value={platformConfig.sepayApiKey}
-                  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-mono text-slate-800 pr-10 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
-                />
-                <button
-                  type="button"
-                  onClick={() => copyToClipboard(platformConfig.sepayApiKey, "platform_apikey")}
-                  className="absolute right-1.5 rounded p-1.5 text-slate-500 hover:text-blue-600"
-                  title="Sao chép"
-                >
-                  {copiedField === "platform_apikey" ? (
-                    <Check className="h-4 w-4 text-emerald-600" />
-                  ) : (
-                    <Copy className="h-4 w-4" />
-                  )}
-                </button>
-              </div>
-              <p className="mt-1 text-[11px] text-slate-400">
-                *Chọn phương thức &quot;API Key&quot; ở bước Bảo mật trên SePay và dán mã này.
-              </p>
-            </div>
-          </div>
-
-          {/* 2. Form chỉnh sửa Số tài khoản nhận tiền của Chủ web */}
-          <form onSubmit={handleSavePlatformConfig} className="rounded-xl border border-indigo-100 bg-white/90 p-4 dark:border-indigo-900/60 dark:bg-slate-850 space-y-4">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-indigo-900 dark:text-indigo-300 flex items-center gap-1.5">
-              <CreditCard className="h-4 w-4 text-indigo-600" />
-              Tài khoản ngân hàng của bạn (Nơi tiền mua gói sẽ chảy về)
-            </h3>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div>
-                <Label htmlFor="bankBin" className="text-xs">
-                  Ngân hàng của bạn
-                </Label>
-                <select
-                  id="bankBin"
-                  value={selectedBankBin}
-                  onChange={(e) => setSelectedBankBin(e.target.value)}
-                  className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-800"
-                >
-                  {POPULAR_BANKS.map((b) => (
-                    <option key={b.bin} value={b.bin}>
-                      {b.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <Label htmlFor="accountNumber" className="text-xs">
-                  Số tài khoản nhận tiền
-                </Label>
-                <Input
-                  id="accountNumber"
-                  name="accountNumber"
-                  value={bankAccount}
-                  onChange={(e) => setBankAccount(e.target.value)}
-                  placeholder="Ví dụ: 0987654321..."
-                  required
-                  className="mt-1.5 h-9 text-xs font-mono"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="accountName" className="text-xs">
-                  Tên chủ tài khoản (In hoa không dấu)
-                </Label>
-                <Input
-                  id="accountName"
-                  name="accountName"
-                  value={accountName}
-                  onChange={(e) => setAccountName(e.target.value.toUpperCase())}
-                  placeholder="Ví dụ: NGUYEN VAN A"
-                  required
-                  className="mt-1.5 h-9 text-xs uppercase"
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end pt-1">
-              <Button
-                type="submit"
-                disabled={isCreating}
-                className="bg-indigo-600 text-white hover:bg-indigo-700 h-8 px-4 text-xs font-bold"
-              >
-                <Save className="h-3.5 w-3.5 mr-1.5" />
-                Lưu tài khoản nhận tiền
-              </Button>
-            </div>
-          </form>
-        </section>
       )}
 
       {/* Card 1: Gói cước hiện tại của Studio */}

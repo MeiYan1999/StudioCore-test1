@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { hasPermission } from "@/lib/auth/permissions";
 import { getActorContext } from "@/lib/auth/session";
 import { getDb } from "@/lib/db/client";
 import {
@@ -72,10 +73,14 @@ export async function simulateSubscriptionPaymentAction(subscriptionId: string) 
 
 export async function savePlatformBillingConfigAction(formData: FormData) {
   const actor = await getActorContext();
-  if (!actor || (actor.role !== "owner" && actor.role !== "platform_admin")) {
+  if (
+    !actor ||
+    (!hasPermission(actor.permissions, "tenants.manage") &&
+      actor.role !== "platform_admin")
+  ) {
     return {
       success: false,
-      error: "Chỉ chủ studio hoặc quản trị viên mới có quyền cấu hình thanh toán nền tảng.",
+      error: "Chỉ Quản trị viên Nền tảng (Platform SuperAdmin) mới có quyền cấu hình thanh toán nền tảng.",
     };
   }
 
@@ -98,7 +103,6 @@ export async function savePlatformBillingConfigAction(formData: FormData) {
     sepayApiKey,
   });
 
-  revalidatePath("/manage/settings/billing");
   revalidatePath("/platform");
   return {
     success: true,

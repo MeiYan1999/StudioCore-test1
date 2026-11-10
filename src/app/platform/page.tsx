@@ -9,14 +9,16 @@ import { hasPermission } from "@/lib/auth/permissions";
 import { requireActor } from "@/lib/auth/session";
 import { logoutAction } from "@/lib/auth/actions";
 import { getDb } from "@/lib/db/client";
-import { branches, contactRequests, staff, tenants } from "@/lib/db/schema";
+import { branches, contactRequests, platformSubscriptions, staff, tenants } from "@/lib/db/schema";
 import { formatDateTime, formatVnd } from "@/lib/utils";
+import { getPlatformBillingConfig } from "@/lib/services/subscription-service";
 import {
   TenantPlanSelect,
   TenantStatusSelect,
   ContactRequestStatusSelect,
   ResetOwnerPasswordModal,
 } from "./tenant-row-controls";
+import { PlatformBillingCard } from "./platform-billing-card";
 
 export const dynamic = "force-dynamic";
 
@@ -126,6 +128,30 @@ export default async function PlatformPage({
       .where(eq(contactRequests.status, "new"))
       .get()?.value ?? 0;
 
+  const platformConfig = getPlatformBillingConfig(db);
+  const recentSubs = db
+    .select({
+      id: platformSubscriptions.id,
+      tenantId: platformSubscriptions.tenantId,
+      plan: platformSubscriptions.plan,
+      billingCycle: platformSubscriptions.billingCycle,
+      amount: platformSubscriptions.amount,
+      code: platformSubscriptions.code,
+      status: platformSubscriptions.status,
+      createdAt: platformSubscriptions.createdAt,
+      paidAt: platformSubscriptions.paidAt,
+    })
+    .from(platformSubscriptions)
+    .orderBy(desc(platformSubscriptions.createdAt))
+    .limit(20)
+    .all();
+
+  const tenantNameMap = new Map(allTenants.map((t) => [t.id, t.name]));
+  const formattedSubs = recentSubs.map((s) => ({
+    ...s,
+    tenantName: tenantNameMap.get(s.tenantId) || s.tenantId,
+  }));
+
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border bg-surface">
@@ -215,6 +241,12 @@ export default async function PlatformPage({
             <p className="text-xs text-muted-foreground">{requests.length} tổng lead</p>
           </div>
         </section>
+
+        {/* Platform Billing & SePay Config */}
+        <PlatformBillingCard
+          platformConfig={platformConfig}
+          recentTransactions={formattedSubs}
+        />
 
         {/* Search & Filter Toolbar */}
         <section className="mt-8 rounded-xl border border-border bg-surface p-4">
