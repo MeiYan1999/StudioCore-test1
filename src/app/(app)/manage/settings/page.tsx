@@ -139,6 +139,15 @@ export default async function SettingsHubPage() {
       iconColor: "text-indigo-600 dark:text-indigo-400",
     },
     {
+      id: "billing",
+      title: "Quản lý gói cước & Nâng cấp",
+      description: "Xem hạn dùng, nâng cấp gói Cơ bản, Pro, Doanh nghiệp tự động qua VietQR.",
+      href: "/manage/settings/billing",
+      icon: Sparkles,
+      iconBg: "bg-amber-500/10 dark:bg-amber-500/20",
+      iconColor: "text-amber-600 dark:text-amber-400",
+    },
+    {
       id: "payments",
       title: "Kết nối SePay (Biến động số dư)",
       description: "Nhận biến động số dư ngân hàng qua SePay Webhook tự động.",

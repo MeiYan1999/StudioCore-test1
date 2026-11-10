@@ -203,7 +203,7 @@ export const PLANS: Plan[] = [
       "In hóa đơn, phiếu thu & VietQR",
     ],
     cta: "Chọn gói Cơ bản",
-    href: "/contact?plan=basic",
+    href: "/manage/settings/billing?plan=basic",
   },
   {
     key: "pro",
@@ -224,7 +224,7 @@ export const PLANS: Plan[] = [
       "Báo cáo phân tích doanh thu chuyên sâu",
     ],
     cta: "Chọn gói Pro (Phổ biến nhất)",
-    href: "/register?plan=pro",
+    href: "/manage/settings/billing?plan=pro",
   },
   {
     key: "business",

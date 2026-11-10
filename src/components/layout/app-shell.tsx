@@ -14,6 +14,7 @@ import {
   Camera,
   ChevronRight,
   ClipboardList,
+  CreditCard,
   DoorOpen,
   FileText,
   HardDrive,
@@ -103,6 +104,7 @@ export type NavIcon =
   | "audit"
   | "studio"
   | "branches"
+  | "billing"
   | "settings";
 
 export type NavItem = {
@@ -170,6 +172,7 @@ const ICONS: Record<NavIcon, LucideIcon> = {
   audit: ScrollText,
   studio: Settings2,
   branches: Building2,
+  billing: CreditCard,
   settings: Settings,
 };
 
@@ -215,6 +218,7 @@ const SEGMENT_LABELS: Record<string, string> = {
   equipment: "Thiết bị",
   contract: "Hợp đồng",
   receipt: "Phiếu thu",
+  billing: "Quản lý gói",
   settings: "Cài đặt",
   users: "Người dùng",
   roles: "Vai trò & quyền",

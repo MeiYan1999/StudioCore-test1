@@ -29,10 +29,39 @@ export const tenants = sqliteTable(
     slug: text("slug").notNull(),
     status: text("status").notNull().default("active"),
     plan: text("plan").notNull().default("trial"),
+    planExpiresAt: integer("plan_expires_at", { mode: "timestamp_ms" }),
     createdAt: createdAtColumn(),
     updatedAt: updatedAtColumn(),
   },
   (table) => [uniqueIndex("tenants_slug_unique").on(table.slug)],
+);
+
+export const platformSubscriptions = sqliteTable(
+  "platform_subscriptions",
+  {
+    id: text("id").primaryKey(),
+    tenantId: text("tenant_id")
+      .notNull()
+      .references(() => tenants.id),
+    plan: text("plan").notNull(),
+    billingCycle: text("billing_cycle").notNull().default("monthly"),
+    amount: integer("amount").notNull(),
+    code: text("code").notNull(),
+    status: text("status").notNull().default("pending"),
+    gateway: text("gateway"),
+    transactionRef: text("transaction_ref"),
+    accountNumber: text("account_number"),
+    content: text("content"),
+    expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
+    paidAt: integer("paid_at", { mode: "timestamp_ms" }),
+    createdAt: createdAtColumn(),
+    updatedAt: updatedAtColumn(),
+  },
+  (table) => [
+    index("platform_subs_tenant_idx").on(table.tenantId),
+    uniqueIndex("platform_subs_code_unique").on(table.code),
+    index("platform_subs_status_idx").on(table.status),
+  ],
 );
 
 export const branches = sqliteTable(

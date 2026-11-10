@@ -172,6 +172,11 @@ export default async function ManageLayout({
         label: "Cài đặt",
         icon: "settings",
       });
+      systemItems.push({
+        href: "/manage/settings/billing",
+        label: "Quản lý gói",
+        icon: "billing",
+      });
     }
 
     if (systemItems.length > 0) {
