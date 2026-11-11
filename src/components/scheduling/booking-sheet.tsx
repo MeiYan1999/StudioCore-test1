@@ -2,7 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarPlus } from "lucide-react";
+import { CalendarPlus, FileText } from "lucide-react";
 import { toast } from "sonner";
 import {
   createAppointmentAction,
@@ -12,6 +12,7 @@ import { initialActionState } from "@/lib/actions/action-state";
 import type { AppointmentDetail } from "@/lib/services/appointment-service";
 import type { AssigneeOption, OrderOption } from "@/lib/services/order-service";
 import type { RoomItem } from "@/lib/services/room-service";
+import type { ServiceItem } from "@/lib/services/catalog-service";
 import { toDateTimeLocalValue } from "@/lib/utils";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -29,6 +30,10 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { SubmitButton } from "@/components/shared/submit-button";
+import {
+  ContractCreateModal,
+  type StudioBankConfig,
+} from "@/components/orders/contract-create-modal";
 
 function FieldError({ id, message }: { id: string; message?: string }) {
   if (!message) return null;
@@ -47,6 +52,7 @@ export function BookingSheet({
   defaultBranchId,
   defaultDate,
   appointment,
+  contractModalProps,
   trigger,
 }: {
   orders: OrderOption[];
@@ -60,6 +66,18 @@ export function BookingSheet({
   defaultBranchId: string;
   defaultDate: string;
   appointment?: AppointmentDetail;
+  contractModalProps?: {
+    branches: { id: string; name: string }[];
+    services?: ServiceItem[];
+    rooms?: RoomItem[];
+    assignees?: {
+      photographers: AssigneeOption[];
+      editors: AssigneeOption[];
+      makeup: AssigneeOption[];
+    };
+    defaultBranchId?: string;
+    studioBankConfig?: StudioBankConfig;
+  };
   trigger?: React.ReactNode;
 }) {
   const isEdit = Boolean(appointment);
@@ -216,7 +234,25 @@ export function BookingSheet({
               <FieldError id="booking-branch-error" message={state.fieldErrors?.branchId} />
             </div>
             <div>
-              <Label htmlFor="booking-order">Đơn hàng</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="booking-order">Đơn hàng</Label>
+                {contractModalProps && !isEdit ? (
+                  <ContractCreateModal
+                    {...contractModalProps}
+                    defaultDate={defaultDate}
+                    defaultBranchId={branchId}
+                    trigger={
+                      <button
+                        type="button"
+                        className="text-[11px] font-semibold text-primary hover:underline flex items-center gap-1"
+                      >
+                        <FileText className="h-3 w-3" />
+                        + Lên hợp đồng mới
+                      </button>
+                    }
+                  />
+                ) : null}
+              </div>
               <Select
                 id="booking-order"
                 name="orderId"
@@ -232,6 +268,27 @@ export function BookingSheet({
                   </option>
                 ))}
               </Select>
+              {branchOrders.length === 0 && !isEdit && contractModalProps && (
+                <div className="mt-2 rounded-lg border border-dashed border-primary/40 bg-primary/5 p-2.5 text-center">
+                  <p className="text-xs text-muted-foreground mb-1.5">
+                    Chưa có đơn hàng nào chờ xếp lịch.
+                  </p>
+                  <ContractCreateModal
+                    {...contractModalProps}
+                    defaultDate={defaultDate}
+                    defaultBranchId={branchId}
+                    trigger={
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground shadow-xs hover:bg-primary/90"
+                      >
+                        <FileText className="h-3.5 w-3.5" />
+                        Lên Hợp Đồng Mới &amp; Xếp Lịch
+                      </button>
+                    }
+                  />
+                </div>
+              )}
               <FieldError id="booking-order-error" message={state.fieldErrors?.orderId} />
             </div>
 

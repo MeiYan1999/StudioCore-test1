@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ReceiptText } from "lucide-react";
+import { FileText, ReceiptText } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,13 +12,16 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { ForbiddenState } from "@/components/shared/forbidden-state";
 import { Money } from "@/components/shared/money";
 import { OrderCreateSheet } from "@/components/orders/order-create-sheet";
+import { ContractCreateModal } from "@/components/orders/contract-create-modal";
 import { hasPermission } from "@/lib/auth/permissions";
 import { requireActor } from "@/lib/auth/session";
 import { getDb } from "@/lib/db/client";
 import { ORDER_STATUSES, ORDER_STATUS_META, isOrderStatus } from "@/lib/orders/status";
-import { listCatalogOptions } from "@/lib/services/catalog-service";
+import { listCatalogOptions, listServices } from "@/lib/services/catalog-service";
 import { listCustomerOptions } from "@/lib/services/customer-service";
 import { listOrders, orderAssigneeOptions, type OrderListItem } from "@/lib/services/order-service";
+import { listRooms } from "@/lib/services/room-service";
+import { getTenantSettings } from "@/lib/services/settings-service";
 
 export const metadata = {
   title: "Đơn hàng",
@@ -72,6 +75,33 @@ export default async function OrdersPage({
   const canManage = hasPermission(actor.permissions, "orders.manage");
   const totalPages = Math.max(1, Math.ceil(result.total / result.pageSize));
   const defaultBranchId = actor.activeBranchId ?? actor.branches[0]?.id ?? "";
+
+  const services = listServices(getDb(), actor);
+  const rooms = listRooms(getDb(), actor);
+  const tenantSettings = getTenantSettings(getDb(), actor.tenantId);
+  const studioBankConfig = {
+    bankBin: tenantSettings["payment.bankBin"] || "970422",
+    bankName: tenantSettings["payment.bankName"] || "MBBank",
+    accountNumber: tenantSettings["payment.bankAccountNumber"] || "",
+    accountName: tenantSettings["payment.bankAccountName"] || actor.tenantName,
+  };
+
+  const createContractModal = canManage ? (
+    <ContractCreateModal
+      branches={actor.branches}
+      services={services}
+      rooms={rooms}
+      assignees={orderAssigneeOptions(getDb(), actor)}
+      defaultBranchId={defaultBranchId}
+      studioBankConfig={studioBankConfig}
+      trigger={
+        <Button variant="primary">
+          <FileText className="h-4 w-4 mr-1.5" />
+          Thêm hợp đồng mới
+        </Button>
+      }
+    />
+  ) : null;
 
   const createSheet = canManage ? (
     <OrderCreateSheet
@@ -163,7 +193,12 @@ export default async function OrdersPage({
       <PageHeader
         title="Đơn hàng"
         description={`${result.total} đơn trong phạm vi xem. Tìm theo mã đơn, tên hoặc SĐT khách.`}
-        actions={createSheet}
+        actions={
+          <div className="flex items-center gap-2">
+            {createContractModal}
+            {createSheet}
+          </div>
+        }
       />
 
       <form

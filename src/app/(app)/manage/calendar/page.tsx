@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CalendarDays, DoorOpen, Plus } from "lucide-react";
+import { CalendarDays, CalendarPlus, DoorOpen, FileText, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { ForbiddenState } from "@/components/shared/forbidden-state";
 import { BookingSheet } from "@/components/scheduling/booking-sheet";
 import { GoogleCalendarSyncDialog } from "@/components/scheduling/google-calendar-sync-dialog";
+import { ContractCreateModal } from "@/components/orders/contract-create-modal";
 import { hasPermission } from "@/lib/auth/permissions";
 import { requireActor } from "@/lib/auth/session";
 import { getDb } from "@/lib/db/client";
@@ -30,6 +31,8 @@ import {
 } from "@/lib/services/appointment-service";
 import { orderAssigneeOptions, listOrderOptions } from "@/lib/services/order-service";
 import { listRooms } from "@/lib/services/room-service";
+import { listServices } from "@/lib/services/catalog-service";
+import { getTenantSettings } from "@/lib/services/settings-service";
 import { cn } from "@/lib/utils";
 
 export const metadata = {
@@ -153,10 +156,29 @@ export default async function CalendarPage({
   const rooms = listRooms(getDb(), actor);
   const assignees = orderAssigneeOptions(getDb(), actor);
   const orders = listOrderOptions(getDb(), actor);
+  const services = listServices(getDb(), actor);
+  const tenantSettings = getTenantSettings(getDb(), actor.tenantId);
   const canManage = hasPermission(actor.permissions, "schedule.manage");
   const defaultBranchId = actor.activeBranchId ?? actor.branches[0]?.id ?? "";
   const feedToken = getOrCreateCalendarFeedToken(getDb(), actor.tenantId);
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://studiocore.io.vn";
+
+  const studioBankConfig = {
+    bankBin: tenantSettings["payment.bankBin"] || "970422",
+    bankName: tenantSettings["payment.bankName"] || "MBBank",
+    accountNumber: tenantSettings["payment.bankAccountNumber"] || "",
+    accountName: tenantSettings["payment.bankAccountName"] || actor.tenantName,
+  };
+
+  const contractModalProps = {
+    branches: actor.branches,
+    services,
+    rooms,
+    assignees,
+    defaultBranchId,
+    studioBankConfig,
+  };
+
   const currentFilters: SearchParams = {
     date: data.dateKey,
     view: data.view,
@@ -182,6 +204,18 @@ export default async function CalendarPage({
               </Button>
             ) : null}
             {canManage ? (
+              <ContractCreateModal
+                {...contractModalProps}
+                defaultDate={data.dateKey}
+                trigger={
+                  <Button variant="primary">
+                    <FileText className="h-4 w-4 mr-1.5" aria-hidden="true" />
+                    Thêm hợp đồng
+                  </Button>
+                }
+              />
+            ) : null}
+            {canManage ? (
               <BookingSheet
                 orders={orders}
                 rooms={rooms}
@@ -189,6 +223,7 @@ export default async function CalendarPage({
                 branches={actor.branches}
                 defaultBranchId={defaultBranchId}
                 defaultDate={data.dateKey}
+                contractModalProps={contractModalProps}
               />
             ) : null}
           </>
@@ -318,23 +353,36 @@ export default async function CalendarPage({
             <EmptyState
               icon={<CalendarDays className="h-6 w-6" aria-hidden="true" />}
               title="Chưa có lịch trong ngày"
-              description="Chọn ngày khác hoặc bấm vào bên dưới để thêm lịch chụp."
+              description="Chọn ngày khác hoặc thêm hợp đồng mới / xếp lịch chụp cho ngày này."
               action={
                 canManage ? (
-                  <BookingSheet
-                    orders={orders}
-                    rooms={rooms}
-                    assignees={assignees}
-                    branches={actor.branches}
-                    defaultBranchId={defaultBranchId}
-                    defaultDate={data.dateKey}
-                    trigger={
-                      <Button size="sm">
-                        <Plus className="mr-1.5 h-4 w-4" />
-                        Xếp lịch ngày này
-                      </Button>
-                    }
-                  />
+                  <div className="flex flex-wrap items-center justify-center gap-2.5">
+                    <ContractCreateModal
+                      {...contractModalProps}
+                      defaultDate={data.dateKey}
+                      trigger={
+                        <Button size="sm" variant="primary">
+                          <FileText className="mr-1.5 h-4 w-4" />
+                          + Thêm hợp đồng mới
+                        </Button>
+                      }
+                    />
+                    <BookingSheet
+                      orders={orders}
+                      rooms={rooms}
+                      assignees={assignees}
+                      branches={actor.branches}
+                      defaultBranchId={defaultBranchId}
+                      defaultDate={data.dateKey}
+                      contractModalProps={contractModalProps}
+                      trigger={
+                        <Button size="sm" variant="outline">
+                          <CalendarPlus className="mr-1.5 h-4 w-4" />
+                          Xếp lịch đơn có sẵn
+                        </Button>
+                      }
+                    />
+                  </div>
                 ) : undefined
               }
             />
@@ -344,7 +392,17 @@ export default async function CalendarPage({
                 <EventCard key={appointment.id} appointment={appointment} />
               ))}
               {canManage ? (
-                <div className="pt-2">
+                <div className="pt-2 flex items-center gap-2">
+                  <ContractCreateModal
+                    {...contractModalProps}
+                    defaultDate={data.dateKey}
+                    trigger={
+                      <Button variant="primary" size="sm" className="gap-1.5">
+                        <FileText className="h-4 w-4" />
+                        + Thêm hợp đồng ngày này
+                      </Button>
+                    }
+                  />
                   <BookingSheet
                     orders={orders}
                     rooms={rooms}
@@ -352,10 +410,11 @@ export default async function CalendarPage({
                     branches={actor.branches}
                     defaultBranchId={defaultBranchId}
                     defaultDate={data.dateKey}
+                    contractModalProps={contractModalProps}
                     trigger={
                       <Button variant="outline" size="sm" className="gap-1.5">
-                        <Plus className="h-4 w-4" />
-                        Thêm lịch chụp trong ngày
+                        <CalendarPlus className="h-4 w-4" />
+                        Xếp lịch đơn có sẵn
                       </Button>
                     }
                   />
@@ -383,18 +442,14 @@ export default async function CalendarPage({
                       <span className="tabular-nums">{day.label.slice(0, 5)}</span>
                     </div>
                     {canManage ? (
-                      <BookingSheet
-                        orders={orders}
-                        rooms={rooms}
-                        assignees={assignees}
-                        branches={actor.branches}
-                        defaultBranchId={defaultBranchId}
+                      <ContractCreateModal
+                        {...contractModalProps}
                         defaultDate={day.dateKey}
                         trigger={
                           <button
                             type="button"
-                            className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-surface hover:text-foreground transition-colors"
-                            title={`Thêm lịch ngày ${day.label}`}
+                            className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-surface hover:text-primary transition-colors"
+                            title={`Thêm hợp đồng ngày ${day.label}`}
                           >
                             <Plus className="h-3.5 w-3.5" />
                           </button>
@@ -405,23 +460,39 @@ export default async function CalendarPage({
                   <div className="space-y-2">
                     {day.appointments.length === 0 ? (
                       canManage ? (
-                        <BookingSheet
-                          orders={orders}
-                          rooms={rooms}
-                          assignees={assignees}
-                          branches={actor.branches}
-                          defaultBranchId={defaultBranchId}
-                          defaultDate={day.dateKey}
-                          trigger={
-                            <button
-                              type="button"
-                              className="w-full flex flex-col items-center justify-center gap-1 py-8 rounded-lg border border-dashed border-border/80 text-xs text-muted-foreground hover:border-primary/50 hover:bg-primary/5 hover:text-primary transition-all group"
-                            >
-                              <Plus className="h-4 w-4 group-hover:scale-125 transition-transform" />
-                              <span>+ Thêm lịch</span>
-                            </button>
-                          }
-                        />
+                        <div className="flex flex-col gap-1.5 rounded-lg border border-dashed border-border/80 p-3 text-center">
+                          <ContractCreateModal
+                            {...contractModalProps}
+                            defaultDate={day.dateKey}
+                            trigger={
+                              <button
+                                type="button"
+                                className="w-full flex items-center justify-center gap-1.5 py-2 rounded-md bg-primary/10 text-xs font-semibold text-primary hover:bg-primary hover:text-primary-foreground transition-all shadow-2xs"
+                              >
+                                <FileText className="h-3.5 w-3.5" />
+                                <span>+ Thêm hợp đồng</span>
+                              </button>
+                            }
+                          />
+                          <BookingSheet
+                            orders={orders}
+                            rooms={rooms}
+                            assignees={assignees}
+                            branches={actor.branches}
+                            defaultBranchId={defaultBranchId}
+                            defaultDate={day.dateKey}
+                            contractModalProps={contractModalProps}
+                            trigger={
+                              <button
+                                type="button"
+                                className="w-full flex items-center justify-center gap-1 py-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                              >
+                                <CalendarPlus className="h-3 w-3" />
+                                <span>Xếp lịch đơn có sẵn</span>
+                              </button>
+                            }
+                          />
+                        </div>
                       ) : (
                         <p className="px-1 text-xs text-muted-foreground">Trống</p>
                       )
@@ -433,7 +504,20 @@ export default async function CalendarPage({
                   </div>
                 </div>
                 {canManage && day.appointments.length > 0 ? (
-                  <div className="pt-2">
+                  <div className="pt-2 flex items-center gap-1">
+                    <ContractCreateModal
+                      {...contractModalProps}
+                      defaultDate={day.dateKey}
+                      trigger={
+                        <button
+                          type="button"
+                          className="flex-1 py-1 rounded border border-border/80 text-[11px] font-medium text-muted-foreground hover:border-primary/50 hover:text-primary flex items-center justify-center gap-1 transition-all"
+                        >
+                          <FileText className="h-3 w-3" />
+                          <span>+ HĐ</span>
+                        </button>
+                      }
+                    />
                     <BookingSheet
                       orders={orders}
                       rooms={rooms}
@@ -441,12 +525,14 @@ export default async function CalendarPage({
                       branches={actor.branches}
                       defaultBranchId={defaultBranchId}
                       defaultDate={day.dateKey}
+                      contractModalProps={contractModalProps}
                       trigger={
                         <button
                           type="button"
-                          className="w-full py-1 rounded border border-dashed border-border/60 text-[11px] text-muted-foreground hover:border-primary/40 hover:text-primary flex items-center justify-center gap-1 transition-colors"
+                          className="flex-1 py-1 rounded border border-border/80 text-[11px] font-medium text-muted-foreground hover:border-primary/50 hover:text-primary flex items-center justify-center gap-1 transition-all"
                         >
-                          <Plus className="h-3 w-3" /> Thêm lịch
+                          <CalendarPlus className="h-3 w-3" />
+                          <span>+ Lịch</span>
                         </button>
                       }
                     />
@@ -485,18 +571,14 @@ export default async function CalendarPage({
                     {day.dateKey.slice(8)}
                   </Link>
                   {canManage ? (
-                    <BookingSheet
-                      orders={orders}
-                      rooms={rooms}
-                      assignees={assignees}
-                      branches={actor.branches}
-                      defaultBranchId={defaultBranchId}
+                    <ContractCreateModal
+                      {...contractModalProps}
                       defaultDate={day.dateKey}
                       trigger={
                         <button
                           type="button"
                           className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground opacity-70 hover:opacity-100 hover:bg-surface hover:text-primary transition-all sm:opacity-0 sm:group-hover:opacity-100"
-                          title={`Thêm lịch ngày ${day.dateKey}`}
+                          title={`Thêm hợp đồng ngày ${day.dateKey}`}
                         >
                           <Plus className="h-3.5 w-3.5" />
                         </button>
