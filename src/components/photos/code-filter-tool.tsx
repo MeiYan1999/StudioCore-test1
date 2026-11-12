@@ -947,13 +947,65 @@ export function CodeFilterTool({
             );
 
             if (!skip) {
-              // 1. Tạo file trên thư mục đích và mở writable stream (chuẩn s2.io.vn)
+              // A. LẤY FILE NGUỒN VÀ NẠP THẲNG VÀO BỘ ĐỆM RAM (TRÁNH LỖI NOTFOUNDERROR CỦA CHROMIUM)
+              let fileObj: File | null = null;
+              try {
+                if (sourceFile.relativePath && sourceFile.relativePath !== sourceFile.name) {
+                  fileObj = await readFileFromDirectory(inputHandle, sourceFile.relativePath);
+                } else {
+                  const fh = await inputHandle.getFileHandle(sourceFile.name);
+                  fileObj = await fh.getFile();
+                }
+              } catch {
+                if (
+                  sourceFile.fileHandle &&
+                  typeof (sourceFile.fileHandle as FileHandleLike).getFile === "function"
+                ) {
+                  try {
+                    fileObj = await (sourceFile.fileHandle as FileHandleLike).getFile();
+                  } catch {
+                    fileObj = null;
+                  }
+                }
+              }
+
+              if (!fileObj) {
+                try {
+                  fileObj = await readFileFromDirectory(inputHandle, sourceFile.name);
+                } catch {
+                  fileObj = sourceFile.file ?? null;
+                }
+              }
+
+              if (!fileObj) {
+                throw new Error(`Không tìm thấy file nguồn "${sourceFile.name}".`);
+              }
+
+              // Nạp dữ liệu vào RAM -> độc lập 100% với file trên ổ đĩa
+              const arrayBuffer = await fileObj.arrayBuffer();
+              const memBlob = new Blob([arrayBuffer], {
+                type: fileObj.type || "application/octet-stream",
+              });
+
+              // B. MỞ THƯ MỤC ĐÍCH TƯƠI MỚI VÀ GHI FILE
+              let activeDestDir = targetDir;
+              if (!outputHandle) {
+                try {
+                  activeDestDir = await inputHandle.getDirectoryHandle(
+                    sanitizeFolderName(subfolderName.trim()) || "Ảnh Khách Chọn",
+                    { create: true },
+                  );
+                } catch {
+                  activeDestDir = targetDir;
+                }
+              }
+
               let destFileHandle: FileHandleLike;
               try {
-                destFileHandle = await targetDir.getFileHandle(destName, { create: true });
+                destFileHandle = await activeDestDir.getFileHandle(destName, { create: true });
               } catch {
                 const { stem, extension } = splitFilename(destName);
-                destFileHandle = await targetDir.getFileHandle(`${stem}_copy${extension}`, { create: true });
+                destFileHandle = await activeDestDir.getFileHandle(`${stem}_copy${extension}`, { create: true });
               }
 
               if (!destFileHandle.createWritable) {
@@ -962,50 +1014,10 @@ export function CodeFilterTool({
               const writable = await destFileHandle.createWritable({ keepExistingData: false });
 
               try {
-                // 2. Lấy dữ liệu file nguồn
-                let fileBlob: Blob | File | null = null;
-                if (
-                  sourceFile.fileHandle &&
-                  typeof (sourceFile.fileHandle as FileHandleLike).getFile === "function"
-                ) {
-                  try {
-                    fileBlob = await (sourceFile.fileHandle as FileHandleLike).getFile();
-                  } catch {
-                    fileBlob = null;
-                  }
-                }
-
-                if (!fileBlob) {
-                  try {
-                    fileBlob = await readFileFromDirectory(inputHandle, sourceFile.relativePath);
-                  } catch {
-                    fileBlob = null;
-                  }
-                }
-
-                if (!fileBlob) {
-                  try {
-                    fileBlob = await readFileFromDirectory(inputHandle, sourceFile.name);
-                  } catch {
-                    fileBlob = sourceFile.file ?? null;
-                  }
-                }
-
-                if (!fileBlob) {
-                  throw new Error(`Không thể đọc file "${sourceFile.name}" từ thư mục nguồn.`);
-                }
-
-                // 3. Ghi dữ liệu file nguồn vào writable stream (chuẩn s2.io.vn, có RAM blob fallback)
-                try {
-                  await writable.write(fileBlob);
-                } catch {
-                  const buffer = await fileBlob.arrayBuffer();
-                  const memBlob = new Blob([buffer], { type: fileBlob.type || "application/octet-stream" });
-                  await writable.write(memBlob);
-                }
+                await writable.write(memBlob);
                 await writable.close();
 
-                // 4. Nếu chọn chế độ Chuyển (Move) như s2.io.vn:
+                // Nếu chọn chế độ Chuyển (Move)
                 if (filterAction === "move" && inputHandle.removeEntry) {
                   try {
                     await inputHandle.removeEntry(sourceFile.name);
@@ -1020,7 +1032,7 @@ export function CodeFilterTool({
                   filename: destName,
                   relativePath: sourceFile.relativePath,
                   status: "matched",
-                  message: task.resolutionNote || (filterAction === "move" ? "Đã chuyển" : "Đã chép"),
+                  message: task.resolutionNote || (filterAction === "move" ? "Đã chuyển" : "Đã lọc"),
                 });
               } catch (writeErr: unknown) {
                 try {
@@ -1517,162 +1529,58 @@ export function CodeFilterTool({
               className="hidden"
             />
 
-            {/* Box: CHỌN THƯ MỤC NGUỒN VÀ ĐÍCH (Chuẩn s2.io.vn) */}
-            <div className="rounded-xl border border-border/80 bg-muted/20 p-4 space-y-3">
+            {/* Box: THƯ MỤC ẢNH VÀ ĐÍCH ĐẾN (1-CLICK TỰ ĐỘNG) */}
+            <div className="rounded-xl border border-border/80 bg-muted/20 p-4 space-y-3.5">
               <div className="flex items-center justify-between">
                 <div className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase flex items-center gap-1.5">
-                  <span>THƯ MỤC NGUỒN & THƯ MỤC ĐÍCH</span>
+                  <span>THƯ MỤC ẢNH TRÊN MÁY TÍNH</span>
                 </div>
-                <Badge tone="info" className="text-[10px]">
-                  Chuẩn S2 File System
-                </Badge>
+                {inputFolderName && (
+                  <Badge tone="info" className="text-[10px]">
+                    {scannedFiles.length} file ảnh
+                  </Badge>
+                )}
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-stretch">
-                {/* 1. Thư mục Nguồn */}
-                <div className="flex flex-col justify-between p-3.5 rounded-xl border border-border bg-background space-y-2.5 shadow-2xs">
-                  <div>
-                    <div className="flex items-center justify-between text-xs font-semibold text-foreground">
-                      <span className="flex items-center gap-1">
-                        <span>📁</span>
-                        <span>1. Thư mục Nguồn (Ảnh gốc)</span>
-                      </span>
-                      {inputFolderName && (
-                        <span className="text-[10px] font-mono text-blue-600 bg-blue-50 dark:bg-blue-950 px-1.5 py-0.5 rounded">
-                          {scannedFiles.length} file
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-[11px] text-muted-foreground mt-1 truncate">
-                      {isScanning
-                        ? statusMessage || "Đang quét..."
-                        : inputFolderName
-                          ? inputFolderName
-                          : "<Chưa chọn thư mục nguồn>"}
-                    </p>
-                  </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={() => void chooseInputDirectory()}
-                    className="rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold gap-1.5 w-full shadow-2xs"
-                  >
-                    <FolderOpen className="h-3.5 w-3.5" />
-                    <span>{inputFolderName ? "Đổi thư mục nguồn" : "Chọn thư mục nguồn"}</span>
-                  </Button>
-                </div>
+              {/* Nút chọn thư mục duy nhất */}
+              <div className="space-y-2">
+                <Button
+                  type="button"
+                  size="default"
+                  onClick={() => void chooseInputDirectory()}
+                  className="rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs md:text-sm font-semibold px-4 py-2.5 gap-2 shadow-2xs w-full sm:w-auto"
+                >
+                  <FolderOpen className="h-4 w-4" />
+                  <span>{inputFolderName ? "Đổi thư mục ảnh khác" : "Chọn thư mục ảnh từ máy tính"}</span>
+                </Button>
 
-                {/* 2. Thư mục Đích */}
-                <div className="flex flex-col justify-between p-3.5 rounded-xl border border-border bg-background space-y-2.5 shadow-2xs">
-                  <div>
-                    <div className="flex items-center justify-between text-xs font-semibold text-foreground">
-                      <span className="flex items-center gap-1">
-                        <span>📂</span>
-                        <span>2. Thư mục Đích (Lưu ảnh lọc)</span>
-                      </span>
-                      {outputFolderName ? (
-                        <span className="text-[10px] font-mono text-emerald-600 bg-emerald-50 dark:bg-emerald-950 px-1.5 py-0.5 rounded">
-                          Đích riêng
-                        </span>
-                      ) : (
-                        <span className="text-[10px] font-mono text-amber-600 bg-amber-50 dark:bg-amber-950 px-1.5 py-0.5 rounded">
-                          Thư mục con
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-[11px] text-muted-foreground mt-1 truncate">
-                      {outputFolderName
-                        ? outputFolderName
-                        : `Thư mục con: "${subfolderName}"`}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={() => void chooseOutputDirectory()}
-                      className="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold gap-1.5 flex-1 shadow-2xs"
-                    >
-                      <FolderCheck className="h-3.5 w-3.5" />
-                      <span>{outputFolderName ? "Đổi thư mục đích" : "Chọn thư mục đích (Khuyên dùng)"}</span>
-                    </Button>
-                    {outputFolderName && (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={clearOutputDirectory}
-                        className="rounded-lg text-xs px-2.5 h-8"
-                        title="Bỏ thư mục đích riêng để dùng thư mục con"
-                      >
-                        <X className="h-3.5 w-3.5 text-muted-foreground" />
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Tuỳ chọn tạo thư mục con nếu chưa chọn thư mục đích riêng */}
-              {!outputHandle && (
-                <div className="pt-2 border-t border-border/50">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={createSubfolder}
-                      onChange={(e) => setCreateSubfolder(e.target.checked)}
-                      className="h-3.5 w-3.5 rounded border-border text-blue-600 focus:ring-blue-500"
-                    />
-                    <span className="text-xs text-muted-foreground">
-                      Tự động gom vào thư mục con:
+                <p className="text-xs text-muted-foreground truncate">
+                  {isScanning ? (
+                    <span className="text-blue-600 dark:text-blue-400 font-medium animate-pulse">
+                      {statusMessage || "Đang quét ảnh..."}
                     </span>
-                    <Input
-                      type="text"
-                      value={subfolderName}
-                      onChange={(e) => setSubfolderName(e.target.value)}
-                      className="h-7 text-xs max-w-[160px]"
-                      placeholder="Ảnh Khách Chọn"
-                      disabled={!createSubfolder}
-                    />
-                  </label>
-                </div>
-              )}
-            </div>
-
-            {/* Chế độ thao tác (Chép / Chuyển - Chuẩn s2.io.vn) */}
-            <div className="rounded-xl border border-border/80 bg-muted/20 p-3.5 space-y-2">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs font-semibold text-foreground">
-                  Thao tác xử lý file:
-                </Label>
-                <span className="text-[11px] text-muted-foreground">
-                  {filterAction === "copy" ? "Giữ nguyên file gốc" : "Ảnh gốc sẽ bị xoá sau khi copy"}
-                </span>
+                  ) : inputFolderName ? (
+                    <span className="font-medium text-foreground">
+                      📁 Thư mục đang chọn: <span className="text-blue-600 dark:text-blue-400 font-semibold">{inputFolderName}</span> ({scannedFiles.length} file)
+                    </span>
+                  ) : (
+                    "Chưa chọn thư mục nào. Bấm nút trên để chọn thư mục ảnh chụp từ thẻ nhớ hoặc ổ cứng."
+                  )}
+                </p>
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setFilterAction("copy")}
-                  className={`flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold transition-all ${
-                    filterAction === "copy"
-                      ? "bg-blue-600 text-white shadow-2xs"
-                      : "border border-border bg-background text-foreground hover:bg-muted"
-                  }`}
-                >
-                  <Copy className="h-3.5 w-3.5" />
-                  <span>Chép (Copy ảnh)</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFilterAction("move")}
-                  className={`flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold transition-all ${
-                    filterAction === "move"
-                      ? "bg-amber-600 text-white shadow-2xs"
-                      : "border border-border bg-background text-foreground hover:bg-muted"
-                  }`}
-                >
-                  <Scissors className="h-3.5 w-3.5" />
-                  <span>Chuyển (Move ảnh)</span>
-                </button>
+
+              {/* Tự động 1-click tạo folder và gom ảnh */}
+              <div className="pt-2.5 border-t border-border/50 space-y-1.5 text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />
+                  <span className="text-muted-foreground">Tự động tạo folder và lưu vào:</span>
+                  <span className="font-semibold text-foreground bg-background px-2.5 py-0.5 rounded-md border border-border/80 font-mono text-[11px] text-emerald-700 dark:text-emerald-400">
+                    📁 {subfolderName || "Ảnh Khách Chọn"}
+                  </span>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  (Hệ thống tự động tạo folder này bên trong thư mục ảnh, không cần bạn phải tạo hay trỏ tay)
+                </p>
               </div>
             </div>
 
@@ -1755,22 +1663,10 @@ export function CodeFilterTool({
                 type="button"
                 onClick={() => void handleStartFiltering()}
                 disabled={parsed.valid.length === 0}
-                className={`w-full rounded-xl py-3.5 md:py-4 text-sm md:text-base font-bold text-white shadow-md disabled:bg-slate-200 disabled:text-slate-400 dark:disabled:bg-slate-800 dark:disabled:text-slate-600 gap-2 cursor-pointer transition-all ${
-                  filterAction === "move"
-                    ? "bg-amber-600 hover:bg-amber-700"
-                    : "bg-blue-600 hover:bg-blue-700"
-                }`}
+                className="w-full rounded-xl py-3.5 md:py-4 text-sm md:text-base font-bold text-white shadow-md bg-blue-600 hover:bg-blue-700 disabled:bg-slate-200 disabled:text-slate-400 dark:disabled:bg-slate-800 dark:disabled:text-slate-600 gap-2 cursor-pointer transition-all"
               >
-                {filterAction === "move" ? (
-                  <Scissors className="h-4 w-4" />
-                ) : (
-                  <Play className="h-4 w-4 fill-current" />
-                )}
-                <span>
-                  {filterAction === "move"
-                    ? "BẮT ĐẦU CHUYỂN ẢNH TỪ MÁY TÍNH"
-                    : "BẮT ĐẦU CHÉP ẢNH TỪ MÁY TÍNH"}
-                </span>
+                <Play className="h-4 w-4 fill-current" />
+                <span>BẮT ĐẦU LỌC ẢNH VÀO FOLDER "ẢNH KHÁCH CHỌN"</span>
               </Button>
             )}
           </div>
