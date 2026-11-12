@@ -9,6 +9,7 @@ import {
   like,
   ne,
   or,
+  sql,
   type SQL,
 } from "drizzle-orm";
 import type { AppDb } from "../db/client";
@@ -990,6 +991,8 @@ export function recordOrderPayment(
     paidAt: string;
   },
 ): string {
+  const inboxBooking = db.get(sql`SELECT id FROM inbox_bookings WHERE order_id=${orderId} AND tenant_id=${actor.tenantId}`);
+  if (inboxBooking && !actor.permissions.includes("finance.manage")) throw new AuthorizationError("Cần quyền xác nhận cọc tài chính.");
   if (!canRecordPayment(actor)) {
     throw new AuthorizationError("Bạn không có quyền ghi nhận thanh toán.");
   }
@@ -1085,6 +1088,8 @@ export function recordOrderPayment(
       })
       .where(and(eq(orders.id, orderId), eq(orders.tenantId, actor.tenantId)))
       .run();
+
+    tx.run(sql`UPDATE inbox_bookings SET status='confirmed' WHERE order_id=${orderId} AND tenant_id=${actor.tenantId} AND status='held' AND expires_at>${Date.now()} AND (SELECT paid >= deposit FROM orders WHERE id=${orderId})`);
 
     if (statusAfter !== order.status) {
       tx.insert(orderStatusHistory)

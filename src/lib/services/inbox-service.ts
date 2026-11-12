@@ -5,6 +5,7 @@ import {
   aiJobs,
   branches,
   conversations,
+  facebookThreads,
   customers,
   messages,
   staff,
@@ -55,6 +56,9 @@ export function listConversations(
   const conditions: SQL[] = [eq(conversations.tenantId, actor.tenantId)];
   if (scope.mode === "branch") {
     conditions.push(eq(conversations.branchId, scope.branchId));
+  }
+  if (actor.role !== "owner") {
+    conditions.push(sql`(NOT EXISTS (SELECT 1 FROM facebook_threads f WHERE f.conversation_id=${conversations.id}) OR ${conversations.assignedTo}=${actor.staffId})`);
   }
   if (filters.status && (CONVERSATION_STATUSES as readonly string[]).includes(filters.status)) {
     conditions.push(eq(conversations.status, filters.status));
@@ -194,6 +198,9 @@ function requireConversation(
     .get();
   if (!row) throw new NotFoundError("Không tìm thấy hội thoại.");
   assertBranchAccess(actor, row.branchId);
+  const facebook = db.select().from(facebookThreads).where(eq(facebookThreads.conversationId, row.id)).get();
+  if (facebook && actor.role !== "owner" && row.assignedTo !== actor.staffId) throw new ValidationError("Hội thoại chưa được phân công cho bạn.");
+  if (actor.readOnly) throw new ValidationError("Tài khoản chỉ đọc.");
   return row;
 }
 
@@ -205,6 +212,7 @@ export function sendMessage(
 ): void {
   assertPermission(actor, "customers.manage");
   const conversation = requireConversation(db, actor, conversationId);
+  if (db.select().from(facebookThreads).where(eq(facebookThreads.conversationId, conversationId)).get()) throw new ValidationError("Vui lòng gửi qua kết nối Messenger tại Inbox.");
   if (!content.trim()) throw new ValidationError("Nội dung tin nhắn là bắt buộc.");
   if (content.length > 4000) throw new ValidationError("Tin nhắn quá dài.");
   const now = new Date();
@@ -357,6 +365,7 @@ export function simulateInboundMessage(
 ): { reply: string | null; handoff: boolean } {
   assertPermission(actor, "customers.manage");
   const conversation = requireConversation(db, actor, conversationId);
+  if (db.select().from(facebookThreads).where(eq(facebookThreads.conversationId, conversationId)).get()) throw new ValidationError("Không mô phỏng tin vào hội thoại Facebook thật.");
   if (!content.trim()) throw new ValidationError("Nội dung tin đến là bắt buộc.");
   const now = new Date();
   db.insert(messages)

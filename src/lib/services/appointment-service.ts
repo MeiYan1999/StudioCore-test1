@@ -1,3 +1,4 @@
+import { expireHolds } from '../omnichannel/booking';
 import {
   and,
   asc,
@@ -1153,6 +1154,7 @@ export function getCalendarData(
   actor: ActorContext,
   filters: AppointmentListFilters,
 ): CalendarData {
+  expireHolds(db);
   assertPermission(actor, "schedule.view");
   const todayKey = getTodayKey();
   const dateKey = /^\d{4}-\d{2}-\d{2}$/.test(filters.date) ? filters.date : todayKey;

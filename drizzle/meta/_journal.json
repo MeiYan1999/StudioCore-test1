@@ -64,6 +64,13 @@
       "when": 1794307104329,
       "tag": "0008_complete_praxagora",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1794409899451,
+      "tag": "0009_misty_gunslinger",
+      "breakpoints": true
     }
   ]
 }

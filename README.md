@@ -162,3 +162,7 @@ Các adapter live được lazy-init; thiếu cấu hình sẽ hiển thị “c
 - PDF server-side chính thức chưa làm; hợp đồng/phiếu thu dùng print-to-PDF của trình duyệt.
 - SQLite WAL là runtime demo; PostgreSQL là production path thiết kế, chưa test.
 
+
+## Facebook Inbox và đặt lịch
+
+Hướng dẫn migration, chạy local, kết nối Meta App, phân quyền, giữ chỗ và nghiệm thu nằm tại [Facebook Inbox](docs/facebook-inbox.md).

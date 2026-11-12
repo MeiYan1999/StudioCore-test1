@@ -15,6 +15,7 @@ const TEST_BRANCH = "branch-contract-test";
 const TEST_STAFF = "staff-contract-test";
 
 const testActor: ActorContext = {
+  sessionId: "test-session", tenantSlug: "studio-test", tenantPlan: "pro", staffCode: "NV001", staffEmail: null, readOnly: false,
   staffId: TEST_STAFF,
   staffName: "Test Manager",
   tenantId: TEST_TENANT,
@@ -43,7 +44,6 @@ beforeAll(() => {
       id: TEST_BRANCH,
       tenantId: TEST_TENANT,
       name: "Chi nhánh chính",
-      slug: "chi-nhanh-chinh",
       address: "123 Đường Test",
       phone: "0900000001",
     })
@@ -57,7 +57,7 @@ beforeAll(() => {
       name: "Test Manager",
       email: "manager@test.com",
       role: "manager",
-      status: "active",
+      active: true,
       passwordHash: "hash",
     })
     .run();

@@ -1671,3 +1671,91 @@ export const contactRequests = sqliteTable(
 );
 
 export type ContactRequest = typeof contactRequests.$inferSelect;
+
+
+// Facebook transport metadata is separate so existing local conversations remain readable.
+export const facebookPages = sqliteTable("facebook_pages", {
+  id: text("id").primaryKey(),
+  tenantId: text("tenant_id").notNull().references(() => tenants.id),
+  branchId: text("branch_id").notNull().references(() => branches.id),
+  name: text("name").notNull(),
+  avatar: text("avatar"),
+  token: text("token"),
+  status: text("status").notNull().default("pending"),
+  lastEventAt: integer("last_event_at"),
+});
+export const facebookThreads = sqliteTable("facebook_threads", {
+  conversationId: text("conversation_id").primaryKey().references(() => conversations.id),
+  pageId: text("page_id").notNull().references(() => facebookPages.id),
+  psid: text("psid").notNull(),
+  lastInboundAt: integer("last_inbound_at").notNull().default(0),
+  readAt: integer("read_at").notNull().default(0),
+  label: text("label").notNull().default("Khách mới"),
+}, t => [uniqueIndex("facebook_page_psid").on(t.pageId, t.psid)]);
+export const facebookDeliveries = sqliteTable("facebook_deliveries", {
+  id: text("id").primaryKey(),
+  conversationId: text("conversation_id").notNull().references(() => conversations.id),
+  messageId: text("message_id"),
+  status: text("status").notNull(),
+  error: text("error"),
+  attachment: text("attachment"),
+}, t => [uniqueIndex("facebook_message_mid").on(t.messageId)]);
+export const facebookOauth = sqliteTable("facebook_oauth", {
+  state: text("state").primaryKey(),
+  sessionId: text("session_id").notNull(),
+  tenantId: text("tenant_id").notNull(),
+  branchId: text("branch_id").notNull(),
+  expiresAt: integer("expires_at").notNull(),
+});
+export const bookingOffers = sqliteTable("booking_offers", {
+  serviceId: text("service_id").primaryKey().references(() => services.id),
+  tenantId: text("tenant_id").notNull().references(() => tenants.id),
+  roomId: text("room_id").references(() => rooms.id),
+  photographerId: text("photographer_id").references(() => staff.id),
+  opens: integer("opens").notNull().default(540),
+  closes: integer("closes").notNull().default(1080),
+  closedDays: text("closed_days").notNull().default("0"),
+  holidays: text("holidays").notNull().default(""),
+  buffer: integer("buffer").notNull().default(30),
+  holdMinutes: integer("hold_minutes").notNull().default(30),
+  deposit: integer("deposit").notNull().default(0),
+  createdBy: text("created_by").notNull().references(() => staff.id),
+  active: integer("active").notNull().default(1),
+});
+export const bookingLinks = sqliteTable("booking_links", {
+  tokenHash: text("token_hash").primaryKey(),
+  conversationId: text("conversation_id").notNull().references(() => conversations.id),
+  serviceId: text("service_id").notNull().references(() => services.id),
+  expiresAt: integer("expires_at").notNull(),
+  bookingId: text("booking_id"),
+});
+export const inboxBookings = sqliteTable("inbox_bookings", {
+  id: text("id").primaryKey(),
+  tenantId: text("tenant_id").notNull().references(() => tenants.id),
+  conversationId: text("conversation_id").references(() => conversations.id),
+  pageId: text("page_id").references(() => facebookPages.id),
+  serviceId: text("service_id").notNull().references(() => services.id),
+  orderId: text("order_id").notNull().references(() => orders.id),
+  appointmentId: text("appointment_id").notNull().references(() => appointments.id),
+  status: text("status").notNull().default("held"),
+  expiresAt: integer("expires_at").notNull(),
+  source: text("source").notNull(),
+  requestKey: text("request_key").notNull(),
+}, t => [uniqueIndex("inbox_booking_request").on(t.tenantId, t.requestKey), uniqueIndex("inbox_booking_appointment").on(t.appointmentId)]);
+export const inboxReceipts = sqliteTable("inbox_receipts", {
+  key: text("key").primaryKey(),
+  bookingId: text("booking_id").notNull().references(() => inboxBookings.id),
+  paymentId: text("payment_id").notNull(),
+});
+export const inboxNotes = sqliteTable("inbox_notes", {
+  id: text("id").primaryKey(),
+  conversationId: text("conversation_id").notNull().references(() => conversations.id),
+  staffId: text("staff_id").notNull().references(() => staff.id),
+  content: text("content").notNull(),
+  createdAt: integer("created_at").notNull(),
+});
+export const inboxReplies = sqliteTable("inbox_replies", {
+  id: text("id").primaryKey(),
+  tenantId: text("tenant_id").notNull().references(() => tenants.id),
+  content: text("content").notNull(),
+});

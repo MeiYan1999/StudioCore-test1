@@ -56,6 +56,7 @@ export default async function SettingsHubPage() {
   }
 
   const categories: SettingCategoryItem[] = [
+    { id: "facebook", title: "Kênh bán hàng · Facebook", description: "Kết nối Fanpage, Inbox và cấu hình đặt lịch công khai.", href: "/manage/settings/facebook", icon: Building, iconBg: "bg-primary/10", iconColor: "text-primary" },
     {
       id: "studio",
       title: "Thông tin Studio",
