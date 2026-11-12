@@ -4,6 +4,7 @@ import {
   buildMissingText,
   fileCategory,
   fileMatchesType,
+  isOutputOrIgnoredDirectory,
   matchCodesToFiles,
   parseCustomerCodes,
   suggestSimilarAlbumCodes,
@@ -139,5 +140,87 @@ describe("so khớp file", () => {
     expect(manifest).toContain("input_code,filename");
     expect(manifest).toContain("duoi-ca/anh-001.jpg");
     expect(buildMissingText([{ inputCode: "ANH-999" }])).toBe("ANH-999");
+  });
+
+  it("nhận diện đúng định dạng RAW hiện đại (Canon CR3, RW2, ORF, v.v.)", () => {
+    expect(fileCategory("SAM00013.CR3")).toBe("raw");
+    expect(fileCategory("SAM00013.cr3")).toBe("raw");
+    expect(fileCategory("P1010001.RW2")).toBe("raw");
+    expect(fileCategory("PA120001.ORF")).toBe("raw");
+    expect(fileCategory("DSC_0001.NEF")).toBe("raw");
+    expect(fileCategory("DSC0001.ARW")).toBe("raw");
+    expect(fileCategory("SAM00013.JPG")).toBe("standard");
+    expect(fileCategory("SAM00013.png")).toBe("standard");
+    expect(fileCategory("SAM00013.heic")).toBe("standard");
+  });
+
+  it("bỏ qua thư mục xuất ảnh / khách chọn để tránh đệ quy quét trùng", () => {
+    expect(isOutputOrIgnoredDirectory("Ảnh Khách Chọn")).toBe(true);
+    expect(isOutputOrIgnoredDirectory("Ảnh Khách Chọnđ")).toBe(true);
+    expect(isOutputOrIgnoredDirectory("Anh Khach Chon")).toBe(true);
+    expect(isOutputOrIgnoredDirectory("Ảnh Đã Lọc")).toBe(true);
+    expect(isOutputOrIgnoredDirectory("Export")).toBe(true);
+    expect(isOutputOrIgnoredDirectory("Selected")).toBe(true);
+    expect(isOutputOrIgnoredDirectory(".hidden")).toBe(true);
+
+    expect(isOutputOrIgnoredDirectory("le-gia-tien")).toBe(false);
+    expect(isOutputOrIgnoredDirectory("duoi-ca")).toBe(false);
+    expect(isOutputOrIgnoredDirectory("1-11 GV Nguyễn Ngọc Triệu 15h30")).toBe(false);
+  });
+
+  it("ưu tiên khớp chính xác tên file có đuôi và bỏ qua file trong thư mục output", () => {
+    const testFiles: FilterFileEntry[] = [
+      {
+        name: "SAM00013.JPG",
+        relativePath: "SAM00013.JPG",
+        size: 5000,
+        lastModified: 0,
+        category: "standard",
+      },
+      {
+        name: "SAM00013.JPG",
+        relativePath: "Ảnh Khách Chọn/SAM00013.JPG",
+        size: 5000,
+        lastModified: 0,
+        category: "standard",
+      },
+      {
+        name: "SAM00013.CR3",
+        relativePath: "SAM00013.CR3",
+        size: 25000,
+        lastModified: 0,
+        category: "raw",
+      },
+    ];
+
+    // Người dùng nhập SAM00013.JPG kèm đuôi file
+    const parsedWithExt = parseCustomerCodes("SAM00013.JPG", "alphanumeric");
+    const matchedWithExt = matchCodesToFiles(parsedWithExt.valid, testFiles, "alphanumeric");
+    expect(matchedWithExt.matchedCount).toBe(1);
+    expect(matchedWithExt.ambiguousCount).toBe(0);
+    expect(matchedWithExt.items[0]?.matchedFile?.relativePath).toBe("SAM00013.JPG");
+
+    // Chỉ có 2 file cùng tên: 1 ở gốc và 1 ở thư mục "Ảnh Khách Chọn"
+    const filesWithDuplicateInSubfolder: FilterFileEntry[] = [
+      {
+        name: "SAM00055.JPG",
+        relativePath: "SAM00055.JPG",
+        size: 5000,
+        lastModified: 0,
+        category: "standard",
+      },
+      {
+        name: "SAM00055.JPG",
+        relativePath: "Ảnh Khách Chọn/SAM00055.JPG",
+        size: 5000,
+        lastModified: 0,
+        category: "standard",
+      },
+    ];
+    const parsed55 = parseCustomerCodes("SAM00055", "alphanumeric");
+    const matched55 = matchCodesToFiles(parsed55.valid, filesWithDuplicateInSubfolder, "alphanumeric");
+    expect(matched55.matchedCount).toBe(1);
+    expect(matched55.ambiguousCount).toBe(0);
+    expect(matched55.items[0]?.matchedFile?.relativePath).toBe("SAM00055.JPG");
   });
 });

@@ -52,6 +52,7 @@ import {
   buildMissingText,
   fileCategory,
   fileMatchesType,
+  isOutputOrIgnoredDirectory,
   matchCodesToFiles,
   parseCustomerCodes,
   sanitizeFolderName,
@@ -134,6 +135,7 @@ function subscribeNoop(): () => void {
 async function scanDirectory(
   root: DirectoryHandleLike,
   onProgress?: (count: number) => void,
+  ignoredSubfolder?: string,
 ): Promise<FilterFileEntry[]> {
   const entries: FilterFileEntry[] = [];
   let scannedCount = 0;
@@ -144,14 +146,18 @@ async function scanDirectory(
   ): Promise<void> {
     for await (const [name, handle] of directory.entries()) {
       if (name.startsWith(".")) continue;
-      const relativePath = parentPath ? `${parentPath}/${name}` : name;
       if (handle.kind === "directory") {
+        if (isOutputOrIgnoredDirectory(name, ignoredSubfolder)) {
+          continue;
+        }
+        const relativePath = parentPath ? `${parentPath}/${name}` : name;
         await walk(handle as DirectoryHandleLike, relativePath);
       } else if (handle.kind === "file") {
         const category = fileCategory(name);
         if (!category) continue;
         try {
           const file = await (handle as FileHandleLike).getFile();
+          const relativePath = parentPath ? `${parentPath}/${name}` : name;
           entries.push({
             name,
             relativePath,
@@ -505,9 +511,13 @@ export function CodeFilterTool({
       setIsScanning(true);
       toast.info(`Đang quét ảnh trong thư mục "${handle.name}"...`);
 
-      const scanned = await scanDirectory(handle, (count) => {
-        setStatusMessage(`Đang quét file trên máy tính: ${count} ảnh...`);
-      });
+      const scanned = await scanDirectory(
+        handle,
+        (count) => {
+          setStatusMessage(`Đang quét file trên máy tính: ${count} ảnh...`);
+        },
+        subfolderName,
+      );
 
       setScannedFiles(scanned);
       setIsScanning(false);
@@ -529,9 +539,16 @@ export function CodeFilterTool({
     for (let i = 0; i < fileList.length; i += 1) {
       const file = fileList[i];
       if (!file) continue;
+      const relativePath = file.webkitRelativePath || file.name;
+      const pathParts = relativePath.split("/");
+      if (pathParts.length > 1) {
+        const dirParts = pathParts.slice(0, -1);
+        if (dirParts.some((p) => isOutputOrIgnoredDirectory(p, subfolderName))) {
+          continue;
+        }
+      }
       const category = fileCategory(file.name);
       if (!category) continue;
-      const relativePath = file.webkitRelativePath || file.name;
       entries.push({
         name: file.name,
         relativePath,
@@ -562,9 +579,16 @@ export function CodeFilterTool({
       return;
     }
 
-    const availableFiles = scannedFiles.filter((file) =>
-      fileMatchesType(file, fileType),
-    );
+    const availableFiles = scannedFiles.filter((file) => {
+      const parts = file.relativePath.split("/");
+      if (parts.length > 1) {
+        const dirParts = parts.slice(0, -1);
+        if (dirParts.some((part) => isOutputOrIgnoredDirectory(part, subfolderName))) {
+          return false;
+        }
+      }
+      return fileMatchesType(file, fileType);
+    });
 
     if (availableFiles.length === 0) {
       toast.error(
@@ -581,17 +605,56 @@ export function CodeFilterTool({
 
     // Perform match
     const matchResult = matchCodesToFiles(parsed.valid, availableFiles, mode);
-    const itemsToCopy = matchResult.items.filter(
-      (item) => item.status === "matched" && item.matchedFile,
-    );
 
-    const missingItems = matchResult.items.filter(
-      (item) => item.status === "missing" || item.status === "ambiguous",
-    );
+    type CopyTask = {
+      parsed: typeof parsed.valid[0];
+      sourceFile: FilterFileEntry;
+      resolutionNote?: string;
+    };
+
+    const tasksToCopy: CopyTask[] = [];
+    const missingItems: CodeMatchItem[] = [];
+
+    for (const item of matchResult.items) {
+      if (item.status === "matched" && item.matchedFile) {
+        tasksToCopy.push({
+          parsed: item.parsed,
+          sourceFile: item.matchedFile,
+        });
+      } else if (item.status === "ambiguous" && item.candidates.length > 0) {
+        if (fileType === "all") {
+          // Khi chọn tất cả (RAW & JPG): lấy mọi định dạng ảnh của mã này
+          const seenNames = new Set<string>();
+          for (const cand of item.candidates) {
+            if (!seenNames.has(cand.name.toLowerCase())) {
+              seenNames.add(cand.name.toLowerCase());
+              tasksToCopy.push({
+                parsed: item.parsed,
+                sourceFile: cand,
+                resolutionNote: item.candidates.length > 1 ? "Đã lọc cả RAW & JPG" : undefined,
+              });
+            }
+          }
+        } else {
+          // Ưu tiên theo định dạng đã chọn (raw hoặc standard), hoặc file nông nhất
+          const preferred =
+            item.candidates.find((c) =>
+              fileType === "raw" ? c.category === "raw" : c.category === "standard",
+            ) ?? item.candidates[0]!;
+          tasksToCopy.push({
+            parsed: item.parsed,
+            sourceFile: preferred,
+            resolutionNote: `Trùng mã: đã lấy ${preferred.name}`,
+          });
+        }
+      } else {
+        missingItems.push(item);
+      }
+    }
 
     setProgress({
       scanned: availableFiles.length,
-      matched: itemsToCopy.length,
+      matched: tasksToCopy.length,
       copied: 0,
       missing: missingItems.length,
       errors: 0,
@@ -615,12 +678,12 @@ export function CodeFilterTool({
         let copiedCount = 0;
         let errorCount = 0;
 
-        for (const item of itemsToCopy) {
+        for (const task of tasksToCopy) {
           if (abortRef.current) {
             setStatusMessage("Đã dừng quá trình lọc ảnh.");
             break;
           }
-          const sourceFile = item.matchedFile!;
+          const sourceFile = task.sourceFile;
           try {
             setStatusMessage(`Đang copy file: ${sourceFile.name}...`);
             const fileData = await readFileFromDirectory(inputHandle, sourceFile.relativePath);
@@ -635,14 +698,15 @@ export function CodeFilterTool({
               await writeBlob(targetDir, destName, fileData);
               copiedCount += 1;
               executionRows.push({
-                inputCode: item.parsed.raw,
+                inputCode: task.parsed.raw,
                 filename: destName,
                 relativePath: sourceFile.relativePath,
                 status: "matched",
+                message: task.resolutionNote,
               });
             } else {
               executionRows.push({
-                inputCode: item.parsed.raw,
+                inputCode: task.parsed.raw,
                 filename: sourceFile.name,
                 relativePath: sourceFile.relativePath,
                 status: "skipped",
@@ -652,7 +716,7 @@ export function CodeFilterTool({
           } catch (err: unknown) {
             errorCount += 1;
             executionRows.push({
-              inputCode: item.parsed.raw,
+              inputCode: task.parsed.raw,
               filename: sourceFile.name,
               relativePath: sourceFile.relativePath,
               status: "error",
@@ -684,7 +748,7 @@ export function CodeFilterTool({
         setRows(executionRows);
         setFilterDone(true);
         setStatusMessage(
-          `Hoàn tất! Đã copy ${copiedCount}/${itemsToCopy.length} file vào thư mục "${createSubfolder ? subfolderName : inputHandle.name}".`,
+          `Hoàn tất! Đã copy ${copiedCount}/${tasksToCopy.length} file vào thư mục "${createSubfolder ? subfolderName : inputHandle.name}".`,
         );
         toast.success(
           `Đã lọc thành công ${copiedCount} ảnh vào thư mục "${createSubfolder ? subfolderName : inputHandle.name}"!`,
@@ -697,7 +761,7 @@ export function CodeFilterTool({
             mode,
             inputCodesText: text,
             parsedCount: parsed.valid.length,
-            matchedCount: itemsToCopy.length,
+            matchedCount: tasksToCopy.length,
             missingCount: missingItems.length,
             ambiguousCount: matchResult.ambiguousCount,
             duplicateCount: parsed.duplicateCount,
@@ -736,9 +800,9 @@ export function CodeFilterTool({
         const folder = createSubfolder ? zip.folder(subfolderName) || zip : zip;
         let copiedCount = 0;
 
-        for (const item of itemsToCopy) {
+        for (const task of tasksToCopy) {
           if (abortRef.current) break;
-          const source = item.matchedFile!;
+          const source = task.sourceFile;
           // Find File in fallback
           const fileInput = folderInputRef.current;
           if (fileInput?.files) {
@@ -748,16 +812,30 @@ export function CodeFilterTool({
                 folder.file(source.name, f);
                 copiedCount += 1;
                 executionRows.push({
-                  inputCode: item.parsed.raw,
+                  inputCode: task.parsed.raw,
                   filename: source.name,
                   relativePath: source.relativePath,
                   status: "matched",
+                  message: task.resolutionNote,
                 });
                 break;
               }
             }
           }
           setProgress((prev) => ({ ...prev, copied: copiedCount }));
+        }
+
+        for (const item of missingItems) {
+          executionRows.push({
+            inputCode: item.parsed.raw,
+            filename: "",
+            relativePath: "",
+            status: item.status,
+            message:
+              item.status === "ambiguous"
+                ? "Tìm thấy nhiều file trùng mã"
+                : "Không tìm thấy trong thư mục",
+          });
         }
 
         const zipBlob = await zip.generateAsync({ type: "blob" });
@@ -1302,6 +1380,11 @@ export function CodeFilterTool({
                 <div className="flex items-center gap-2 truncate">
                   <span className="font-mono font-semibold">{row.inputCode}</span>
                   {row.filename && <span className="text-muted-foreground truncate">→ {row.filename}</span>}
+                  {row.message && (
+                    <span className="text-[11px] text-amber-600 dark:text-amber-400 shrink-0">
+                      ({row.message})
+                    </span>
+                  )}
                 </div>
                 <div>
                   {row.status === "matched" ? (

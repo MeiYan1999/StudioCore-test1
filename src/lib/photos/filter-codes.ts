@@ -2,8 +2,39 @@ export type CodeMatchMode = "alphanumeric" | "numeric";
 export type FileTypeFilter = "all" | "raw" | "standard";
 export type MatchStatus = "matched" | "ambiguous" | "missing";
 
-export const RAW_EXTENSIONS = ["raw", "cr2", "nef", "arw", "dng", "raf"] as const;
-export const STANDARD_EXTENSIONS = ["jpg", "jpeg", "png", "webp"] as const;
+export const RAW_EXTENSIONS = [
+  "raw",
+  "cr2",
+  "cr3",
+  "crw",
+  "nef",
+  "nrw",
+  "arw",
+  "srf",
+  "sr2",
+  "dng",
+  "raf",
+  "rw2",
+  "orf",
+  "pef",
+  "ptx",
+  "3fr",
+  "fff",
+  "iiq",
+  "rwl",
+] as const;
+export const STANDARD_EXTENSIONS = [
+  "jpg",
+  "jpeg",
+  "png",
+  "webp",
+  "tif",
+  "tiff",
+  "heic",
+  "heif",
+  "avif",
+  "bmp",
+] as const;
 
 export type ParsedCodeItem = {
   raw: string;
@@ -227,6 +258,58 @@ export function matchCodesToFiles(
         };
       }
       if (candidates.length > 1) {
+        // 1. Kiểm tra khớp chính xác tên file (gồm đuôi mở rộng) nếu người dùng nhập có đuôi (VD: SAM00013.JPG)
+        const rawBasename = basenameOf(item.raw.trim().toLowerCase());
+        const hasExt = rawBasename.includes(".");
+        if (hasExt) {
+          const exact = candidates.find(
+            (c) => c.name.toLowerCase() === rawBasename,
+          );
+          if (exact) {
+            return {
+              parsed: item,
+              status: "matched" as const,
+              candidates,
+              matchedFile: exact,
+            };
+          }
+        }
+
+        // 2. Bỏ qua các file nằm trong thư mục output/lọc nếu còn file ngoài thư mục gốc
+        const outsideIgnored = candidates.filter(
+          (c) =>
+            !c.relativePath
+              .split("/")
+              .slice(0, -1)
+              .some((part) => isOutputOrIgnoredDirectory(part)),
+        );
+        const viableCandidates =
+          outsideIgnored.length > 0 ? outsideIgnored : candidates;
+
+        if (viableCandidates.length === 1) {
+          return {
+            parsed: item,
+            status: "matched" as const,
+            candidates,
+            matchedFile: viableCandidates[0] ?? null,
+          };
+        }
+
+        // 3. Ưu tiên file ở thư mục gốc (độ sâu đường dẫn ngắn nhất, tránh file copy trong thư mục con)
+        const depths = viableCandidates.map((c) => c.relativePath.split("/").length);
+        const minDepth = Math.min(...depths);
+        const shallowCandidates = viableCandidates.filter(
+          (c) => c.relativePath.split("/").length === minDepth,
+        );
+        if (shallowCandidates.length === 1) {
+          return {
+            parsed: item,
+            status: "matched" as const,
+            candidates,
+            matchedFile: shallowCandidates[0] ?? null,
+          };
+        }
+
         return {
           parsed: item,
           status: "ambiguous" as const,
@@ -277,6 +360,39 @@ export function validAlbumCodeCount(
   }));
   const result = matchCodesToFiles(parsed, entries, mode);
   return result.matchedCount + result.ambiguousCount;
+}
+
+export function isOutputOrIgnoredDirectory(
+  name: string,
+  customSubfolderName?: string,
+): boolean {
+  const n = name.trim().toLowerCase();
+  if (!n || n.startsWith(".")) return true;
+
+  if (customSubfolderName) {
+    const s = customSubfolderName.trim().toLowerCase();
+    if (s && n === s) return true;
+  }
+
+  // Remove accents / Vietnamese diacritics
+  const nonAccent = n
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d");
+
+  if (
+    nonAccent.includes("khach chon") ||
+    nonAccent.includes("da loc") ||
+    nonAccent.includes("selected") ||
+    nonAccent.includes("filtered") ||
+    nonAccent.includes("__filtered__") ||
+    nonAccent === "export" ||
+    nonAccent === "output"
+  ) {
+    return true;
+  }
+
+  return false;
 }
 
 export function sanitizeFolderName(value: string): string {
