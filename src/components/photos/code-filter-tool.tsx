@@ -106,6 +106,7 @@ type FileHandleLike = {
 type DirectoryPickerWindow = Window & {
   showDirectoryPicker?: (options?: {
     mode?: "read" | "readwrite";
+    startIn?: unknown;
   }) => Promise<DirectoryHandleLike>;
 };
 
@@ -553,6 +554,8 @@ export function CodeFilterTool({
   const [inputFolderName, setInputFolderName] = useState<string>("");
   const [outputHandle, setOutputHandle] = useState<DirectoryHandleLike | null>(null);
   const [outputFolderName, setOutputFolderName] = useState<string>("");
+  const [lastTargetDir, setLastTargetDir] = useState<DirectoryHandleLike | null>(null);
+  const [lastTargetFolderName, setLastTargetFolderName] = useState<string>("");
   const [filterAction, setFilterAction] = useState<"copy" | "move">("copy");
   const [fallbackFiles, setFallbackFiles] = useState<FilterFileEntry[]>([]);
   const [scannedFiles, setScannedFiles] = useState<FilterFileEntry[]>([]);
@@ -1082,6 +1085,8 @@ export function CodeFilterTool({
           });
         }
 
+        setLastTargetDir(targetDir);
+        setLastTargetFolderName(actualTargetFolderName);
         setRows(executionRows);
         setFilterDone(true);
         setStatusMessage(
@@ -1190,6 +1195,8 @@ export function CodeFilterTool({
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
 
+        setLastTargetDir(null);
+        setLastTargetFolderName(subfolderName || "Ảnh Khách Chọn");
         setRows(executionRows);
         setFilterDone(true);
         setStatusMessage(`Đã tải xuống file ZIP gồm ${copiedCount} ảnh được lọc!`);
@@ -1206,6 +1213,37 @@ export function CodeFilterTool({
     abortRef.current = true;
     setIsRunning(false);
     toast.info("Đã yêu cầu dừng quá trình lọc.");
+  };
+
+  // Mở trực tiếp thư mục chứa ảnh lọc bằng cửa sổ Finder (macOS) / Explorer (Windows)
+  const handleOpenOutputFolder = async () => {
+    const folderDisplay = lastTargetFolderName || subfolderName || "Ảnh Khách Chọn";
+    if (!lastTargetDir) {
+      toast.info(
+        inputFolderName
+          ? `Ảnh đã được lưu trong thư mục: "${inputFolderName} > ${folderDisplay}".`
+          : `Ảnh đã được lưu trong thư mục: "${folderDisplay}".`,
+      );
+      return;
+    }
+    try {
+      const pickerWin = window as DirectoryPickerWindow;
+      if (pickerWin.showDirectoryPicker) {
+        await pickerWin.showDirectoryPicker({
+          startIn: lastTargetDir,
+          mode: "read",
+        });
+      }
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === "AbortError") {
+        return;
+      }
+      toast.info(
+        inputFolderName
+          ? `Ảnh đã được lưu trong thư mục: "${inputFolderName} > ${folderDisplay}".`
+          : `Ảnh đã được lưu trong thư mục: "${folderDisplay}".`,
+      );
+    }
   };
 
   // Export Manifest & Missing
@@ -1680,6 +1718,18 @@ export function CodeFilterTool({
               </h3>
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              {pickerSupported && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void handleOpenOutputFolder()}
+                  className="text-xs font-medium gap-1.5 rounded-lg text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+                >
+                  <FolderOpen className="h-3.5 w-3.5" />
+                  <span>Mở Folder Ảnh Lọc</span>
+                </Button>
+              )}
               <Button
                 type="button"
                 variant="outline"
@@ -1703,6 +1753,37 @@ export function CodeFilterTool({
                 </Button>
               )}
             </div>
+          </div>
+
+          {/* Banner vị trí lưu ảnh & Nút mở trực tiếp */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl border border-emerald-500/25 bg-emerald-50/70 dark:bg-emerald-950/20 text-xs">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="h-9 w-9 rounded-lg bg-emerald-600/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                <FolderCheck className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <p className="font-semibold text-emerald-950 dark:text-emerald-200 truncate">
+                  Đã lưu {progress.copied} ảnh vào thư mục:{" "}
+                  <span className="font-mono underline font-bold">
+                    📁 {inputFolderName ? `${inputFolderName} > ` : ""}{lastTargetFolderName || subfolderName || "Ảnh Khách Chọn"}
+                  </span>
+                </p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  Bấm nút bên cạnh để mở ngay cửa sổ Finder / File Explorer xem trực tiếp thư mục này trên máy tính.
+                </p>
+              </div>
+            </div>
+            {pickerSupported && (
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => void handleOpenOutputFolder()}
+                className="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs gap-1.5 shrink-0 shadow-2xs cursor-pointer"
+              >
+                <FolderOpen className="h-3.5 w-3.5" />
+                <span>Mở Thư Mục Ảnh</span>
+              </Button>
+            )}
           </div>
 
           <div className="max-h-60 overflow-y-auto rounded-xl border border-border divide-y divide-border text-xs">
