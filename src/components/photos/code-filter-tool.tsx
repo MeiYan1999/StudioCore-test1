@@ -93,6 +93,7 @@ type FileHandleLike = {
   createWritable?(options?: { keepExistingData?: boolean }): Promise<{
     write(data: Blob): Promise<void>;
     close(): Promise<void>;
+    abort?(): Promise<void>;
   }>;
 };
 
@@ -226,6 +227,65 @@ async function readFileFromDirectory(
     }
     throw new Error(`Không tìm thấy file "${filename}" trong thư mục.`);
   }
+}
+
+async function readSourceFileBlob(
+  root: DirectoryHandleLike,
+  sourceFile: FilterFileEntry,
+): Promise<Blob> {
+  // Chiến lược 1: Lấy File snapshot tươi mới ngay tại thời điểm copy từ fileHandle và nạp ngay vào RAM
+  if (
+    sourceFile.fileHandle &&
+    typeof (sourceFile.fileHandle as FileHandleLike).getFile === "function"
+  ) {
+    try {
+      const freshFile = await (sourceFile.fileHandle as FileHandleLike).getFile();
+      const buffer = await freshFile.arrayBuffer();
+      return new Blob([buffer], {
+        type: freshFile.type || "application/octet-stream",
+      });
+    } catch {
+      // Snapshot của fileHandle có thể bị stale hoặc metadata APFS thay đổi, chuyển sang chiến lược 2
+    }
+  }
+
+  // Chiến lược 2: Duyệt lại từ root directory handle theo đường dẫn tương đối
+  try {
+    const file = await readFileFromDirectory(root, sourceFile.relativePath);
+    const buffer = await file.arrayBuffer();
+    return new Blob([buffer], {
+      type: file.type || "application/octet-stream",
+    });
+  } catch {
+    // Chuyển sang chiến lược 3
+  }
+
+  // Chiến lược 3: Tìm kiếm trực tiếp ở thư mục gốc nếu đường dẫn tương đối có thay đổi
+  if (sourceFile.name !== sourceFile.relativePath) {
+    try {
+      const file = await readFileFromDirectory(root, sourceFile.name);
+      const buffer = await file.arrayBuffer();
+      return new Blob([buffer], {
+        type: file.type || "application/octet-stream",
+      });
+    } catch {
+      // Chuyển sang chiến lược 4
+    }
+  }
+
+  // Chiến lược 4: Dùng File snapshot lưu lúc quét ban đầu nếu vẫn đọc được
+  if (sourceFile.file) {
+    try {
+      const buffer = await sourceFile.file.arrayBuffer();
+      return new Blob([buffer], {
+        type: sourceFile.file.type || "application/octet-stream",
+      });
+    } catch {
+      // Không đọc được
+    }
+  }
+
+  throw new Error(`Không thể đọc file "${sourceFile.name}" từ thư mục gốc.`);
 }
 
 async function entryExists(
@@ -381,8 +441,19 @@ async function writeBlob(
     throw new Error("Trình duyệt không hỗ trợ ghi file vào thư mục.");
   }
   const writable = await handle.createWritable({ keepExistingData: false });
-  await writable.write(blob);
-  await writable.close();
+  try {
+    await writable.write(blob);
+    await writable.close();
+  } catch (writeErr: unknown) {
+    try {
+      if (writable.abort) {
+        await writable.abort();
+      }
+    } catch {
+      // Bỏ qua lỗi abort
+    }
+    throw writeErr;
+  }
 }
 
 function downloadText(filename: string, content: string): void {
@@ -811,16 +882,26 @@ export function CodeFilterTool({
           const sourceFile = task.sourceFile;
           try {
             setStatusMessage(`Đang copy file: ${sourceFile.name}...`);
-            let fileData: Blob | File | null = sourceFile.file ?? null;
-            if (!fileData && sourceFile.fileHandle) {
+
+            // Đọc dữ liệu file trực tiếp thành Blob bộ nhớ, có cơ chế thử lại nếu hệ điều hành tạm thời khoá file
+            let fileData: Blob | null = null;
+            let readErr: unknown = null;
+            for (let attempt = 0; attempt < 2; attempt += 1) {
               try {
-                fileData = await (sourceFile.fileHandle as FileHandleLike).getFile();
-              } catch {
-                fileData = null;
+                fileData = await readSourceFileBlob(inputHandle, sourceFile);
+                readErr = null;
+                break;
+              } catch (err: unknown) {
+                readErr = err;
+                if (attempt === 0) {
+                  await new Promise((resolve) => setTimeout(resolve, 150));
+                }
               }
             }
             if (!fileData) {
-              fileData = await readFileFromDirectory(inputHandle, sourceFile.relativePath);
+              throw readErr instanceof Error
+                ? readErr
+                : new Error(`Lỗi đọc file: ${sourceFile.name}`);
             }
 
             const { name: destName, skip } = await resolveDestinationName(
@@ -831,7 +912,24 @@ export function CodeFilterTool({
             );
 
             if (!skip) {
-              await writeBlob(targetDir, destName, fileData);
+              // Thử lại nếu có xung đột ghi đĩa tạm thời
+              let writeErr: unknown = null;
+              for (let attempt = 0; attempt < 2; attempt += 1) {
+                try {
+                  await writeBlob(targetDir, destName, fileData);
+                  writeErr = null;
+                  break;
+                } catch (err: unknown) {
+                  writeErr = err;
+                  if (attempt === 0) {
+                    await new Promise((resolve) => setTimeout(resolve, 200));
+                  }
+                }
+              }
+              if (writeErr) {
+                throw writeErr;
+              }
+
               copiedCount += 1;
               executionRows.push({
                 inputCode: task.parsed.raw,
@@ -849,6 +947,9 @@ export function CodeFilterTool({
                 message: "Bỏ qua do trùng tên",
               });
             }
+
+            // Nghỉ nhẹ 20ms giữa mỗi file để macOS APFS / Windows NTFS giải phóng I/O
+            await new Promise((resolve) => setTimeout(resolve, 20));
           } catch (err: unknown) {
             errorCount += 1;
             executionRows.push({
