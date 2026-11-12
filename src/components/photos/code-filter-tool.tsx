@@ -908,23 +908,19 @@ export function CodeFilterTool({
         let targetDir: DirectoryHandleLike;
         let actualTargetFolderName: string;
 
+        // Đảm bảo quyền ghi trên thư mục gốc do người dùng chọn
+        await ensureWritePermission(inputHandle);
+
+        const folderName = sanitizeFolderName(subfolderName.trim()) || "Ảnh Khách Chọn";
+
         if (outputHandle) {
-          // Ưu tiên 1 (Chuẩn s2.io.vn): Sử dụng thư mục đích riêng đã chọn
-          await ensureWritePermission(outputHandle);
           targetDir = outputHandle;
           actualTargetFolderName = outputHandle.name;
-        } else if (createSubfolder) {
-          // Ưu tiên 2: Tự động tạo thư mục con trong thư mục nguồn
-          await ensureWritePermission(inputHandle);
-          const folderName = sanitizeFolderName(subfolderName.trim()) || "Ảnh Khách Chọn";
+        } else {
+          // Tự động tạo hoặc mở thư mục con "Ảnh Khách Chọn"
           const res = await getOrCreateDirectoryHandle(inputHandle, folderName);
           targetDir = res.handle;
           actualTargetFolderName = res.finalName;
-          await ensureWritePermission(targetDir);
-        } else {
-          await ensureWritePermission(inputHandle);
-          targetDir = inputHandle;
-          actualTargetFolderName = inputHandle.name;
         }
 
         let copiedCount = 0;
@@ -1011,7 +1007,7 @@ export function CodeFilterTool({
               if (!destFileHandle.createWritable) {
                 throw new Error("Trình duyệt không hỗ trợ ghi file vào thư mục đích.");
               }
-              const writable = await destFileHandle.createWritable({ keepExistingData: false });
+              const writable = await destFileHandle.createWritable();
 
               try {
                 await writable.write(memBlob);
