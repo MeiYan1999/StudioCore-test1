@@ -16,6 +16,7 @@ import {
   HardDrive,
   HelpCircle,
   KeyRound,
+  MessageSquare,
   MonitorSmartphone,
   ShieldCheck,
   Sparkles,
@@ -56,7 +57,15 @@ export default async function SettingsHubPage() {
   }
 
   const categories: SettingCategoryItem[] = [
-    { id: "facebook", title: "Kênh bán hàng · Facebook", description: "Kết nối Fanpage, Inbox và cấu hình đặt lịch công khai.", href: "/manage/settings/facebook", icon: Building, iconBg: "bg-primary/10", iconColor: "text-primary" },
+    {
+      id: "messaging",
+      title: "Cài đặt Tin nhắn",
+      description: "Kết nối kênh Facebook Page, Zalo OA, Zalo Cá nhân và quản lý trang.",
+      href: "/manage/settings/facebook",
+      icon: MessageSquare,
+      iconBg: "bg-blue-500/10 dark:bg-blue-500/20",
+      iconColor: "text-blue-600 dark:text-blue-400",
+    },
     {
       id: "studio",
       title: "Thông tin Studio",

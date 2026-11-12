@@ -9,6 +9,7 @@ import {
   when,
   type Package,
 } from "./booking-form";
+import { MessagingSettingsView } from "./messaging-settings-view";
 import "./workspace.css";
 
 type Thread = {
@@ -145,177 +146,18 @@ export function OmniWorkspace({ settings = false }: { settings?: boolean }) {
     );
   const configuredService = offerId || data.services[0]?.id || "";
   const configured = data.offers.find(o => o.service.id === configuredService)?.offer;
-  if (settings)
+  if (settings) {
     return (
-      <div className="omni">
-        <header>
-          <h1>Kênh bán hàng · Facebook</h1>
-          <Link href="/manage/inbox">Mở Inbox</Link>
-        </header>
-        <p>{data.readiness}</p>
-        {error && <p role="alert">{error}</p>}
-        {data.owner && (
-          <form action="/api/facebook/oauth">
-            <label>
-              Chi nhánh nhận hội thoại
-              <select name="branchId">
-                {data.branches.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button>Đăng nhập Facebook / Kết nối lại</button>
-          </form>
-        )}
-        <section className="omni-pages">
-          {data.pages.map((p) => (
-            <article key={p.id}>
-              {p.avatar && <img src={p.avatar} alt="" width="44" height="44" />}
-              <h2>{p.name}</h2>
-              <p>
-                {p.status === "connected"
-                  ? "Đã kết nối"
-                  : p.status === "pending"
-                    ? "Chọn để kết nối"
-                    : "Cần kết nối lại"}
-              </p>
-              <p>
-                Sự kiện gần nhất{" "}
-                {p.lastEventAt ? when(p.lastEventAt) : "chưa nhận"}
-              </p>
-              {data.owner && (
-                <>
-                  <button
-                    disabled={busy}
-                    onClick={() =>
-                      act({ action: "page", id: p.id, connect: true })
-                    }
-                  >
-                    Kết nối trang
-                  </button>
-                  <button
-                    disabled={busy}
-                    onClick={() =>
-                      act({ action: "page", id: p.id, connect: false })
-                    }
-                  >
-                    Ngắt kết nối
-                  </button>
-                </>
-              )}
-            </article>
-          ))}
-        </section>
-        {data.owner && (
-          <>
-            <h2>Mở gói chụp cho khách đặt lịch</h2>
-            <p>
-              Giờ Việt Nam · Các tài nguyên được giữ trong suốt buổi chụp và
-              thời gian dọn set.
-            </p>
-            <form
-              key={configuredService}
-              className="omni-form"
-              onSubmit={(e) => {
-                e.preventDefault();
-                const f = new FormData(e.currentTarget);
-                void act({
-                  action: "offer",
-                  serviceId: f.get("serviceId"),
-                  roomId: f.get("roomId"),
-                  photographerId: f.get("photographerId"),
-                  opens: Number(f.get("opens")),
-                  closes: Number(f.get("closes")),
-                  closedDays: f.get("closedDays"),
-                  holidays: f.get("holidays"),
-                  buffer: Number(f.get("buffer")),
-                  holdMinutes: Number(f.get("holdMinutes")),
-                  deposit: Number(f.get("deposit")),
-                  active: Number(f.get("active")),
-                });
-              }}
-            >
-              <label>
-                Gói chụp
-                <select name="serviceId" value={configuredService} onChange={e => setOfferId(e.target.value)}>
-                  {data.services.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Phòng
-                <select name="roomId" defaultValue={configured?.roomId || ""}>
-                  <option value="">Không giữ phòng</option>
-                  {data.rooms.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Photographer
-                <select name="photographerId" defaultValue={configured?.photographerId || ""}>
-                  <option value="">Không giữ photographer</option>
-                  {data.staff.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {[
-                ["opens", "Mở cửa (phút từ 00:00)", 540],
-                ["closes", "Đóng cửa (phút từ 00:00)", 1080],
-                ["buffer", "Dọn set (phút)", 30],
-                ["holdMinutes", "Thời hạn giữ chỗ (phút)", 30],
-                ["deposit", "Cọc tối thiểu (VND)", 0],
-              ].map(([name, title, value]) => (
-                <label key={name}>
-                  {title}
-                  <input
-                    name={String(name)}
-                    type="number"
-                    min="0"
-                    defaultValue={configured?.[name as keyof typeof configured] ?? value}
-                  />
-                </label>
-              ))}
-              <label>
-                Ngày nghỉ trong tuần (0 là Chủ nhật, ngăn bằng dấu phẩy)
-                <input name="closedDays" defaultValue={configured?.closedDays ?? "0"} />
-              </label>
-              <label>
-                Ngày nghỉ riêng (YYYY-MM-DD, ngăn bằng dấu phẩy)
-                <input name="holidays" defaultValue={configured?.holidays ?? ""} />
-              </label>
-              <label>
-                Trạng thái
-                <select name="active" defaultValue={configured?.active ?? 1}>
-                  <option value="1">Mở đặt lịch</option>
-                  <option value="0">Tạm đóng</option>
-                </select>
-              </label>
-              <button disabled={busy}>Lưu cấu hình</button>
-            </form>
-            <h2>Link các gói đã cấu hình</h2>
-            {data.offers.map((o) => (
-              <p key={o.service.id}>
-                <Link href={`/book/${o.service.id}`}>
-                  {o.service.name} · {money(o.service.price)}
-                </Link>{" "}
-                · {o.offer.active ? "Đang mở" : "Đã đóng"}
-              </p>
-            ))}
-          </>
-        )}
-      </div>
+      <MessagingSettingsView
+        data={data}
+        busy={busy}
+        error={error}
+        act={act}
+        offerId={offerId}
+        setOfferId={setOfferId}
+      />
     );
+  }
   return (
     <div className="omni">
       <header>
