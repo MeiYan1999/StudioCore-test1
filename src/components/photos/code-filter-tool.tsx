@@ -194,15 +194,69 @@ async function readFileFromDirectory(
   return handle.getFile();
 }
 
-async function fileExists(
+async function entryExists(
   directory: DirectoryHandleLike,
-  filename: string,
+  name: string,
 ): Promise<boolean> {
   try {
-    await directory.getFileHandle(filename);
+    await directory.getFileHandle(name);
+    return true;
+  } catch (err: unknown) {
+    if (
+      err instanceof DOMException &&
+      (err.name === "TypeMismatchError" || err.name === "PathExistsError")
+    ) {
+      return true;
+    }
+  }
+  try {
+    await directory.getDirectoryHandle(name);
     return true;
   } catch {
     return false;
+  }
+}
+
+async function getOrCreateDirectoryHandle(
+  parent: DirectoryHandleLike,
+  name: string,
+): Promise<{ handle: DirectoryHandleLike; finalName: string }> {
+  // 1. Thử mở thư mục đã có mà không cần tạo mới (tránh PathExistsError trên Chrome)
+  try {
+    const existing = await parent.getDirectoryHandle(name, { create: false });
+    return { handle: existing, finalName: name };
+  } catch {
+    // Không tìm thấy thư mục, tiến hành tạo mới
+  }
+
+  // 2. Thử tạo mới thư mục
+  try {
+    const created = await parent.getDirectoryHandle(name, { create: true });
+    return { handle: created, finalName: name };
+  } catch (createErr: unknown) {
+    // 3. Nếu gặp PathExistsError / TypeMismatchError ("An attempt was made to create a file or directory where an element already exists.")
+    // Thử lại lần nữa mở trực tiếp hoặc dùng tên biến thể (1), (2)...
+    try {
+      const fallbackOpen = await parent.getDirectoryHandle(name);
+      return { handle: fallbackOpen, finalName: name };
+    } catch {
+      for (let i = 1; i <= 20; i += 1) {
+        const candidateName = `${name} (${i})`;
+        try {
+          try {
+            const candDir = await parent.getDirectoryHandle(candidateName, { create: false });
+            return { handle: candDir, finalName: candidateName };
+          } catch {
+            // Không có sẵn, thử tạo
+          }
+          const candCreated = await parent.getDirectoryHandle(candidateName, { create: true });
+          return { handle: candCreated, finalName: candidateName };
+        } catch {
+          // thử tên tiếp theo
+        }
+      }
+      throw createErr;
+    }
   }
 }
 
@@ -219,7 +273,7 @@ async function resolveDestinationName(
   conflict: "rename" | "overwrite" | "skip",
 ): Promise<{ name: string; skip: boolean }> {
   const exists =
-    (directory ? await fileExists(directory, filename) : false) ||
+    (directory ? await entryExists(directory, filename) : false) ||
     usedNames.has(filename);
   if (!exists) {
     usedNames.add(filename);
@@ -237,7 +291,7 @@ async function resolveDestinationName(
   while (true) {
     const candidate = `${stem}-${index}${extension}`;
     const candidateExists =
-      (directory ? await fileExists(directory, candidate) : false) ||
+      (directory ? await entryExists(directory, candidate) : false) ||
       usedNames.has(candidate);
     if (!candidateExists) {
       usedNames.add(candidate);
@@ -264,7 +318,23 @@ async function writeBlob(
   filename: string,
   blob: Blob,
 ): Promise<void> {
-  const handle = await directory.getFileHandle(filename, { create: true });
+  let handle: FileHandleLike;
+  try {
+    handle = await directory.getFileHandle(filename, { create: true });
+  } catch (err: unknown) {
+    // Nếu bị trùng với thư mục hoặc gặp PathExistsError, đặt tên an toàn
+    const { stem, extension } = splitFilename(filename);
+    let idx = 1;
+    while (true) {
+      try {
+        handle = await directory.getFileHandle(`${stem}_${idx}${extension}`, { create: true });
+        break;
+      } catch {
+        idx += 1;
+        if (idx > 50) throw err;
+      }
+    }
+  }
   if (!handle.createWritable) {
     throw new Error("Trình duyệt không hỗ trợ ghi file vào thư mục.");
   }
@@ -669,9 +739,12 @@ export function CodeFilterTool({
         await ensureWritePermission(inputHandle);
 
         let targetDir: DirectoryHandleLike = inputHandle;
+        let actualTargetFolderName = inputHandle.name;
         if (createSubfolder) {
           const folderName = sanitizeFolderName(subfolderName.trim()) || "Ảnh Khách Chọn";
-          targetDir = await inputHandle.getDirectoryHandle(folderName, { create: true });
+          const res = await getOrCreateDirectoryHandle(inputHandle, folderName);
+          targetDir = res.handle;
+          actualTargetFolderName = res.finalName;
           await ensureWritePermission(targetDir);
         }
 
@@ -748,10 +821,10 @@ export function CodeFilterTool({
         setRows(executionRows);
         setFilterDone(true);
         setStatusMessage(
-          `Hoàn tất! Đã copy ${copiedCount}/${tasksToCopy.length} file vào thư mục "${createSubfolder ? subfolderName : inputHandle.name}".`,
+          `Hoàn tất! Đã copy ${copiedCount}/${tasksToCopy.length} file vào thư mục "${createSubfolder ? actualTargetFolderName : inputHandle.name}".`,
         );
         toast.success(
-          `Đã lọc thành công ${copiedCount} ảnh vào thư mục "${createSubfolder ? subfolderName : inputHandle.name}"!`,
+          `Đã lọc thành công ${copiedCount} ảnh vào thư mục "${createSubfolder ? actualTargetFolderName : inputHandle.name}"!`,
         );
 
         // Auto-save filter job history to database
@@ -766,7 +839,7 @@ export function CodeFilterTool({
             ambiguousCount: matchResult.ambiguousCount,
             duplicateCount: parsed.duplicateCount,
             outputMode: createSubfolder ? "subfolder" : "separate",
-            outputFolderName: createSubfolder ? subfolderName : "Thư mục gốc",
+            outputFolderName: createSubfolder ? actualTargetFolderName : "Thư mục gốc",
             fileType,
             status: "completed",
             items: executionRows.map((r) => ({
