@@ -60,6 +60,8 @@ export type FilterFileEntry = {
   size: number;
   lastModified: number;
   category: "raw" | "standard";
+  file?: File;
+  fileHandle?: unknown;
 };
 
 export type CodeMatchItem = {

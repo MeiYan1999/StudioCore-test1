@@ -78,6 +78,9 @@ type DirectoryHandleLike = {
     name: string,
     options?: { create?: boolean },
   ): Promise<FileHandleLike>;
+  queryPermission?: (options: {
+    mode: "read" | "readwrite";
+  }) => Promise<"granted" | "denied" | "prompt">;
   requestPermission?: (options: {
     mode: "read" | "readwrite";
   }) => Promise<"granted" | "denied" | "prompt">;
@@ -87,7 +90,7 @@ type FileHandleLike = {
   name: string;
   kind: "file";
   getFile(): Promise<File>;
-  createWritable?(): Promise<{
+  createWritable?(options?: { keepExistingData?: boolean }): Promise<{
     write(data: Blob): Promise<void>;
     close(): Promise<void>;
   }>;
@@ -164,6 +167,8 @@ async function scanDirectory(
             size: file.size,
             lastModified: file.lastModified,
             category,
+            file,
+            fileHandle: handle as FileHandleLike,
           });
           scannedCount += 1;
           if (scannedCount % 50 === 0 && onProgress) {
@@ -184,14 +189,43 @@ async function readFileFromDirectory(
   root: DirectoryHandleLike,
   relativePath: string,
 ): Promise<File> {
-  const segments = relativePath.split("/");
-  const filename = segments.pop() ?? relativePath;
+  const normalizedPath = relativePath.replace(/\\/g, "/");
+  const segments = normalizedPath.split("/").filter(Boolean);
+  const filename = segments.pop() ?? normalizedPath;
   let directory = root;
   for (const segment of segments) {
-    directory = await directory.getDirectoryHandle(segment);
+    try {
+      directory = await directory.getDirectoryHandle(segment);
+    } catch {
+      // Tìm kiếm không phân biệt hoa thường
+      let found: DirectoryHandleLike | null = null;
+      const lower = segment.toLowerCase();
+      for await (const [name, handle] of directory.entries()) {
+        if (handle.kind === "directory" && name.toLowerCase() === lower) {
+          found = handle as DirectoryHandleLike;
+          break;
+        }
+      }
+      if (!found) {
+        throw new Error(`Không tìm thấy thư mục con "${segment}".`);
+      }
+      directory = found;
+    }
   }
-  const handle = await directory.getFileHandle(filename);
-  return handle.getFile();
+
+  try {
+    const handle = await directory.getFileHandle(filename);
+    return await handle.getFile();
+  } catch {
+    // Tìm kiếm file không phân biệt hoa thường
+    const lowerFilename = filename.toLowerCase();
+    for await (const [name, handle] of directory.entries()) {
+      if (handle.kind === "file" && name.toLowerCase() === lowerFilename) {
+        return await (handle as FileHandleLike).getFile();
+      }
+    }
+    throw new Error(`Không tìm thấy file "${filename}" trong thư mục.`);
+  }
 }
 
 async function entryExists(
@@ -304,11 +338,19 @@ async function resolveDestinationName(
 async function ensureWritePermission(
   handle: DirectoryHandleLike,
 ): Promise<void> {
+  if (handle.queryPermission) {
+    try {
+      const current = await handle.queryPermission({ mode: "readwrite" });
+      if (current === "granted") return;
+    } catch {
+      // Proceed to requestPermission
+    }
+  }
   if (!handle.requestPermission) return;
   const state = await handle.requestPermission({ mode: "readwrite" });
   if (state !== "granted") {
     throw new Error(
-      "Chưa được cấp quyền ghi thư mục. Chọn lại thư mục và cho phép chỉnh sửa.",
+      "Chưa được cấp quyền ghi thư mục. Vui lòng cho phép quyền chỉnh sửa (Edit/Save) trên trình duyệt.",
     );
   }
 }
@@ -338,7 +380,7 @@ async function writeBlob(
   if (!handle.createWritable) {
     throw new Error("Trình duyệt không hỗ trợ ghi file vào thư mục.");
   }
-  const writable = await handle.createWritable();
+  const writable = await handle.createWritable({ keepExistingData: false });
   await writable.write(blob);
   await writable.close();
 }
@@ -575,7 +617,16 @@ export function CodeFilterTool({
         folderInputRef.current?.click();
         return;
       }
-      const handle = await pickerWin.showDirectoryPicker({ mode: "read" });
+      let handle: DirectoryHandleLike;
+      try {
+        handle = await pickerWin.showDirectoryPicker({ mode: "readwrite" });
+      } catch (err: unknown) {
+        if (err instanceof Error && err.name === "AbortError") {
+          return;
+        }
+        // Thử lại với chế độ read nếu trình duyệt không hỗ trợ trực tiếp mode readwrite lúc pick
+        handle = await pickerWin.showDirectoryPicker({ mode: "read" });
+      }
       setInputHandle(handle);
       setInputFolderName(handle.name);
       setIsScanning(true);
@@ -625,6 +676,7 @@ export function CodeFilterTool({
         size: file.size,
         lastModified: file.lastModified,
         category,
+        file,
       });
     }
     setFallbackFiles(entries);
@@ -759,7 +811,18 @@ export function CodeFilterTool({
           const sourceFile = task.sourceFile;
           try {
             setStatusMessage(`Đang copy file: ${sourceFile.name}...`);
-            const fileData = await readFileFromDirectory(inputHandle, sourceFile.relativePath);
+            let fileData: Blob | File | null = sourceFile.file ?? null;
+            if (!fileData && sourceFile.fileHandle) {
+              try {
+                fileData = await (sourceFile.fileHandle as FileHandleLike).getFile();
+              } catch {
+                fileData = null;
+              }
+            }
+            if (!fileData) {
+              fileData = await readFileFromDirectory(inputHandle, sourceFile.relativePath);
+            }
+
             const { name: destName, skip } = await resolveDestinationName(
               targetDir,
               usedNames,
@@ -876,24 +939,29 @@ export function CodeFilterTool({
         for (const task of tasksToCopy) {
           if (abortRef.current) break;
           const source = task.sourceFile;
-          // Find File in fallback
-          const fileInput = folderInputRef.current;
-          if (fileInput?.files) {
-            for (let i = 0; i < fileInput.files.length; i += 1) {
-              const f = fileInput.files[i];
-              if (f && (f.webkitRelativePath === source.relativePath || f.name === source.name)) {
-                folder.file(source.name, f);
-                copiedCount += 1;
-                executionRows.push({
-                  inputCode: task.parsed.raw,
-                  filename: source.name,
-                  relativePath: source.relativePath,
-                  status: "matched",
-                  message: task.resolutionNote,
-                });
-                break;
+          let fileData: Blob | File | null = source.file ?? null;
+          if (!fileData) {
+            const fileInput = folderInputRef.current;
+            if (fileInput?.files) {
+              for (let i = 0; i < fileInput.files.length; i += 1) {
+                const f = fileInput.files[i];
+                if (f && (f.webkitRelativePath === source.relativePath || f.name === source.name)) {
+                  fileData = f;
+                  break;
+                }
               }
             }
+          }
+          if (fileData) {
+            folder.file(source.name, fileData);
+            copiedCount += 1;
+            executionRows.push({
+              inputCode: task.parsed.raw,
+              filename: source.name,
+              relativePath: source.relativePath,
+              status: "matched",
+              message: task.resolutionNote,
+            });
           }
           setProgress((prev) => ({ ...prev, copied: copiedCount }));
         }
