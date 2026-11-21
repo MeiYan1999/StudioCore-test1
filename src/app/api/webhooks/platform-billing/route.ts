@@ -22,7 +22,7 @@ export async function POST(request: Request): Promise<Response> {
 
   const rawKey = authHeader || xApiKey || queryApiKey;
 
-  let payload: any = {};
+  let payload: Parameters<typeof processPlatformBillingWebhook>[1] = {};
   try {
     const rawBody = await request.text();
     if (rawBody) {

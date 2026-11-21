@@ -335,7 +335,9 @@ const SHARES_FILE_NAME = "drive-shares.json";
 function getStorageFilePath(): string | null {
   if (typeof window !== "undefined") return null;
   try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy node built-ins; this module is also imported by client components
     const path = require("node:path");
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy node built-ins; this module is also imported by client components
     const fs = require("node:fs");
     const dataDir = path.join(process.cwd(), "data");
     if (!fs.existsSync(dataDir)) {
@@ -363,6 +365,7 @@ function loadPersistedShares(): DriveShare[] | null {
   const filePath = getStorageFilePath();
   if (!filePath) return null;
   try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy node built-ins; this module is also imported by client components
     const fs = require("node:fs");
     if (fs.existsSync(filePath)) {
       const data = fs.readFileSync(filePath, "utf8");
@@ -381,6 +384,7 @@ function persistSharesToDisk(shares: DriveShare[]): void {
   const filePath = getStorageFilePath();
   if (!filePath) return;
   try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy node built-ins; this module is also imported by client components
     const fs = require("node:fs");
     const customShares = shares.filter((s) => !isDemoShare(s.id));
     fs.writeFileSync(filePath, JSON.stringify(customShares, null, 2), "utf8");

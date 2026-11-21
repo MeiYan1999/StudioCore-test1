@@ -54,6 +54,7 @@ export function WebPushSettingsView({ initialSettings, tenantName }: Props) {
 
   useEffect(() => {
     if (typeof window !== "undefined") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- browser-only values read after mount to keep SSR hydration consistent
       setUserAgent(navigator.userAgent || "");
       const iosCheck = /iPad|iPhone|iPod/.test(navigator.userAgent || "");
       setIsIos(iosCheck);

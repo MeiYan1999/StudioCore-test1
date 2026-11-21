@@ -84,7 +84,7 @@ export async function backupDbToR2(sourcePath?: string): Promise<boolean> {
     try {
       const { getDb } = await import("./client");
       const db = getDb();
-      (db as any).$client?.pragma?.("wal_checkpoint(TRUNCATE)");
+      (db as unknown as { $client?: { pragma?: (source: string) => unknown } }).$client?.pragma?.("wal_checkpoint(TRUNCATE)");
     } catch {}
 
     const buffer = fs.readFileSync(/*turbopackIgnore: true*/ dbPath);

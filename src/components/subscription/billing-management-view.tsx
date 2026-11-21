@@ -18,6 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { formatVnd } from "@/lib/utils";
 import { DateTimeText } from "@/components/shared/date-time";
 import { createSubscriptionInvoiceAction } from "@/lib/actions/subscription-actions";
+import type { platformSubscriptions } from "@/lib/db/schema";
 import { SubscriptionCheckoutModal } from "./subscription-checkout-modal";
 import {
   SUBSCRIPTION_PLANS,
@@ -41,10 +42,10 @@ interface BillingManagementViewProps {
       monthly: number;
       yearly: number;
     };
-    latestSub: any;
+    latestSub: unknown;
     isTrial: boolean;
   };
-  subscriptionHistory: any[];
+  subscriptionHistory: (typeof platformSubscriptions.$inferSelect)[];
   initialPlan?: string;
 }
 
@@ -58,6 +59,24 @@ export function BillingManagementView({
   const [isCreating, startTransition] = useTransition();
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  const [nowMs] = useState(() => Date.now());
+
+  const handleSelectPlan = (planKey: SubscriptionPlanKey) => {
+    setErrorMsg(null);
+    startTransition(async () => {
+      try {
+        const res = await createSubscriptionInvoiceAction(planKey, billingCycle);
+        if (res.success && res.data) {
+          setCheckoutData(res.data);
+        } else {
+          setErrorMsg(res.error || "Không thể tạo mã thanh toán.");
+        }
+      } catch (err) {
+        setErrorMsg((err as Error)?.message || "Lỗi hệ thống.");
+      }
+    });
+  };
+
   const autoOpenedRef = useRef(false);
   useEffect(() => {
     if (
@@ -70,27 +89,11 @@ export function BillingManagementView({
     }
   }, [initialPlan]);
 
-  const handleSelectPlan = (planKey: SubscriptionPlanKey) => {
-    setErrorMsg(null);
-    startTransition(async () => {
-      try {
-        const res = await createSubscriptionInvoiceAction(planKey, billingCycle);
-        if (res.success && res.data) {
-          setCheckoutData(res.data);
-        } else {
-          setErrorMsg(res.error || "Không thể tạo mã thanh toán.");
-        }
-      } catch (err: any) {
-        setErrorMsg(err?.message || "Lỗi hệ thống.");
-      }
-    });
-  };
-
   const daysRemaining = currentPlanData.tenant.planExpiresAt
     ? Math.max(
         0,
         Math.ceil(
-          (currentPlanData.tenant.planExpiresAt.getTime() - Date.now()) /
+          (currentPlanData.tenant.planExpiresAt.getTime() - nowMs) /
             (1000 * 60 * 60 * 24),
         ),
       )
