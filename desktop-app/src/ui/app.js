@@ -429,7 +429,7 @@ async function createShare() {
 }
 async function refresh() {
   state = await api("/api/state");
-  $("device-name").textContent = state.config.deviceName;
+  $("device-name").textContent = `StudioCore Drive · ${state.config.deviceName}`;
   $("connection").textContent =
     `Server: ${{ connected: "đã kết nối", unconfigured: "chưa có khóa", connecting: "đang kết nối", error: "lỗi" }[state.connection.status]}${state.connection.message ? " · " + state.connection.message : ""}`;
   $("tunnel-status").textContent =
@@ -567,7 +567,10 @@ $("bell").addEventListener("click", () =>
     $("notification-list").replaceChildren();
     for (const item of state.notifications)
       $("notification-list").append(
-        element("p", `${item.read ? "" : "● "}${item.title} · Khách đã chốt · ${date(item.time)}`),
+        element(
+          "p",
+          `${item.read ? "" : "Chưa đọc: "}${item.title} · Khách đã chốt · ${date(item.time)}`,
+        ),
       );
     if (!state.notifications.length)
       $("notification-list").append(element("p", "Chưa có thông báo."));

@@ -53,11 +53,12 @@ export default async function ManageDrivePage() {
         <CardHeader>
           <CardTitle>Kết nối một lần, chia sẻ mọi lúc</CardTitle>
         </CardHeader>
-        <CardContent className="grid gap-5 sm:grid-cols-3">
+        <CardContent className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
           {[
-            "Tải và mở StudioCore Drive trên máy tính.",
-            "Thêm máy tính, sao chép khóa vào Cài đặt.",
-            "Chọn thư mục trên ứng dụng và gửi link cho khách.",
+            "Cài Node.js LTS từ nodejs.org, sau đó tải và giải nén gói phù hợp bên trên.",
+            "Windows: chạy windows/install.bat. macOS: chạy install.command. Trình cài đặt sẽ mở giao diện trên trình duyệt.",
+            "Thêm máy tính bên dưới, sao chép khóa một lần vào Cài đặt → Khóa kết nối trong ứng dụng và lưu.",
+            "Chọn Tạo link mới hoặc dùng menu chuột phải / Finder Quick Actions, chọn thư mục và gửi link cho khách. Giữ máy và ứng dụng chạy khi khách xem.",
           ].map((step, i) => (
             <div key={step} className="flex gap-3 text-sm">
               <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">

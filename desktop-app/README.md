@@ -3,6 +3,22 @@
 Independent, zero-npm-dependency desktop core and local web GUI. Node **18+**,
 CommonJS, Windows/macOS; Linux for development. No Electron or build step.
 
+## Download packages
+
+From the repository root, run `npm run drive:package`. The zero-dependency Node
+packager creates `public/downloads/StudioCore-Drive-Windows.zip` and
+`StudioCore-Drive-macOS.zip`. Each contains a `StudioCore Drive/` folder with the
+current runtime, README and platform installers, not tests, local data, cache,
+node_modules or binaries downloaded at runtime. macOS `.command` files and app
+launcher retain executable permissions. ZIP timestamps and ordering are fixed
+for reproducible outputs; regenerate and commit both archives after runtime edits.
+
+Install Node.js LTS, unzip the complete folder, then run `windows/install.bat`
+or `install.command`. Create a device at `/manage/drive`, paste its one-time key
+into **Cài đặt → Khóa kết nối**, and save. The installer opens a browser GUI;
+this is not an Electron application or a Google sign-in flow. Keep the agent and
+computer running while customers use the links. Native installers are unsigned.
+
 ## Start
 
 ```sh

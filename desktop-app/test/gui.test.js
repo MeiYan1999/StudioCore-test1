@@ -138,6 +138,10 @@ test("GUI handoff validates kinds/paths and dynamic rendering never interprets f
   const js = await (await fetch(origin + "/app.js", { headers })).text();
   assert.doesNotMatch(js, /innerHTML|outerHTML|insertAdjacentHTML|document\.write|eval\(/);
   assert.match(js, /node\.textContent = String\(text\)/);
+  assert.ok(js.includes("StudioCore Drive · ${state.config.deviceName}"));
+  const html = await (await fetch(origin)).text();
+  assert.match(html, /\+ Tạo link mới/);
+  assert.doesNotMatch(html, /[＋▦◇≡⚙]/);
 });
 test("GUI enforces a single instance and chooses the next free port for another profile", async (t) => {
   const { app, store, root } = await fixture(t);
