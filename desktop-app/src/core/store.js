@@ -7,6 +7,7 @@ const DEFAULTS = {
   serverUrl: "https://studiocore.io.vn",
   deviceToken: null,
   previousDeviceToken: null,
+  previousServerUrl: null,
   deviceId: null,
   deviceName: null,
   studioName: null,

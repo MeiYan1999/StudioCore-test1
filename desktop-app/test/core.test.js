@@ -110,6 +110,7 @@ test("unpair keeps local shares and re-pair sends then clears the previous token
   agent.unpair();
 
   assert.equal(store.get("previousDeviceToken"), "scdt-old");
+  assert.equal(store.get("previousServerUrl"), "http://localhost:3000");
   assert.equal(store.getShare("share-local").folder, "/photos");
   agent.client = () => ({ listShares: async () => ({ shares: [] }) });
   assert.deepEqual(await agent.listShares(), []);
@@ -133,9 +134,39 @@ test("unpair keeps local shares and re-pair sends then clears the previous token
 
   assert.equal(pairInput.previousToken, "scdt-old");
   assert.equal(store.get("previousDeviceToken"), null);
+  assert.equal(store.get("previousServerUrl"), null);
   assert.equal(store.getShare("share-local").folder, "/photos");
   agent.unpair();
   assert.equal(store.get("previousDeviceToken"), "scdt-new");
+});
+
+test("does not send a previous device token to a different server origin", async () => {
+  const store = new Store(tmp());
+  store.set({ deviceToken: "scdt-old", serverUrl: "https://studio-old.example" });
+  const agent = new DriveAgent({ store, images: {}, appVersion: "test" });
+  agent.start = () => {};
+  agent.unpair();
+
+  const originalFetch = global.fetch;
+  let pairInput;
+  global.fetch = async (_url, init) => {
+    pairInput = JSON.parse(init.body);
+    return Response.json({
+      deviceToken: "scdt-new",
+      deviceId: "device-new",
+      deviceName: "Máy mới",
+      studioName: "Studio",
+    });
+  };
+  try {
+    await agent.pair("code", "https://studio-new.example/path");
+  } finally {
+    global.fetch = originalFetch;
+  }
+
+  assert.equal(pairInput.previousToken, undefined);
+  assert.equal(store.get("previousDeviceToken"), null);
+  assert.equal(store.get("previousServerUrl"), null);
 });
 
 test("failed auto-copy stays pending and retry does not emit another notification", async () => {

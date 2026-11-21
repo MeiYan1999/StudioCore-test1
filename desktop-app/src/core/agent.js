@@ -17,6 +17,14 @@ const MIME = {
   mp4: "video/mp4", m4v: "video/mp4", mov: "video/quicktime", webm: "video/webm", mkv: "video/x-matroska",
 };
 
+function sameServerOrigin(left, right) {
+  try {
+    return new URL(left).origin === new URL(right).origin;
+  } catch {
+    return false;
+  }
+}
+
 function parseRange(header, size) {
   const match = /^bytes=(\d*)-(\d*)$/.exec(header || "");
   if (!match || (match[1] === "" && match[2] === "")) return null;
@@ -74,17 +82,21 @@ class DriveAgent extends EventEmitter {
 
   async pair(code, serverUrl) {
     const client = new ApiClient({ serverUrl: serverUrl || this.store.get("serverUrl"), appVersion: this.appVersion });
+    const previousToken = sameServerOrigin(client.serverUrl, this.store.get("previousServerUrl"))
+      ? this.store.get("previousDeviceToken") || undefined
+      : undefined;
     const result = await client.pair({
       code: String(code || "").trim(),
       name: os.hostname().slice(0, 80),
       platform: process.platform,
       appVersion: this.appVersion,
-      previousToken: this.store.get("previousDeviceToken") || undefined,
+      previousToken,
     });
     this.store.set({
       serverUrl: client.serverUrl,
       deviceToken: result.deviceToken,
       previousDeviceToken: null,
+      previousServerUrl: null,
       deviceId: result.deviceId,
       deviceName: result.deviceName,
       studioName: result.studioName,
@@ -97,6 +109,7 @@ class DriveAgent extends EventEmitter {
     this.stop();
     this.store.set({
       previousDeviceToken: this.store.get("deviceToken"),
+      previousServerUrl: this.store.get("serverUrl"),
       deviceToken: null,
       deviceId: null,
       deviceName: null,
