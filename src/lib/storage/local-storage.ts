@@ -181,15 +181,24 @@ export async function generateDemoAlbumAssets(): Promise<void> {
 }
 
 export async function ensureDemoAlbumAssets(): Promise<boolean> {
-  const { DEMO_ALBUM, demoPhotoThumbnailKey, demoDriveFilePath } =
-    await import("../demo-album");
-  const missing = DEMO_ALBUM.photos.some(
-    (photo) =>
-      !fs.existsSync(resolveStoragePath(demoPhotoThumbnailKey(photo.folder, photo.filename))) ||
-      !fs.existsSync(
-        resolveStoragePath(demoDriveFilePath(photo.folder, photo.filename), DEMO_DRIVE_ROOT),
-      ),
-  );
+  const {
+    DEMO_ALBUM,
+    demoPhotoStorageKey,
+    demoPhotoThumbnailKey,
+    demoPhotoPreviewKey,
+    demoDriveFilePath,
+  } = await import("../demo-album");
+  const missing = DEMO_ALBUM.photos.some(({ folder, filename }) => {
+    const uploadKeys = [
+      demoPhotoStorageKey(folder, filename),
+      demoPhotoThumbnailKey(folder, filename),
+      demoPhotoPreviewKey(folder, filename),
+    ];
+    return (
+      uploadKeys.some((key) => !fs.existsSync(resolveStoragePath(key))) ||
+      !fs.existsSync(resolveStoragePath(demoDriveFilePath(folder, filename), DEMO_DRIVE_ROOT))
+    );
+  });
   if (missing) {
     await generateDemoAlbumAssets();
   }
