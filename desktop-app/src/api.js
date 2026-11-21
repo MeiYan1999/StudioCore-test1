@@ -19,7 +19,10 @@ class AgentApi {
         },
         body: body === undefined ? undefined : JSON.stringify(body),
       });
-      if (response.status === 401) throw new Error("Khóa kết nối không hợp lệ hoặc đã bị thu hồi");
+      if (response.status === 401)
+        throw Object.assign(new Error("Khóa kết nối không hợp lệ hoặc đã bị thu hồi"), {
+          status: 401,
+        });
       let data;
       try {
         data = await response.json();

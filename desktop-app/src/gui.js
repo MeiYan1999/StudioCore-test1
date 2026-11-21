@@ -102,7 +102,10 @@ class DesktopApp {
       await agent.start({ noTunnel: this.noTunnel });
       if (this.noTunnel) this.tunnel.origin = agent.origin;
     } catch (error) {
-      this.connection = { status: "error", message: error.message };
+      this.connection = {
+        status: this.agent?.revoked ? "revoked" : "error",
+        message: error.message,
+      };
     }
   }
   async onFinalize({ shareId, selection }) {
@@ -166,12 +169,10 @@ class DesktopApp {
     }
     return {
       config,
-      shares: this.store
-        .loadShares()
-        .map(({ mediaSecret, files, previews, ...share }) => ({
-          ...share,
-          fileCount: Object.keys(files).length,
-        })),
+      shares: this.store.loadShares().map(({ mediaSecret, files, previews, ...share }) => ({
+        ...share,
+        fileCount: Object.keys(files).length,
+      })),
       connection: this.connection,
       tunnel: this.tunnel,
       warning: this.warning,

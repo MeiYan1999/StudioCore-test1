@@ -119,7 +119,13 @@ class AccessLog {
   }
 }
 
-function createMediaServer({ store, cache, port = 0, log = new AccessLog(store.directory) }) {
+function createMediaServer({
+  store,
+  cache,
+  port = 0,
+  log = new AccessLog(store.directory),
+  canServe = () => true,
+}) {
   const server = http.createServer(async (request, response) => {
     const controller = new AbortController();
     response.on("close", () => {
@@ -162,6 +168,7 @@ function createMediaServer({ store, cache, port = 0, log = new AccessLog(store.d
       entry.variant = prefix === "z" ? "zip" : variant;
       const share = store.loadShares().find((item) => item.id === id);
       if (
+        !canServe() ||
         !share ||
         share.status !== "active" ||
         (share.expiresAt && Date.parse(share.expiresAt) <= Date.now()) ||

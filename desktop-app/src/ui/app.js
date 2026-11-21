@@ -431,7 +431,7 @@ async function refresh() {
   state = await api("/api/state");
   $("device-name").textContent = `StudioCore Drive · ${state.config.deviceName}`;
   $("connection").textContent =
-    `Server: ${{ connected: "đã kết nối", unconfigured: "chưa có khóa", connecting: "đang kết nối", error: "lỗi" }[state.connection.status]}${state.connection.message ? " · " + state.connection.message : ""}`;
+    `Server: ${{ connected: "đã kết nối", unconfigured: "chưa có khóa", connecting: "đang kết nối", revoked: "khóa đã bị thu hồi", error: "lỗi" }[state.connection.status]}${state.connection.message ? " · " + state.connection.message : ""}`;
   $("tunnel-status").textContent =
     `Đường truyền: ${{ connected: "đã kết nối", development: "nội bộ (dev)", starting: "đang kết nối", stopped: "đã dừng", error: "lỗi" }[state.tunnel.status]}${state.tunnel.origin ? " · " + state.tunnel.origin : ""}`;
   if (state.warning) $("tunnel-status").textContent += ` · ${state.warning}`;

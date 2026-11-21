@@ -17,8 +17,26 @@ class Agent extends EventEmitter {
     this.cache = options.cache || new PreviewCache(store.directory, this.config.cache);
     this.stopped = true;
     this.origin = null;
+    this.authenticated = false;
+    this.revoked = false;
+  }
+  invalidate(error) {
+    if (this.revoked) return;
+    this.revoked = true;
+    this.authError = error;
+    this.authenticated = false;
+    this.origin = null;
+    clearInterval(this.heartbeatTimer);
+    clearInterval(this.pollTimer);
+    this.store.updateShares((shares) =>
+      shares.map((share) => (share.status === "active" ? { ...share, status: "paused" } : share)),
+    );
+    this.media?.server.closeAllConnections?.();
+    void this.tunnel?.stop().catch((failure) => this.emit("warning", failure.message));
+    this.emit("connection", { status: "revoked", message: error.message });
   }
   async createShare(target, kind, options = {}) {
+    if (this.revoked) throw this.authError;
     const scanned = await scan(target, kind, this.config.filter.outputName);
     const settings = this.config.defaults;
     const { share } = await this.api.createShare({
@@ -32,6 +50,7 @@ class Agent extends EventEmitter {
       expiresInDays: options.expiresDays ?? settings.expiresDays,
       files: scanned.files,
     });
+    if (this.revoked) throw this.authError;
     this.store.updateShares((shares) => [
       ...shares,
       {
@@ -58,6 +77,7 @@ class Agent extends EventEmitter {
     return { id: share.id, url: share.url, title: share.title, fileCount: scanned.files.length };
   }
   async heartbeat() {
+    if (this.revoked) throw this.authError;
     if (this.heartbeatTask) return this.heartbeatTask;
     this.heartbeatTask = this.api.heartbeat({
       name: this.config.deviceName,
@@ -67,20 +87,27 @@ class Agent extends EventEmitter {
     });
     try {
       const result = await this.heartbeatTask;
+      if (this.revoked) throw this.authError;
+      this.authenticated = true;
       this.emit("connection", { status: "connected", ...result });
       return result;
     } catch (error) {
-      this.emit("connection", { status: "error", message: error.message });
+      if (error.status === 401) this.invalidate(error);
+      else if (!this.revoked) this.emit("connection", { status: "error", message: error.message });
       throw error;
     } finally {
       this.heartbeatTask = null;
     }
   }
   async poll() {
+    if (this.revoked) throw this.authError;
     if (this.pollTask) return this.pollTask;
     this.pollTask = this.syncShares();
     try {
       await this.pollTask;
+    } catch (error) {
+      if (error.status === 401) this.invalidate(error);
+      throw error;
     } finally {
       this.pollTask = null;
     }
@@ -89,6 +116,7 @@ class Agent extends EventEmitter {
     const before = this.store.loadShares();
     const known = new Set(before.map((share) => share.id));
     const { shares } = await this.api.listShares();
+    if (this.revoked) throw this.authError;
     const remote = new Map(shares.map((share) => [share.id, share]));
     const finalized = new Map();
     for (const local of before) {
@@ -100,10 +128,12 @@ class Agent extends EventEmitter {
         try {
           finalized.set(local.id, await this.api.selection(local.id));
         } catch (error) {
+          if (error.status === 401) throw error;
           this.emit("warning", error.message);
         }
       }
     }
+    if (this.revoked) throw this.authError;
     this.store.updateShares((local) =>
       local.map((share) => {
         const current = remote.get(share.id);
@@ -146,6 +176,7 @@ class Agent extends EventEmitter {
         store: this.store,
         cache: this.cache,
         port: this.config.mediaPort,
+        canServe: () => this.authenticated && !this.revoked,
       });
       this.port = await this.media.start();
       this.emit("media", { port: this.port });
@@ -184,7 +215,7 @@ class Agent extends EventEmitter {
     await this.tunnel?.stop();
     await Promise.allSettled([this.heartbeatTask, this.pollTask]);
     this.origin = null;
-    await this.heartbeat().catch((error) => this.emit("warning", error.message));
+    if (!this.revoked) await this.heartbeat().catch((error) => this.emit("warning", error.message));
     if (this.media?.server.listening) await this.media.stop();
   }
 }
