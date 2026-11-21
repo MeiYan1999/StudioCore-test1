@@ -46,8 +46,14 @@ const collator = new Intl.Collator("vi", { numeric: true, sensitivity: "base" })
  * Quét thư mục thành danh mục tệp. File RAW có ảnh JPG cùng tên trong cùng thư mục
  * không được đưa lên link (khách xem JPG; RAW được ghép lại khi lọc ảnh đã chọn).
  */
-async function scanFolder(root, salt) {
+async function scanFolder(root, salt, options = {}) {
   const entries = [];
+  const skipDirs = new Set([
+    ...SKIP_DIRS,
+    ...(Array.isArray(options.skipDirs)
+      ? options.skipDirs.filter((name) => typeof name === "string").map((name) => name.toLowerCase())
+      : []),
+  ]);
   async function walk(dir, depth) {
     let list;
     try {
@@ -64,7 +70,7 @@ async function scanFolder(root, salt) {
       if (item.name.startsWith(".") || item.isSymbolicLink()) continue;
       const full = path.join(dir, item.name);
       if (item.isDirectory()) {
-        if (depth < MAX_DEPTH && !SKIP_DIRS.has(item.name.toLowerCase())) await walk(full, depth + 1);
+        if (depth < MAX_DEPTH && !skipDirs.has(item.name.toLowerCase())) await walk(full, depth + 1);
         continue;
       }
       if (!item.isFile()) continue;

@@ -26,6 +26,17 @@ test("quét thư mục: bỏ RAW đã có JPG, khoá không lộ đường dẫn
   assert.notEqual((await scanFolder(dir, "salt-khac"))[0].key, files[0].key);
 });
 
+test("quét thư mục bỏ qua tên thư mục xuất tùy chỉnh không phân biệt hoa thường", async () => {
+  const dir = tmp();
+  fs.mkdirSync(path.join(dir, "Da Chon"));
+  fs.writeFileSync(path.join(dir, "root.jpg"), "x");
+  fs.writeFileSync(path.join(dir, "Da Chon", "picked.jpg"), "x");
+
+  const files = await scanFolder(dir, "salt", { skipDirs: ["dA cHon"] });
+
+  assert.deepEqual(files.map((file) => file.name), ["root.jpg"]);
+});
+
 test("chặn đường dẫn thoát khỏi thư mục chia sẻ", async () => {
   const dir = tmp();
   const outside = tmp();
