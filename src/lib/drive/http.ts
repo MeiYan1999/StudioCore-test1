@@ -35,8 +35,33 @@ export function requireDriveDevice(request: Request): { db: AppDb; device: Drive
 }
 
 export async function readJsonBody(request: Request, maxBytes = 8 * 1024 * 1024): Promise<Record<string, unknown>> {
-  const text = await request.text();
-  if (text.length > maxBytes) throw new ValidationError("Dữ liệu gửi lên quá lớn.");
+  const contentLength = request.headers.get("content-length");
+  if (contentLength && /^\d+$/.test(contentLength) && Number(contentLength) > maxBytes) {
+    throw new ValidationError("Dữ liệu gửi lên quá lớn.");
+  }
+
+  const reader = request.body?.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  if (reader) {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      totalBytes += value.byteLength;
+      if (totalBytes > maxBytes) {
+        await reader.cancel().catch(() => undefined);
+        throw new ValidationError("Dữ liệu gửi lên quá lớn.");
+      }
+      chunks.push(value);
+    }
+  }
+  const bytes = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  const text = new TextDecoder().decode(bytes);
   try {
     const parsed: unknown = JSON.parse(text || "{}");
     if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
