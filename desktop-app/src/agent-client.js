@@ -9,7 +9,7 @@ const { autoFilterRawFiles } = require("./raw-filter");
 const CONFIG_DIR = path.join(os.homedir(), ".studiocore-drive");
 const CONFIG_FILE = path.join(CONFIG_DIR, "config.json");
 
-function loadConfig() {
+function loadConfig(fallback = null) {
   if (!fs.existsSync(CONFIG_DIR)) {
     fs.mkdirSync(CONFIG_DIR, { recursive: true });
   }
@@ -19,7 +19,8 @@ function loadConfig() {
     try {
       cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, "utf8"));
     } catch {
-      // Fallback
+      // File đang được tiến trình khác ghi dở: giữ cấu hình hiện có, không ghi đè bằng mặc định
+      if (fallback) return fallback;
     }
   }
 
@@ -70,7 +71,9 @@ function saveConfig(cfg) {
   if (!fs.existsSync(CONFIG_DIR)) {
     fs.mkdirSync(CONFIG_DIR, { recursive: true });
   }
-  fs.writeFileSync(CONFIG_FILE, JSON.stringify(cfg, null, 2), "utf8");
+  const tmpFile = `${CONFIG_FILE}.${process.pid}.tmp`;
+  fs.writeFileSync(tmpFile, JSON.stringify(cfg, null, 2), "utf8");
+  fs.renameSync(tmpFile, CONFIG_FILE);
 }
 
 function getLocalNetworkIp() {
@@ -103,7 +106,7 @@ class AgentClient {
   }
 
   reloadConfig() {
-    this.config = loadConfig();
+    this.config = loadConfig(this.config);
     return this.config;
   }
 
