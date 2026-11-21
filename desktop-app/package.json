@@ -11,7 +11,7 @@
     "studiocore-drive": "./cli.js"
   },
   "scripts": {
-    "start": "node cli.js daemon",
+    "start": "node cli.js gui",
     "daemon": "node cli.js daemon",
     "test": "node --test"
   },

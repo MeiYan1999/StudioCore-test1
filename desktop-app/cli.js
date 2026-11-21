@@ -1,14 +1,17 @@
 #!/usr/bin/env node
-const { Agent } = require("./src/agent");
+const fs = require("node:fs/promises");
+const path = require("node:path");
+const { spawn } = require("node:child_process");
 const { Store } = require("./src/store");
-const { kindLabels } = require("./src/labels");
+const { DesktopApp } = require("./src/gui");
+const integration = require("./src/os-integration");
 
 function parseArgs(args) {
   const options = {};
   for (let index = 0; index < args.length; index++) {
     const key = args[index];
-    if (key === "--no-tunnel") {
-      options.noTunnel = true;
+    if (["--no-tunnel", "--no-open"].includes(key)) {
+      options[key === "--no-tunnel" ? "noTunnel" : "noOpen"] = true;
       continue;
     }
     if (
@@ -20,30 +23,53 @@ function parseArgs(args) {
   }
   return options;
 }
-
+async function running(store) {
+  try {
+    const { port } = store.read("gui.json", {});
+    if (!Number.isInteger(port) || port < 1 || port > 65535) return null;
+    const token = (await fs.readFile(path.join(store.directory, "gui-token"), "utf8")).trim();
+    const origin = `http://127.0.0.1:${port}`;
+    const call = async (route, body) => {
+      const response = await fetch(origin + route, {
+        method: body === undefined ? "GET" : "POST",
+        headers: { "X-SC-Token": token, "Content-Type": "application/json" },
+        body: body === undefined ? undefined : JSON.stringify(body),
+        signal: AbortSignal.timeout(3000),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error);
+      return result;
+    };
+    if ((await call("/api/ping")).app !== "StudioCoreDrive") return null;
+    return { origin, call };
+  } catch {
+    return null;
+  }
+}
 async function main(args = process.argv.slice(2)) {
-  const command = args.shift() || "status";
+  const command = args.shift() || "gui";
   const store = new Store();
+  const options = parseArgs(args);
+  if (["install-context", "uninstall-context"].includes(command))
+    return integration.contextMenu(command === "install-context");
+  if (["autostart-on", "autostart-off"].includes(command)) {
+    await integration.autoStart(command === "autostart-on");
+    store.saveConfig({ ...store.loadConfig(), autoStart: command === "autostart-on" });
+    return;
+  }
   if (command === "status") {
     const config = store.loadConfig();
     console.log(
       JSON.stringify(
         {
-          dataDirectory: store.directory,
+          directory: store.directory,
+          running: Boolean(await running(store)),
           serverUrl: config.serverUrl,
           deviceName: config.deviceName,
           connectKey: config.connectKey ? "Đã thiết lập" : "Chưa thiết lập",
           tunnelMode: config.tunnel.mode,
-          shares: store
-            .loadShares()
-            .map(({ id, kind, title, status, expiresAt, files }) => ({
-              id,
-              kind: kindLabels[kind],
-              title,
-              status,
-              expiresAt,
-              fileCount: Object.keys(files).length,
-            })),
+          autoStart: config.autoStart,
+          shareCount: store.loadShares().length,
         },
         null,
         2,
@@ -51,46 +77,84 @@ async function main(args = process.argv.slice(2)) {
     );
     return;
   }
-  const options = parseArgs(args);
-  const agent = new Agent(store);
-  if (command === "share") {
-    if (!options.path || !options.kind)
-      throw new Error(
-        "Dùng: node cli.js share --path P --kind album|view|video|folder [--title T --customer K --pin PIN --max N --days N]",
-      );
-    const result = await agent.createShare(options.path, options.kind, {
-      title: options.title,
-      customer: options.customer,
-      pin: options.pin,
-      maxSelect: options.max === undefined ? undefined : Number(options.max),
-      expiresDays: options.days === undefined ? undefined : Number(options.days),
-    });
-    console.log(JSON.stringify(result, null, 2));
+  let existing = await running(store);
+  if (command === "uninstall") {
+    if (existing) await existing.call("/api/shutdown", {}).catch(() => {});
+    await integration.contextMenu(false);
+    await integration.autoStart(false);
+    store.saveConfig({ ...store.loadConfig(), autoStart: false });
     return;
   }
-  if (command !== "daemon")
-    throw new Error("Lệnh hỗ trợ: daemon, status, share. GUI sẽ có ở phiên bản tiếp theo.");
-  agent.on("media", ({ port }) => console.log(`Máy chủ media: http://127.0.0.1:${port}`));
-  agent.on("tunnel", ({ status, origin, message }) =>
-    console.log(`Tunnel: ${status}${origin ? ` ${origin}` : ""}${message ? ` — ${message}` : ""}`),
-  );
-  agent.on("warning", (message) => console.error(message));
-  agent.on("finalized", ({ shareId }) => console.log(`Khách đã chốt lựa chọn: ${shareId}`));
+  if (!["gui", "open", "daemon", "share"].includes(command))
+    throw new Error("Lệnh: gui, open, daemon, status, share.");
+  if (
+    command === "share" &&
+    (!options.path || !["album", "view", "folder", "video"].includes(options.kind))
+  )
+    throw new Error("Dùng share --path P --kind album|view|video|folder");
+  if (!existing && command === "share") {
+    const child = spawn(
+      process.execPath,
+      [__filename, "daemon", ...(options.noTunnel ? ["--no-tunnel"] : [])],
+      { detached: true, stdio: "ignore", windowsHide: true },
+    );
+    child.unref();
+    for (let tries = 0; tries < 100 && !existing; tries++) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      existing = await running(store);
+    }
+    if (!existing)
+      throw new Error(
+        "Không khởi động được StudioCore Drive. Hãy chạy node cli.js gui để xem lỗi.",
+      );
+  }
+  if (existing) {
+    let hash = "";
+    if (command === "share")
+      hash = (
+        await existing.call("/api/handoff", {
+          path: path.resolve(options.path),
+          kind: options.kind,
+        })
+      ).hash;
+    if (command !== "daemon" && !options.noOpen)
+      await integration.openPath(existing.origin + "/" + hash);
+    return;
+  }
+  const app = new DesktopApp(store, { noTunnel: options.noTunnel });
+  try {
+    await app.start();
+  } catch (error) {
+    if (error.code === "EEXIST") {
+      for (let tries = 0; tries < 50 && !existing; tries++) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        existing = await running(store);
+      }
+      if (existing) {
+        if (command !== "daemon" && !options.noOpen) await integration.openPath(existing.origin);
+        return;
+      }
+    }
+    throw error;
+  }
+  console.log(`StudioCore Drive GUI: http://127.0.0.1:${app.port}`);
   let stopping = false;
   const stop = async () => {
-    if (stopping) return;
-    stopping = true;
-    await agent.stop();
+    if (!stopping) {
+      stopping = true;
+      await app.stop();
+    }
   };
   process.once("SIGINT", stop);
   process.once("SIGTERM", stop);
-  await agent.start({ noTunnel: options.noTunnel });
-  console.log("StudioCore Drive đang chạy. Nhấn Ctrl+C để dừng.");
+  if (command !== "daemon" && !options.noOpen)
+    await integration
+      .openPath(`http://127.0.0.1:${app.port}`)
+      .catch((error) => console.error(error.message));
 }
-
 if (require.main === module)
   main().catch((error) => {
     console.error(error.message);
     process.exitCode = 1;
   });
-module.exports = { main, parseArgs };
+module.exports = { main, parseArgs, running };

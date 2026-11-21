@@ -45,6 +45,12 @@ class Agent extends EventEmitter {
         status: share.status,
         expiresAt: share.expiresAt,
         selectionStatus: share.selectionStatus,
+        url: share.url,
+        pin: (options.pin ?? settings.pin) || "",
+        customerName: share.customerName || options.customer || "",
+        createdAt: new Date().toISOString(),
+        maxSelect: share.maxSelect,
+        fileCount: scanned.files.length,
         files: scanned.mapping,
         previews: scanned.previews,
       },
@@ -60,7 +66,12 @@ class Agent extends EventEmitter {
       tunnelOrigin: this.origin,
     });
     try {
-      return await this.heartbeatTask;
+      const result = await this.heartbeatTask;
+      this.emit("connection", { status: "connected", ...result });
+      return result;
+    } catch (error) {
+      this.emit("connection", { status: "error", message: error.message });
+      throw error;
     } finally {
       this.heartbeatTask = null;
     }
@@ -105,6 +116,13 @@ class Agent extends EventEmitter {
           selectionStatus: current.selectionStatus,
           finalizedAt: current.finalizedAt,
           lastFinalizedAt: finalized.has(share.id) ? current.finalizedAt : share.lastFinalizedAt,
+          title: current.title,
+          customerName: current.customerName,
+          url: current.url,
+          maxSelect: current.maxSelect,
+          likedCount: current.likedCount,
+          pinProtected: current.pinProtected,
+          createdAt: current.createdAt,
         };
       }),
     );

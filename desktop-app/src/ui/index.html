@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="sc-token" content="__SC_TOKEN__" />
+    <title>StudioCore Drive</title>
+    <link rel="stylesheet" href="/style.css" />
+    <script defer src="/app.js"></script>
+  </head>
+  <body>
+    <aside>
+      <div class="brand">
+        S<span>StudioCore <small>DRIVE · KHÔNG GIAN LÀM VIỆC</small></span>
+      </div>
+      <nav>
+        <button data-tab="shares" class="active">▦ Album &amp; link</button
+        ><button data-tab="filter">◇ Lọc ảnh</button><button data-tab="logs">≡ Nhật ký</button
+        ><button data-tab="settings">⚙ Cài đặt</button>
+      </nav>
+      <div class="aside-bottom">Tệp ở máy bạn.<br />Trải nghiệm dành cho khách.</div>
+    </aside>
+    <main>
+      <header>
+        <div>
+          <strong id="device-name">StudioCore Drive</strong>
+          <div id="connection" class="muted">Đang tải trạng thái…</div>
+          <div id="tunnel-status" class="muted"></div>
+        </div>
+        <button id="bell">Thông báo <span id="unread">0</span></button>
+      </header>
+      <div id="message" role="status" hidden></div>
+      <section id="tab-shares">
+        <div class="page-title">
+          <div>
+            <p class="eyebrow">KẾT NỐI VỚI KHÁCH HÀNG</p>
+            <h1>Album &amp; link</h1>
+            <p class="muted">Một nơi cho ảnh, lựa chọn và những câu chuyện của bạn.</p>
+          </div>
+          <button id="new-share" class="primary">＋ Tạo link mới</button>
+        </div>
+        <div class="toolbar">
+          <div id="kind-filters" class="chips"></div>
+          <input
+            id="search"
+            placeholder="Tìm album, tên khách hoặc thư mục…"
+            aria-label="Tìm album"
+          />
+        </div>
+        <div id="share-list"></div>
+      </section>
+      <section id="tab-filter" hidden>
+        <p class="eyebrow">TỪ LỰA CHỌN ĐẾN BÀN GIAO</p>
+        <h1>Lọc ảnh</h1>
+        <p class="muted">Tìm đúng mã, giữ nguyên bản gốc. Không bao giờ ghi đè tệp đã có.</p>
+        <form id="filter-form" class="panel form-grid">
+          <label class="wide"
+            >Nguồn lựa chọn<select name="shareId" id="filter-share">
+              <option value="">Dán mã thủ công</option>
+            </select></label
+          ><label class="wide"
+            >Mã ảnh<textarea
+              name="codes"
+              id="filter-codes"
+              rows="3"
+              placeholder="IMG_001, IMG_002 | IMG_003"
+            ></textarea
+            ><small id="code-count">0 mã ảnh</small></label
+          ><label class="wide"
+            >Thư mục nguồn
+            <div class="input-group">
+              <input name="source" id="filter-source" required /><button
+                type="button"
+                data-pick="filter-source"
+              >
+                Chọn thư mục
+              </button>
+            </div></label
+          ><label
+            >Định dạng<select name="mode" id="filter-mode">
+              <option value="raw">RAW</option>
+              <option value="jpg">JPG</option>
+              <option value="both">Cả hai</option>
+            </select></label
+          ><label
+            >Tên thư mục con<input
+              name="outputName"
+              id="filter-output-name"
+              value="Anh_Chon_Goc" /></label
+          ><label class="wide"
+            >Hoặc thư mục kết quả tùy chọn
+            <div class="input-group">
+              <input
+                name="outputPath"
+                id="filter-output"
+                placeholder="Để trống để tạo thư mục con trong nguồn"
+              /><button type="button" data-pick="filter-output">Chọn thư mục</button>
+            </div></label
+          >
+          <div class="actions wide">
+            <button type="button" id="filter-preview">Xem trước</button
+            ><button class="primary">Lọc &amp; copy</button>
+          </div>
+        </form>
+        <div id="filter-result" class="panel" hidden></div>
+      </section>
+      <section id="tab-logs" hidden>
+        <p class="eyebrow">THEO DÕI KẾT NỐI</p>
+        <h1>Nhật ký truy cập</h1>
+        <p class="muted">300 lượt gần nhất · tự cập nhật mỗi 5 giây khi mở tab này.</p>
+        <div class="panel table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Thời gian</th>
+                <th>IP</th>
+                <th>Album</th>
+                <th>Tệp</th>
+                <th>Loại</th>
+                <th>HTTP</th>
+              </tr>
+            </thead>
+            <tbody id="logs-body"></tbody>
+          </table>
+        </div>
+      </section>
+      <section id="tab-settings" hidden>
+        <p class="eyebrow">THIẾT LẬP KHÔNG GIAN CỦA BẠN</p>
+        <h1>Cài đặt</h1>
+        <form id="settings-form">
+          <div id="settings-fields"></div>
+          <div class="actions sticky">
+            <button class="primary">Lưu cài đặt</button
+            ><button type="button" id="test-connection">Kiểm tra kết nối</button>
+          </div>
+        </form>
+        <div class="panel">
+          <h2>Thành phần &amp; hệ thống</h2>
+          <p id="component-status" class="muted"></p>
+          <div class="actions">
+            <button data-tunnel="download">Tải thành phần kết nối</button
+            ><button data-tunnel="start">Bắt đầu</button><button data-tunnel="stop">Dừng</button
+            ><button data-tunnel="restart">Khởi động lại</button>
+          </div>
+          <hr />
+          <div class="actions">
+            <button id="install-context">Cài menu chuột phải</button
+            ><button id="uninstall-context">Gỡ menu chuột phải</button
+            ><button id="clear-cache">Dọn ngay</button>
+          </div>
+          <p id="cache-usage" class="muted"></p>
+        </div>
+      </section>
+      <footer>StudioCore Drive · Riêng tư từ máy tính của bạn</footer>
+    </main>
+    <dialog id="create-dialog">
+      <div class="dialog-title">
+        <h2>Tạo link chia sẻ</h2>
+        <button type="button" data-close="create-dialog">✕</button>
+      </div>
+      <form id="create-form" class="form-grid">
+        <label class="wide"
+          >Đường dẫn nguồn
+          <div class="input-group">
+            <input name="path" id="create-path" required /><button type="button" id="create-pick">
+              Chọn thư mục / video
+            </button>
+          </div></label
+        >
+        <div id="kind-cards" class="wide kind-cards"></div>
+        <input type="hidden" name="kind" id="create-kind" value="album" /><label
+          >Tên album<input name="title" id="create-title" required /></label
+        ><label>Tên khách<input name="customer" /></label>
+        <div id="max-field" class="wide">
+          <label
+            >Số ảnh tối đa<input
+              name="maxSelect"
+              type="number"
+              min="1"
+              max="5000"
+              id="create-max"
+              value="30"
+          /></label>
+          <div class="chips" id="max-chips"></div>
+        </div>
+        <label
+          >PIN (6 số, tùy chọn)
+          <div class="input-group">
+            <input name="pin" pattern="[0-9]{6}" maxlength="6" id="create-pin" /><button
+              type="button"
+              id="random-pin"
+            >
+              Ngẫu nhiên
+            </button>
+          </div></label
+        ><label
+          >Hết hạn sau (ngày; 0 = không hết hạn)<input
+            name="expiresDays"
+            type="number"
+            min="0"
+            max="3650"
+            id="create-days"
+            value="30" /></label
+        ><label class="check wide"
+          ><input name="allowOriginals" type="checkbox" id="create-originals" checked />Cho tải bản
+          gốc</label
+        ><button class="primary wide">Tạo link</button>
+      </form>
+      <div id="create-result" hidden></div>
+    </dialog>
+    <dialog id="selection-dialog">
+      <div class="dialog-title">
+        <h2>Ảnh khách chọn</h2>
+        <button data-close="selection-dialog">✕</button>
+      </div>
+      <div id="selection-list"></div>
+    </dialog>
+    <dialog id="notifications-dialog">
+      <div class="dialog-title">
+        <h2>Thông báo</h2>
+        <button data-close="notifications-dialog">✕</button>
+      </div>
+      <div id="notification-list"></div>
+    </dialog>
+  </body>
+</html>
