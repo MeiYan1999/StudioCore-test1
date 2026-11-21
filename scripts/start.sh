@@ -26,9 +26,7 @@ else
   echo "[Init] Database đã tồn tại từ trước hoặc đã phục hồi từ R2, bỏ qua seed để bảo vệ tài khoản người dùng."
 fi
 
-# 4. Ảnh demo nằm ngoài database (UPLOAD_ROOT, demo-data/), tạo lại nếu thiếu
-if [ "${STORAGE_PROVIDER:-local}" = "local" ]; then
-  node --import tsx -e 'import { ensureDemoAlbumAssets } from "./src/lib/storage/local-storage"; await ensureDemoAlbumAssets();' || true
-fi
+# 4. Ảnh demo nằm ngoài database (UPLOAD_ROOT, demo-data/, R2), tạo/upload lại nếu thiếu
+node --import tsx -e 'import { ensureDemoAlbumAssets } from "./src/lib/storage/local-storage"; await ensureDemoAlbumAssets();' || true
 
 exec npm start

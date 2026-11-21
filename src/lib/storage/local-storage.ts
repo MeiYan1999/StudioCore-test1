@@ -180,27 +180,56 @@ export async function generateDemoAlbumAssets(): Promise<void> {
   }
 }
 
-export async function ensureDemoAlbumAssets(): Promise<boolean> {
+type DemoAssetStore = {
+  read(key: string): Promise<Buffer>;
+  put(key: string, buffer: Buffer): Promise<void>;
+};
+
+async function demoAlbumUploadKeys(): Promise<string[]> {
   const {
     DEMO_ALBUM,
     demoPhotoStorageKey,
     demoPhotoThumbnailKey,
     demoPhotoPreviewKey,
-    demoDriveFilePath,
   } = await import("../demo-album");
-  const missing = DEMO_ALBUM.photos.some(({ folder, filename }) => {
-    const uploadKeys = [
-      demoPhotoStorageKey(folder, filename),
-      demoPhotoThumbnailKey(folder, filename),
-      demoPhotoPreviewKey(folder, filename),
-    ];
-    return (
-      uploadKeys.some((key) => !fs.existsSync(resolveStoragePath(key))) ||
-      !fs.existsSync(resolveStoragePath(demoDriveFilePath(folder, filename), DEMO_DRIVE_ROOT))
+  return DEMO_ALBUM.photos.flatMap(({ folder, filename }) => [
+    demoPhotoStorageKey(folder, filename),
+    demoPhotoThumbnailKey(folder, filename),
+    demoPhotoPreviewKey(folder, filename),
+  ]);
+}
+
+export async function syncDemoAlbumAssetsToStore(store: DemoAssetStore): Promise<number> {
+  let uploaded = 0;
+  for (const key of await demoAlbumUploadKeys()) {
+    try {
+      await store.read(key);
+    } catch {
+      await store.put(key, readStorageBuffer(key));
+      uploaded += 1;
+    }
+  }
+  return uploaded;
+}
+
+export async function ensureDemoAlbumAssets(): Promise<boolean> {
+  const { DEMO_ALBUM, demoDriveFilePath } = await import("../demo-album");
+  const uploadKeys = await demoAlbumUploadKeys();
+  const missing =
+    uploadKeys.some((key) => !fs.existsSync(resolveStoragePath(key))) ||
+    DEMO_ALBUM.photos.some(
+      ({ folder, filename }) =>
+        !fs.existsSync(resolveStoragePath(demoDriveFilePath(folder, filename), DEMO_DRIVE_ROOT)),
     );
-  });
   if (missing) {
     await generateDemoAlbumAssets();
   }
-  return missing;
+
+  const { getStorageAdapter } = await import("../adapters/storage");
+  const adapter = getStorageAdapter();
+  const uploaded =
+    adapter.provider !== "local" && adapter.configured
+      ? await syncDemoAlbumAssetsToStore(adapter)
+      : 0;
+  return missing || uploaded > 0;
 }
