@@ -13,9 +13,6 @@ export const metadata: Metadata = {
   },
   description:
     "Nền tảng quản lý studio chụp ảnh: khách hàng, đơn hàng, lịch chụp, album, tài chính và nhân sự trong một hệ thống.",
-  icons: {
-    icon: "/icon.svg",
-  },
   verification: {
     google: "Bff_74fIHBnqwX041Uw3yaPMlm6UBhHc8IABKxuefJQ",
   },

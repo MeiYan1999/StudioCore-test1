@@ -1,7 +1,8 @@
 import { cookies } from "next/headers";
-import { Images, Link2Off, ShieldAlert } from "lucide-react";
+import { notFound } from "next/navigation";
 import { ShareGallery } from "@/components/share/share-gallery";
 import { SharePasswordGate } from "@/components/share/share-password-gate";
+import { ShareUnavailable } from "@/components/share/share-unavailable";
 import { getDb } from "@/lib/db/client";
 import {
   evaluateShareAccess,
@@ -21,34 +22,6 @@ export const metadata = {
   referrer: "no-referrer",
 };
 
-function ShareUnavailable({
-  title,
-  description,
-}: {
-  title: string;
-  description: string;
-}) {
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-10">
-      <div className="w-full max-w-md rounded-2xl border border-border bg-surface p-8 text-center">
-        <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-surface-muted text-muted-foreground">
-          {title.includes("hết hạn") || title.includes("thu hồi") ? (
-            <Link2Off className="h-6 w-6" aria-hidden />
-          ) : (
-            <ShieldAlert className="h-6 w-6" aria-hidden />
-          )}
-        </span>
-        <h1 className="mt-4 text-lg font-semibold text-foreground">{title}</h1>
-        <p className="mt-2 text-sm text-muted-foreground">{description}</p>
-        <p className="mt-6 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
-          <Images className="h-3.5 w-3.5" aria-hidden />
-          StudioCore PhotoShare
-        </p>
-      </div>
-    </div>
-  );
-}
-
 export default async function SharePage({
   params,
 }: {
@@ -59,12 +32,7 @@ export default async function SharePage({
   const album = getShareAlbumByToken(db, token);
 
   if (!album) {
-    return (
-      <ShareUnavailable
-        title="Không tìm thấy album"
-        description="Link không đúng hoặc album đã bị xóa. Vui lòng kiểm tra lại link studio đã gửi."
-      />
-    );
+    notFound();
   }
 
   const cookieStore = await cookies();

@@ -258,7 +258,7 @@ export default async function SettingsHubPage() {
             <Link
               key={item.id}
               href={item.href}
-              {...(isDownloadOrApi ? { target: "_blank", download: true } : {})}
+              {...(isDownloadOrApi ? { target: "_blank", download: true, prefetch: false } : {})}
               className="group relative flex flex-col justify-between rounded-2xl border border-border bg-surface p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/50 hover:bg-surface hover:shadow-md hover:ring-1 hover:ring-primary/20"
             >
               <div>

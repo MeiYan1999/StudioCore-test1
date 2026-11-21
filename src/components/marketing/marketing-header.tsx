@@ -98,6 +98,7 @@ export function MarketingHeader() {
                 </Link>
                 <Link
                   href="/demo"
+                  prefetch={false}
                   onClick={() => setMobileOpen(false)}
                   className="block rounded-lg border border-border px-3 py-2.5 text-center text-sm font-medium"
                 >
