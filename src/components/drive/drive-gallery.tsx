@@ -9,6 +9,7 @@ import {
   FileIcon,
   HardDrive,
   Heart,
+  MessageSquare,
   Play,
   Send,
   WifiOff,
@@ -53,6 +54,7 @@ export function DriveGallery(props: Props) {
   const list = useMemo(() => (tab === "picked" ? files.filter((f) => f.picked) : files), [files, tab]);
   const openIndex = openId ? list.findIndex((f) => f.id === openId) : -1;
   const openFile = openIndex >= 0 ? list[openIndex] : null;
+  const openFileId = openFile?.id ?? "";
 
   const fileUrl = (id: string, variant: "thumb" | "preview" | "original") =>
     `${base}/file/${encodeURIComponent(id)}?v=${variant}`;
@@ -96,6 +98,13 @@ export function DriveGallery(props: Props) {
   useEffect(() => {
     if (!openFile) return;
     const onKey = (event: KeyboardEvent) => {
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable || target.tagName === "INPUT" || target.tagName === "TEXTAREA")
+      ) {
+        return;
+      }
       if (event.key === "Escape") setOpenId(null);
       else if (event.key === "ArrowRight") move(1);
       else if (event.key === "ArrowLeft") move(-1);
@@ -107,6 +116,27 @@ export function DriveGallery(props: Props) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [openFile, move, selecting, togglePick]);
+
+  async function savePhotoNote(fileId: string, photoNote: string) {
+    try {
+      const response = await fetch(`${base}/pick`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileId, note: photoNote }),
+      });
+      const data = (await response.json().catch(() => null)) as
+        | { error?: string; note?: string | null; picked?: boolean }
+        | null;
+      if (!response.ok || !data) throw new Error(data?.error ?? "Không lưu được ghi chú.");
+      setFiles((current) =>
+        current.map((file) =>
+          file.id === fileId ? { ...file, picked: data.picked ?? file.picked, note: data.note ?? null } : file,
+        ),
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Không lưu được ghi chú.");
+    }
+  }
 
   async function submit() {
     setBusy(true);
@@ -215,6 +245,14 @@ export function DriveGallery(props: Props) {
                       </span>
                     </span>
                   ) : null}
+                  {file.note ? (
+                    <span
+                      className="absolute left-2 top-2 rounded-full bg-black/65 p-1.5 text-white"
+                      title="Ảnh có ghi chú"
+                    >
+                      <MessageSquare className="h-3.5 w-3.5" aria-hidden />
+                    </span>
+                  ) : null}
                   <span className="absolute inset-x-0 bottom-0 truncate bg-gradient-to-t from-black/70 to-transparent px-2 pb-1 pt-4 text-left text-[11px] text-white">
                     {file.name}
                   </span>
@@ -268,6 +306,27 @@ export function DriveGallery(props: Props) {
               </Button>
             )}
           </div>
+          {selecting && openFile?.picked ? (
+            <div className="px-4 pb-4">
+              <Textarea
+                value={openFile?.note ?? ""}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setFiles((current) =>
+                    current.map((file) => (file.id === openFileId ? { ...file, note: value || null } : file)),
+                  );
+                }}
+                onBlur={(event) => {
+                  if (!submitted) void savePhotoNote(openFileId, event.currentTarget.value);
+                }}
+                readOnly={submitted}
+                maxLength={500}
+                placeholder={submitted ? "Chưa có ghi chú cho ảnh này." : "Ghi chú cho ảnh này"}
+                aria-label="Ghi chú cho ảnh này"
+                className="mx-auto max-h-20 max-w-2xl border-white/25 bg-white/10 text-white placeholder:text-white/50"
+              />
+            </div>
+          ) : null}
         </div>
       ) : null}
 
