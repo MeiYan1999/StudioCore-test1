@@ -5,8 +5,7 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1).default("./data/studiocore.db"),
   AUTH_SECRET: z
     .string()
-    .min(32, "AUTH_SECRET phải dài tối thiểu 32 ký tự")
-    .default("studiocore-prod-auth-secret-key-stable-2026-vn-secure"),
+    .min(32, "AUTH_SECRET phải dài tối thiểu 32 ký tự"),
   SESSION_TTL_HOURS: z.coerce.number().int().positive().max(720).default(72),
   NEXT_PUBLIC_SITE_URL: z.string().url().default("http://localhost:3000"),
   STORAGE_PROVIDER: z.enum(["local", "s3", "r2"]).default("local"),
