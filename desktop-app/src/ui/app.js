@@ -41,6 +41,13 @@ const CONNECTION_LABELS = {
   unknown: { text: "Đang kiểm tra kết nối SaaS...", color: "#94a3b8" },
 };
 
+function setStatusDot(color) {
+  const dot = document.querySelector(".pulse-dot");
+  if (!dot) return;
+  dot.style.background = color;
+  dot.style.boxShadow = `0 0 10px ${color}`;
+}
+
 let sharesById = new Map();
 let settingsHydrated = false;
 
@@ -64,6 +71,7 @@ async function loadAgentState() {
     statusText.innerText = label.text;
     statusText.style.color = label.color;
     statusText.title = (data.connection && data.connection.message) || "";
+    setStatusDot(label.color);
     hostInfo.innerText = `Máy: ${data.hostname || "Local PC"} (${data.os || "OS"})`;
 
     if (!settingsHydrated) hydrateSettings(data);
@@ -72,6 +80,7 @@ async function loadAgentState() {
   } catch {
     statusText.innerText = "Mất kết nối với Desktop Agent";
     statusText.style.color = "#ef4444";
+    setStatusDot("#ef4444");
     return null;
   }
 }
