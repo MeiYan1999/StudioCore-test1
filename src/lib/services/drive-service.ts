@@ -1,528 +1,716 @@
-export type DriveShareType = "album" | "folder" | "video";
-export type DriveShareStatus = "active" | "paused" | "expired";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { and, asc, count, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
+import type { AppDb } from "../db/client";
+import {
+  driveDevices,
+  drivePairingCodes,
+  driveShareFiles,
+  driveShares,
+  loginAttempts,
+  tenants,
+  type DriveDevice,
+  type DriveShareFileRow,
+  type DriveShareRow,
+} from "../db/schema";
+import { hashSecret, verifySecret } from "../auth/password";
+import { assertPermission } from "../auth/permissions";
+import type { ActorContext } from "../auth/types";
+import { writeAudit } from "../audit";
+import { AuthorizationError, NotFoundError, ValidationError } from "../errors";
 
-export interface DriveItem {
-  id: string;
+export const DRIVE_PAIRING_TTL_MS = 15 * 60 * 1000;
+export const DRIVE_MAX_FILES_PER_SHARE = 20_000;
+export const DRIVE_ONLINE_WINDOW_MS = 75_000;
+const PIN_WINDOW_MS = 15 * 60 * 1000;
+const PIN_MAX_FAILURES = 8;
+
+export const DRIVE_SHARE_KINDS = ["select", "deliver"] as const;
+export type DriveShareKind = (typeof DRIVE_SHARE_KINDS)[number];
+export const DRIVE_FILE_KINDS = ["image", "raw", "video", "other"] as const;
+export type DriveFileKind = (typeof DRIVE_FILE_KINDS)[number];
+
+export type DriveFileInput = {
+  key: string;
   name: string;
-  filename: string;
-  path: string;
-  sizeBytes: number;
-  sizeLabel: string;
-  type: "image" | "raw" | "video" | "document";
-  format: "CR3" | "CR2" | "ARW" | "NEF" | "JPG" | "PNG" | "MP4" | "MOV" | "ZIP" | "PDF";
-  thumbnailUrl: string;
-  previewUrl: string;
-  downloadUrl: string;
-  width?: number;
-  height?: number;
-  selected?: boolean;
-  favorite?: boolean;
-  note?: string | null;
-}
-
-export interface DriveVideoComment {
-  id: string;
-  seconds: number;
-  timeLabel: string;
-  author: string;
-  content: string;
-  createdAt: string;
-}
-
-export interface DriveShare {
-  id: string;
-  tenantId: string;
-  title: string;
-  subtitle?: string;
-  type: DriveShareType;
-  status: DriveShareStatus;
-  localPath: string;
-  agentHostname: string;
-  agentConnected: boolean;
-  passwordProtected: boolean;
-  allowRawDownload: boolean;
-  allowZipDownload: boolean;
-  maxSelectCount: number;
-  selectedCount: number;
-  totalFiles: number;
-  totalSizeBytes: number;
-  totalSizeLabel: string;
-  viewsCount: number;
-  downloadsCount: number;
-  clientName?: string;
-  clientPhone?: string;
-  createdAt: string;
-  expiresAt: string | null;
-  items: DriveItem[];
-  videoMeta?: {
-    videoUrl: string;
-    durationSeconds: number;
-    durationLabel: string;
-    resolution: string;
-    coverUrl: string;
-  };
-  comments?: DriveVideoComment[];
-}
-
-const DEFAULT_DEMO_SHARES: DriveShare[] = [
-  {
-    id: "cuoi-minh-lan-dalat",
-    tenantId: "tenant-demo",
-    title: "Cưới Minh & Lan — Ngoại Cảnh Đà Lạt",
-    subtitle: "Show ngoại cảnh 3 ngày 2 đêm · StudioCore Drive Live",
-    type: "album",
-    status: "active",
-    localPath: "D:/StudioCore-Data/2026/Cuoi_Minh_Lan_DaLat",
-    agentHostname: "PC-PhongDung-01 (Windows 11)",
-    agentConnected: true,
-    passwordProtected: false,
-    allowRawDownload: true,
-    allowZipDownload: true,
-    maxSelectCount: 40,
-    selectedCount: 14,
-    totalFiles: 1248,
-    totalSizeBytes: 34359738368, // ~32 GB
-    totalSizeLabel: "32.4 GB",
-    viewsCount: 28,
-    downloadsCount: 5,
-    clientName: "Trần Minh & Lê Phương Lan",
-    clientPhone: "0988 123 456",
-    createdAt: "2026-11-08T08:30:00Z",
-    expiresAt: "2026-12-08T23:59:59Z",
-    items: [
-      {
-        id: "img-0124",
-        name: "IMG_0124.CR3",
-        filename: "IMG_0124.CR3",
-        path: "D:/StudioCore-Data/2026/Cuoi_Minh_Lan_DaLat/IMG_0124.CR3",
-        sizeBytes: 31457280,
-        sizeLabel: "30.0 MB",
-        type: "raw",
-        format: "CR3",
-        thumbnailUrl: "/api/files/tenant-demo/album-demo-01/duoi-ca/anh-001-thumb.jpg",
-        previewUrl: "/api/files/tenant-demo/album-demo-01/duoi-ca/anh-001.jpg",
-        downloadUrl: "#download-0124",
-        width: 6000,
-        height: 4000,
-        selected: true,
-        favorite: true,
-        note: "Chỉnh màu sáng góc váy và mây trời",
-      },
-      {
-        id: "img-0138",
-        name: "IMG_0138.CR3",
-        filename: "IMG_0138.CR3",
-        path: "D:/StudioCore-Data/2026/Cuoi_Minh_Lan_DaLat/IMG_0138.CR3",
-        sizeBytes: 29360128,
-        sizeLabel: "28.0 MB",
-        type: "raw",
-        format: "CR3",
-        thumbnailUrl: "/api/files/tenant-demo/album-demo-01/duoi-ca/anh-002-thumb.jpg",
-        previewUrl: "/api/files/tenant-demo/album-demo-01/duoi-ca/anh-002.jpg",
-        downloadUrl: "#download-0138",
-        width: 6000,
-        height: 4000,
-        selected: true,
-        favorite: true,
-        note: "Xóa bóng người đi ngang phía sau",
-      },
-      {
-        id: "img-0189",
-        name: "IMG_0189.CR3",
-        filename: "IMG_0189.CR3",
-        path: "D:/StudioCore-Data/2026/Cuoi_Minh_Lan_DaLat/IMG_0189.CR3",
-        sizeBytes: 32505856,
-        sizeLabel: "31.0 MB",
-        type: "raw",
-        format: "CR3",
-        thumbnailUrl: "/api/files/tenant-demo/album-demo-01/duoi-ca/anh-003-thumb.jpg",
-        previewUrl: "/api/files/tenant-demo/album-demo-01/duoi-ca/anh-003.jpg",
-        downloadUrl: "#download-0189",
-        width: 6000,
-        height: 4000,
-        selected: true,
-        favorite: false,
-        note: null,
-      },
-      {
-        id: "img-0205",
-        name: "IMG_0205.CR3",
-        filename: "IMG_0205.CR3",
-        path: "D:/StudioCore-Data/2026/Cuoi_Minh_Lan_DaLat/IMG_0205.CR3",
-        sizeBytes: 28311552,
-        sizeLabel: "27.0 MB",
-        type: "raw",
-        format: "CR3",
-        thumbnailUrl: "/api/files/tenant-demo/album-demo-01/duoi-ca/anh-004-thumb.jpg",
-        previewUrl: "/api/files/tenant-demo/album-demo-01/duoi-ca/anh-004.jpg",
-        downloadUrl: "#download-0205",
-        width: 6000,
-        height: 4000,
-        selected: false,
-        favorite: false,
-        note: null,
-      },
-      {
-        id: "img-0211",
-        name: "IMG_0211.CR3",
-        filename: "IMG_0211.CR3",
-        path: "D:/StudioCore-Data/2026/Cuoi_Minh_Lan_DaLat/IMG_0211.CR3",
-        sizeBytes: 30408704,
-        sizeLabel: "29.0 MB",
-        type: "raw",
-        format: "CR3",
-        thumbnailUrl: "/api/files/tenant-demo/album-demo-01/truyen-thong/anh-005-thumb.jpg",
-        previewUrl: "/api/files/tenant-demo/album-demo-01/truyen-thong/anh-005.jpg",
-        downloadUrl: "#download-0211",
-        width: 6000,
-        height: 4000,
-        selected: false,
-        favorite: false,
-        note: null,
-      },
-      {
-        id: "img-0220",
-        name: "IMG_0220.CR3",
-        filename: "IMG_0220.CR3",
-        path: "D:/StudioCore-Data/2026/Cuoi_Minh_Lan_DaLat/IMG_0220.CR3",
-        sizeBytes: 31457280,
-        sizeLabel: "30.0 MB",
-        type: "raw",
-        format: "CR3",
-        thumbnailUrl: "/api/files/tenant-demo/album-demo-01/truyen-thong/anh-006-thumb.jpg",
-        previewUrl: "/api/files/tenant-demo/album-demo-01/truyen-thong/anh-006.jpg",
-        downloadUrl: "#download-0220",
-        width: 6000,
-        height: 4000,
-        selected: true,
-        favorite: false,
-        note: null,
-      },
-    ],
-  },
-  {
-    id: "ky-yeu-12a1-folder",
-    tenantId: "tenant-demo",
-    title: "Kỷ yếu Lớp 12A1 — Trọn Bộ File In & Bản Đẹp",
-    subtitle: "Thư mục bàn giao file in photobook và ảnh thẻ phóng sự",
-    type: "folder",
-    status: "active",
-    localPath: "/Volumes/NAS_Studio/Ky_Yeu_2026/Lop_12A1",
-    agentHostname: "Mac Studio M2 Ultra (macOS Sequoia)",
-    agentConnected: true,
-    passwordProtected: false,
-    allowRawDownload: false,
-    allowZipDownload: true,
-    maxSelectCount: 0,
-    selectedCount: 0,
-    totalFiles: 248,
-    totalSizeBytes: 3328599654, // ~3.1 GB
-    totalSizeLabel: "3.1 GB",
-    viewsCount: 92,
-    downloadsCount: 45,
-    clientName: "Lớp trưởng Nguyễn Thu Trang",
-    clientPhone: "0912 345 678",
-    createdAt: "2026-11-07T14:00:00Z",
-    expiresAt: "2026-12-31T23:59:59Z",
-    items: [
-      {
-        id: "file-01",
-        name: "01_Anh_Tap_The_Ao_Dai.jpg",
-        filename: "01_Anh_Tap_The_Ao_Dai.jpg",
-        path: "/Volumes/NAS_Studio/Ky_Yeu_2026/Lop_12A1/01_Anh_Tap_The_Ao_Dai.jpg",
-        sizeBytes: 18874368,
-        sizeLabel: "18.0 MB",
-        type: "image",
-        format: "JPG",
-        thumbnailUrl: "/api/files/tenant-demo/album-demo-01/truyen-thong/anh-007-thumb.jpg",
-        previewUrl: "/api/files/tenant-demo/album-demo-01/truyen-thong/anh-007.jpg",
-        downloadUrl: "#download-tapthe",
-        width: 7952,
-        height: 5304,
-      },
-      {
-        id: "file-02",
-        name: "02_Bia_Photobook_Final.pdf",
-        filename: "02_Bia_Photobook_Final.pdf",
-        path: "/Volumes/NAS_Studio/Ky_Yeu_2026/Lop_12A1/02_Bia_Photobook_Final.pdf",
-        sizeBytes: 47185920,
-        sizeLabel: "45.0 MB",
-        type: "document",
-        format: "PDF",
-        thumbnailUrl: "/api/files/tenant-demo/album-demo-01/truyen-thong/anh-008-thumb.jpg",
-        previewUrl: "/api/files/tenant-demo/album-demo-01/truyen-thong/anh-008.jpg",
-        downloadUrl: "#download-pdf",
-      },
-      {
-        id: "file-03",
-        name: "03_Tron_Bo_Anh_Ca_Nhan_35HS.zip",
-        filename: "03_Tron_Bo_Anh_Ca_Nhan_35HS.zip",
-        path: "/Volumes/NAS_Studio/Ky_Yeu_2026/Lop_12A1/03_Tron_Bo_Anh_Ca_Nhan_35HS.zip",
-        sizeBytes: 1610612736,
-        sizeLabel: "1.5 GB",
-        type: "document",
-        format: "ZIP",
-        thumbnailUrl: "/api/files/tenant-demo/album-demo-01/le-gia-tien/anh-009-thumb.jpg",
-        previewUrl: "/api/files/tenant-demo/album-demo-01/le-gia-tien/anh-009.jpg",
-        downloadUrl: "#download-zip",
-      },
-    ],
-  },
-  {
-    id: "highlight-cuoi-minh-lan-video",
-    tenantId: "tenant-demo",
-    title: "Highlight Phóng Sự Cưới — Minh & Lan (Bản 4K)",
-    subtitle: "Khách xem trực tiếp & góp ý chỉnh sửa theo từng giây",
-    type: "video",
-    status: "active",
-    localPath: "D:/StudioCore-Data/Videos/2026/Highlight_Minh_Lan_4K.mp4",
-    agentHostname: "PC-PhongDung-01 (Windows 11)",
-    agentConnected: true,
-    passwordProtected: false,
-    allowRawDownload: true,
-    allowZipDownload: false,
-    maxSelectCount: 0,
-    selectedCount: 0,
-    totalFiles: 1,
-    totalSizeBytes: 2362232012, // ~2.2 GB
-    totalSizeLabel: "2.2 GB",
-    viewsCount: 42,
-    downloadsCount: 12,
-    clientName: "Trần Minh & Lê Phương Lan",
-    clientPhone: "0988 123 456",
-    createdAt: "2026-11-09T02:00:00Z",
-    expiresAt: "2026-12-15T23:59:59Z",
-    items: [],
-    videoMeta: {
-      videoUrl: "/api/files/tenant-demo/demo-video-highlight.mp4",
-      durationSeconds: 275, // 4m35s
-      durationLabel: "04:35",
-      resolution: "4K UHD (3840 x 2160)",
-      coverUrl: "/marketing/dashboard.jpg",
-    },
-    comments: [
-      {
-        id: "cmt-1",
-        seconds: 45,
-        timeLabel: "00:45",
-        author: "Phương Lan (Cô dâu)",
-        content: "Đoạn bố trao tay cắt nhanh hơn 2 giây giúp em nhé studio.",
-        createdAt: "2026-11-09T03:15:00Z",
-      },
-      {
-        id: "cmt-2",
-        seconds: 124,
-        timeLabel: "02:04",
-        author: "Trần Minh (Chú rể)",
-        content: "Màu đoạn nâng ly này đẹp lắm, giữ nguyên nhé anh em!",
-        createdAt: "2026-11-09T04:20:00Z",
-      },
-      {
-        id: "cmt-3",
-        seconds: 215,
-        timeLabel: "03:35",
-        author: "Phương Lan (Cô dâu)",
-        content: "Nhạc nền đoạn này chuyển êm một chút trước khi sang phần pháo sáng ạ.",
-        createdAt: "2026-11-09T05:00:00Z",
-      },
-    ],
-  },
-];
-
-// Persistent runtime & disk store for demo & studio shares
-const SHARES_FILE_NAME = "drive-shares.json";
-
-function getStorageFilePath(): string | null {
-  if (typeof window !== "undefined") return null;
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy node built-ins; this module is also imported by client components
-    const path = require("node:path");
-    // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy node built-ins; this module is also imported by client components
-    const fs = require("node:fs");
-    const dataDir = path.join(process.cwd(), "data");
-    if (!fs.existsSync(dataDir)) {
-      try {
-        fs.mkdirSync(dataDir, { recursive: true });
-      } catch {
-        return path.join("/tmp", SHARES_FILE_NAME);
-      }
-    }
-    return path.join(dataDir, SHARES_FILE_NAME);
-  } catch {
-    return null;
-  }
-}
-
-function cloneDemoShares(): DriveShare[] {
-  return JSON.parse(JSON.stringify(DEFAULT_DEMO_SHARES));
-}
-
-function isDemoShare(id: string): boolean {
-  return DEFAULT_DEMO_SHARES.some((d) => d.id === id);
-}
-
-function loadPersistedShares(): DriveShare[] | null {
-  const filePath = getStorageFilePath();
-  if (!filePath) return null;
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy node built-ins; this module is also imported by client components
-    const fs = require("node:fs");
-    if (fs.existsSync(filePath)) {
-      const data = fs.readFileSync(filePath, "utf8");
-      const parsed = JSON.parse(data);
-      if (Array.isArray(parsed)) {
-        return parsed.filter((s) => !isDemoShare(s.id));
-      }
-    }
-  } catch {
-    // Ignore read error
-  }
-  return null;
-}
-
-function persistSharesToDisk(shares: DriveShare[]): void {
-  const filePath = getStorageFilePath();
-  if (!filePath) return;
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy node built-ins; this module is also imported by client components
-    const fs = require("node:fs");
-    const customShares = shares.filter((s) => !isDemoShare(s.id));
-    fs.writeFileSync(filePath, JSON.stringify(customShares, null, 2), "utf8");
-  } catch {
-    // Ignore write error
-  }
-}
-
-const globalForShares = globalThis as unknown as {
-  __STUDIOCORE_DRIVE_SHARES__?: DriveShare[];
+  kind: DriveFileKind;
+  size: number;
 };
 
-function getGlobalShares(): DriveShare[] {
-  if (!globalForShares.__STUDIOCORE_DRIVE_SHARES__) {
-    const customShares = loadPersistedShares() || [];
-    globalForShares.__STUDIOCORE_DRIVE_SHARES__ = [
-      ...customShares,
-      ...cloneDemoShares(),
-    ];
-  }
-  return globalForShares.__STUDIOCORE_DRIVE_SHARES__;
+export type DriveShareInput = {
+  title: string;
+  clientName?: string | null;
+  kind: DriveShareKind;
+  pin?: string | null;
+  maxSelect?: number;
+  allowOriginal?: boolean;
+  expiresInDays?: number | null;
+  files: DriveFileInput[];
+};
+
+export type DriveShareSummary = {
+  id: string;
+  slug: string;
+  title: string;
+  clientName: string | null;
+  kind: DriveShareKind;
+  status: "active" | "paused";
+  hasPin: boolean;
+  maxSelect: number;
+  allowOriginal: boolean;
+  expiresAt: number | null;
+  expired: boolean;
+  fileCount: number;
+  totalBytes: number;
+  viewCount: number;
+  pickedCount: number;
+  submittedAt: number | null;
+  submissionNote: string | null;
+  deviceId: string;
+  deviceName: string;
+  createdAt: number;
+};
+
+function sha256(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
 }
 
-export function listDriveShares(tenantId?: string): DriveShare[] {
-  const shares = getGlobalShares();
-  if (!tenantId) return shares;
-  return shares.filter((s) => s.tenantId === tenantId || s.tenantId === "tenant-demo");
+function randomToken(prefix: string, bytes: number): string {
+  return `${prefix}${randomBytes(bytes).toString("base64url")}`;
 }
 
-export function getDriveShareById(id: string): DriveShare | undefined {
-  const shares = getGlobalShares();
-  let found = shares.find((s) => s.id === id);
-  if (!found) {
-    const diskShares = loadPersistedShares();
-    if (diskShares) {
-      for (const s of diskShares) {
-        if (!shares.some((existing) => existing.id === s.id)) {
-          shares.unshift(s);
-        }
-      }
-      found = shares.find((s) => s.id === id);
+function cleanText(value: unknown, max: number): string {
+  return typeof value === "string"
+    ? value.replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, max)
+    : "";
+}
+
+// ---------------------------------------------------------------- pairing
+
+export function createDrivePairingCode(db: AppDb, actor: ActorContext): { code: string; expiresAt: number } {
+  assertPermission(actor, "albums.manage");
+  const code = randomToken("scd-", 18);
+  const expiresAt = Date.now() + DRIVE_PAIRING_TTL_MS;
+  db.insert(drivePairingCodes)
+    .values({
+      id: randomUUID(),
+      tenantId: actor.tenantId,
+      codeHash: sha256(code),
+      createdBy: actor.staffId,
+      expiresAt: new Date(expiresAt),
+    })
+    .run();
+  writeAudit(db, {
+    tenantId: actor.tenantId,
+    actorId: actor.staffId,
+    action: "drive.pairing_code.create",
+    entity: "drive_device",
+  });
+  return { code, expiresAt };
+}
+
+export function pairDriveDevice(
+  db: AppDb,
+  input: { code: string; name: string; platform: string; appVersion: string },
+): { deviceToken: string; deviceId: string; deviceName: string; studioName: string } {
+  const code = cleanText(input.code, 120);
+  if (!code) throw new ValidationError("Thiếu mã kết nối.");
+  return db.transaction((tx) => {
+    const row = tx
+      .select()
+      .from(drivePairingCodes)
+      .where(eq(drivePairingCodes.codeHash, sha256(code)))
+      .get();
+    if (!row || row.usedAt || row.expiresAt.getTime() < Date.now()) {
+      throw new AuthorizationError("Mã kết nối không đúng hoặc đã hết hạn.");
     }
+    const tenant = tx.select().from(tenants).where(eq(tenants.id, row.tenantId)).get();
+    if (!tenant || tenant.status !== "active") {
+      throw new AuthorizationError("Studio hiện không hoạt động.");
+    }
+    tx.update(drivePairingCodes)
+      .set({ usedAt: new Date() })
+      .where(eq(drivePairingCodes.id, row.id))
+      .run();
+    const deviceToken = randomToken("scdt-", 32);
+    const deviceId = randomUUID();
+    const deviceName = cleanText(input.name, 80) || "Máy studio";
+    tx.insert(driveDevices)
+      .values({
+        id: deviceId,
+        tenantId: row.tenantId,
+        name: deviceName,
+        platform: cleanText(input.platform, 20) || "unknown",
+        appVersion: cleanText(input.appVersion, 20),
+        tokenHash: sha256(deviceToken),
+        pairedBy: row.createdBy,
+        lastSeenAt: new Date(),
+      })
+      .run();
+    writeAudit(tx as unknown as AppDb, {
+      tenantId: row.tenantId,
+      actorId: row.createdBy,
+      action: "drive.device.pair",
+      entity: "drive_device",
+      entityId: deviceId,
+      metadata: { name: deviceName },
+    });
+    return { deviceToken, deviceId, deviceName, studioName: tenant.name };
+  });
+}
+
+export function authenticateDriveDevice(db: AppDb, token: string | null): DriveDevice {
+  if (!token || !token.startsWith("scdt-")) {
+    throw new AuthorizationError("Thiết bị chưa được kết nối.");
   }
-  return found;
-}
-
-export function createDriveShare(share: Omit<DriveShare, "viewsCount" | "downloadsCount" | "selectedCount">): DriveShare {
-  const shares = getGlobalShares();
-  const newShare: DriveShare = {
-    ...share,
-    viewsCount: 0,
-    downloadsCount: 0,
-    selectedCount: share.items.filter((i) => i.selected).length,
-  };
-
-  const existingIdx = shares.findIndex((s) => s.id === newShare.id);
-  if (existingIdx !== -1) {
-    shares[existingIdx] = newShare;
-  } else {
-    shares.unshift(newShare);
+  const device = db
+    .select()
+    .from(driveDevices)
+    .where(eq(driveDevices.tokenHash, sha256(token)))
+    .get();
+  if (!device || device.revokedAt) {
+    throw new AuthorizationError("Thiết bị đã bị gỡ kết nối.");
   }
-
-  persistSharesToDisk(shares);
-  return newShare;
+  return device;
 }
 
-export function updateDriveShareStatus(id: string, status: DriveShareStatus): boolean {
-  const shares = getGlobalShares();
-  const share = shares.find((s) => s.id === id);
-  if (!share) return false;
-  share.status = status;
-  persistSharesToDisk(shares);
-  return true;
+export function touchDriveDevice(db: AppDb, device: DriveDevice, appVersion?: string): void {
+  const now = Date.now();
+  if (device.lastSeenAt && now - device.lastSeenAt.getTime() < 20_000 && !appVersion) return;
+  db.update(driveDevices)
+    .set({ lastSeenAt: new Date(now), ...(appVersion ? { appVersion: cleanText(appVersion, 20) } : {}) })
+    .where(eq(driveDevices.id, device.id))
+    .run();
 }
 
-export function deleteDriveShare(id: string): boolean {
-  const shares = getGlobalShares();
-  const index = shares.findIndex((s) => s.id === id);
-  if (index === -1) return false;
-  shares.splice(index, 1);
-  persistSharesToDisk(shares);
-  return true;
+export function isDriveDeviceOnline(device: Pick<DriveDevice, "lastSeenAt" | "revokedAt">): boolean {
+  return (
+    !device.revokedAt &&
+    !!device.lastSeenAt &&
+    Date.now() - device.lastSeenAt.getTime() < DRIVE_ONLINE_WINDOW_MS
+  );
 }
 
-export function toggleDriveItemSelection(shareId: string, itemId: string, note?: string | null): boolean {
-  const shares = getGlobalShares();
-  const share = shares.find((s) => s.id === shareId);
-  if (!share) return false;
-  const item = share.items.find((i) => i.id === itemId);
-  if (!item) return false;
+export function getTenantName(db: AppDb, tenantId: string): string {
+  return db.select({ name: tenants.name }).from(tenants).where(eq(tenants.id, tenantId)).get()?.name ?? "";
+}
 
-  item.selected = !item.selected;
-  if (note !== undefined) {
-    item.note = note;
+export type DriveDeviceView = {
+  id: string;
+  name: string;
+  platform: string;
+  appVersion: string;
+  online: boolean;
+  lastSeenAt: number | null;
+  createdAt: number;
+  shareCount: number;
+};
+
+export function listDriveDevices(db: AppDb, actor: ActorContext): DriveDeviceView[] {
+  assertPermission(actor, "albums.view");
+  const rows = db
+    .select()
+    .from(driveDevices)
+    .where(and(eq(driveDevices.tenantId, actor.tenantId), isNull(driveDevices.revokedAt)))
+    .orderBy(desc(driveDevices.createdAt))
+    .all();
+  const counts = new Map(
+    db
+      .select({ deviceId: driveShares.deviceId, n: count() })
+      .from(driveShares)
+      .where(eq(driveShares.tenantId, actor.tenantId))
+      .groupBy(driveShares.deviceId)
+      .all()
+      .map((r) => [r.deviceId, r.n]),
+  );
+  return rows.map((d) => ({
+    id: d.id,
+    name: d.name,
+    platform: d.platform,
+    appVersion: d.appVersion,
+    online: isDriveDeviceOnline(d),
+    lastSeenAt: d.lastSeenAt?.getTime() ?? null,
+    createdAt: d.createdAt.getTime(),
+    shareCount: counts.get(d.id) ?? 0,
+  }));
+}
+
+export function revokeDriveDevice(db: AppDb, actor: ActorContext, deviceId: string): void {
+  assertPermission(actor, "albums.manage");
+  const result = db
+    .update(driveDevices)
+    .set({ revokedAt: new Date() })
+    .where(and(eq(driveDevices.id, deviceId), eq(driveDevices.tenantId, actor.tenantId)))
+    .run();
+  if (result.changes === 0) throw new NotFoundError("Không tìm thấy thiết bị.");
+  db.update(driveShares)
+    .set({ status: "paused", updatedAt: new Date() })
+    .where(eq(driveShares.deviceId, deviceId))
+    .run();
+  writeAudit(db, {
+    tenantId: actor.tenantId,
+    actorId: actor.staffId,
+    action: "drive.device.revoke",
+    entity: "drive_device",
+    entityId: deviceId,
+  });
+}
+
+// ---------------------------------------------------------------- shares
+
+function normalizeFiles(files: unknown): DriveFileInput[] {
+  if (!Array.isArray(files)) throw new ValidationError("Danh sách tệp không hợp lệ.");
+  if (files.length === 0) throw new ValidationError("Thư mục không có ảnh hoặc video nào.");
+  if (files.length > DRIVE_MAX_FILES_PER_SHARE) {
+    throw new ValidationError(`Mỗi link tối đa ${DRIVE_MAX_FILES_PER_SHARE} tệp.`);
   }
-  share.selectedCount = share.items.filter((i) => i.selected).length;
-  persistSharesToDisk(shares);
-  return true;
-}
-
-export function addDriveVideoComment(shareId: string, seconds: number, author: string, content: string): DriveVideoComment | null {
-  const shares = getGlobalShares();
-  const share = shares.find((s) => s.id === shareId);
-  if (!share) return null;
-  if (!share.comments) share.comments = [];
-
-  const mins = Math.floor(seconds / 60).toString().padStart(2, "0");
-  const secs = Math.floor(seconds % 60).toString().padStart(2, "0");
-  const timeLabel = `${mins}:${secs}`;
-
-  const comment: DriveVideoComment = {
-    id: `cmt-${Date.now()}`,
-    seconds,
-    timeLabel,
-    author: author.trim() || "Khách hàng",
-    content: content.trim(),
-    createdAt: new Date().toISOString(),
-  };
-
-  share.comments.push(comment);
-  share.comments.sort((a, b) => a.seconds - b.seconds);
-  persistSharesToDisk(shares);
-  return comment;
-}
-
-export function getDriveExportRawCodes(shareId: string): string {
-  const shares = getGlobalShares();
-  const share = shares.find((s) => s.id === shareId);
-  if (!share) return "";
-  const selectedItems = share.items.filter((i) => i.selected);
-  return selectedItems.map((i) => i.filename.replace(/\.[^/.]+$/, "")).join(", ");
-}
-
-export function incrementDriveViews(shareId: string): void {
-  const shares = getGlobalShares();
-  const share = shares.find((s) => s.id === shareId);
-  if (share) {
-    share.viewsCount += 1;
-    persistSharesToDisk(shares);
+  const seen = new Set<string>();
+  const out: DriveFileInput[] = [];
+  for (const raw of files) {
+    const item = raw as Partial<DriveFileInput>;
+    const key = typeof item.key === "string" ? item.key : "";
+    if (!/^[A-Za-z0-9_-]{6,64}$/.test(key) || seen.has(key)) {
+      throw new ValidationError("Mã tệp không hợp lệ.");
+    }
+    seen.add(key);
+    const name = cleanText(item.name, 255).replace(/[\\/]/g, "_");
+    if (!name) throw new ValidationError("Tên tệp không hợp lệ.");
+    const kind = DRIVE_FILE_KINDS.includes(item.kind as DriveFileKind) ? (item.kind as DriveFileKind) : "other";
+    const size = Number.isFinite(item.size) && (item.size as number) >= 0 ? Math.floor(item.size as number) : 0;
+    out.push({ key, name, kind, size });
   }
+  return out;
+}
+
+function normalizePin(pin: unknown): string | null {
+  if (pin === null || pin === undefined || pin === "") return null;
+  if (typeof pin !== "string" || !/^[0-9A-Za-z]{4,12}$/.test(pin)) {
+    throw new ValidationError("Mã PIN gồm 4-12 chữ số hoặc chữ cái.");
+  }
+  return pin;
+}
+
+function expiresFromDays(days: unknown): Date | null {
+  if (days === null || days === undefined || days === 0 || days === "") return null;
+  const n = Number(days);
+  if (!Number.isFinite(n) || n < 0 || n > 3650) throw new ValidationError("Số ngày hết hạn không hợp lệ.");
+  return n === 0 ? null : new Date(Date.now() + n * 86_400_000);
+}
+
+function insertFiles(tx: AppDb, shareId: string, files: DriveFileInput[], startIndex = 0): void {
+  for (let i = 0; i < files.length; i += 200) {
+    tx.insert(driveShareFiles)
+      .values(
+        files.slice(i, i + 200).map((f, j) => ({
+          id: randomUUID(),
+          shareId,
+          fileKey: f.key,
+          name: f.name,
+          kind: f.kind,
+          size: f.size,
+          sortIndex: startIndex + i + j,
+        })),
+      )
+      .run();
+  }
+}
+
+export function createDriveShare(db: AppDb, device: DriveDevice, input: DriveShareInput): DriveShareRow {
+  const title = cleanText(input.title, 160);
+  if (!title) throw new ValidationError("Vui lòng nhập tên link.");
+  if (!DRIVE_SHARE_KINDS.includes(input.kind)) throw new ValidationError("Loại link không hợp lệ.");
+  const files = normalizeFiles(input.files);
+  const pin = normalizePin(input.pin);
+  const maxSelect = Math.max(0, Math.min(100_000, Math.floor(Number(input.maxSelect) || 0)));
+  const id = randomUUID();
+  return db.transaction((tx) => {
+    tx.insert(driveShares)
+      .values({
+        id,
+        tenantId: device.tenantId,
+        deviceId: device.id,
+        slug: randomBytes(12).toString("base64url"),
+        title,
+        clientName: cleanText(input.clientName, 120) || null,
+        kind: input.kind,
+        pinHash: pin ? hashSecret(pin) : null,
+        maxSelect: input.kind === "select" ? maxSelect : 0,
+        allowOriginal: input.kind === "deliver" ? true : !!input.allowOriginal,
+        expiresAt: expiresFromDays(input.expiresInDays),
+        fileCount: files.length,
+        totalBytes: files.reduce((sum, f) => sum + f.size, 0),
+      })
+      .run();
+    insertFiles(tx as unknown as AppDb, id, files);
+    return tx.select().from(driveShares).where(eq(driveShares.id, id)).get()!;
+  });
+}
+
+/** Cập nhật danh mục tệp sau khi máy studio quét lại thư mục; giữ nguyên lựa chọn của khách. */
+export function replaceDriveShareFiles(db: AppDb, device: DriveDevice, shareId: string, rawFiles: unknown): void {
+  const share = getDeviceShare(db, device, shareId);
+  const files = normalizeFiles(rawFiles);
+  db.transaction((tx) => {
+    const existing = new Map(
+      tx
+        .select()
+        .from(driveShareFiles)
+        .where(eq(driveShareFiles.shareId, share.id))
+        .all()
+        .map((f) => [f.fileKey, f]),
+    );
+    const incoming = new Set(files.map((f) => f.key));
+    const removed = [...existing.values()].filter((f) => !incoming.has(f.fileKey)).map((f) => f.id);
+    for (let i = 0; i < removed.length; i += 400) {
+      tx.delete(driveShareFiles).where(inArray(driveShareFiles.id, removed.slice(i, i + 400))).run();
+    }
+    files.forEach((f, index) => {
+      const current = existing.get(f.key);
+      if (current) {
+        if (current.sortIndex !== index || current.size !== f.size || current.name !== f.name) {
+          tx.update(driveShareFiles)
+            .set({ sortIndex: index, size: f.size, name: f.name, kind: f.kind })
+            .where(eq(driveShareFiles.id, current.id))
+            .run();
+        }
+      } else {
+        insertFiles(tx as unknown as AppDb, share.id, [f], index);
+      }
+    });
+    tx.update(driveShares)
+      .set({
+        fileCount: files.length,
+        totalBytes: files.reduce((sum, f) => sum + f.size, 0),
+        updatedAt: new Date(),
+      })
+      .where(eq(driveShares.id, share.id))
+      .run();
+  });
+}
+
+function getDeviceShare(db: AppDb, device: DriveDevice, shareId: string): DriveShareRow {
+  const share = db
+    .select()
+    .from(driveShares)
+    .where(and(eq(driveShares.id, shareId), eq(driveShares.deviceId, device.id)))
+    .get();
+  if (!share) throw new NotFoundError("Không tìm thấy link chia sẻ.");
+  return share;
+}
+
+export type DriveSharePatch = {
+  status?: "active" | "paused";
+  title?: string;
+  clientName?: string | null;
+  pin?: string | null;
+  maxSelect?: number;
+  allowOriginal?: boolean;
+  expiresInDays?: number | null;
+  reopen?: boolean;
+};
+
+function applySharePatch(db: AppDb, share: DriveShareRow, patch: DriveSharePatch): void {
+  const set: Partial<typeof driveShares.$inferInsert> = { updatedAt: new Date() };
+  if (patch.status !== undefined) {
+    if (patch.status !== "active" && patch.status !== "paused") throw new ValidationError("Trạng thái không hợp lệ.");
+    set.status = patch.status;
+  }
+  if (patch.title !== undefined) {
+    const title = cleanText(patch.title, 160);
+    if (!title) throw new ValidationError("Vui lòng nhập tên link.");
+    set.title = title;
+  }
+  if (patch.clientName !== undefined) set.clientName = cleanText(patch.clientName, 120) || null;
+  if (patch.pin !== undefined) {
+    const pin = normalizePin(patch.pin);
+    set.pinHash = pin ? hashSecret(pin) : null;
+  }
+  if (patch.maxSelect !== undefined) {
+    set.maxSelect = Math.max(0, Math.min(100_000, Math.floor(Number(patch.maxSelect) || 0)));
+  }
+  if (patch.allowOriginal !== undefined && share.kind === "select") set.allowOriginal = !!patch.allowOriginal;
+  if (patch.expiresInDays !== undefined) set.expiresAt = expiresFromDays(patch.expiresInDays);
+  if (patch.reopen) {
+    set.submittedAt = null;
+    set.submissionNote = null;
+  }
+  db.update(driveShares).set(set).where(eq(driveShares.id, share.id)).run();
+}
+
+export function updateDriveShareFromDevice(db: AppDb, device: DriveDevice, shareId: string, patch: DriveSharePatch): void {
+  applySharePatch(db, getDeviceShare(db, device, shareId), patch);
+}
+
+export function deleteDriveShareFromDevice(db: AppDb, device: DriveDevice, shareId: string): void {
+  const share = getDeviceShare(db, device, shareId);
+  db.delete(driveShares).where(eq(driveShares.id, share.id)).run();
+}
+
+function getTenantShare(db: AppDb, actor: ActorContext, shareId: string): DriveShareRow {
+  const share = db
+    .select()
+    .from(driveShares)
+    .where(and(eq(driveShares.id, shareId), eq(driveShares.tenantId, actor.tenantId)))
+    .get();
+  if (!share) throw new NotFoundError("Không tìm thấy link chia sẻ.");
+  return share;
+}
+
+export function updateDriveShareByActor(db: AppDb, actor: ActorContext, shareId: string, patch: DriveSharePatch): void {
+  assertPermission(actor, "albums.manage");
+  applySharePatch(db, getTenantShare(db, actor, shareId), patch);
+  writeAudit(db, {
+    tenantId: actor.tenantId,
+    actorId: actor.staffId,
+    action: "drive.share.update",
+    entity: "drive_share",
+    entityId: shareId,
+    metadata: { fields: Object.keys(patch) },
+  });
+}
+
+export function deleteDriveShareByActor(db: AppDb, actor: ActorContext, shareId: string): void {
+  assertPermission(actor, "albums.manage");
+  const share = getTenantShare(db, actor, shareId);
+  db.delete(driveShares).where(eq(driveShares.id, share.id)).run();
+  writeAudit(db, {
+    tenantId: actor.tenantId,
+    actorId: actor.staffId,
+    action: "drive.share.delete",
+    entity: "drive_share",
+    entityId: shareId,
+    metadata: { title: share.title },
+  });
+}
+
+function summarize(db: AppDb, rows: DriveShareRow[]): DriveShareSummary[] {
+  if (rows.length === 0) return [];
+  const ids = rows.map((r) => r.id);
+  const picked = new Map(
+    db
+      .select({ shareId: driveShareFiles.shareId, n: count() })
+      .from(driveShareFiles)
+      .where(and(inArray(driveShareFiles.shareId, ids), eq(driveShareFiles.picked, true)))
+      .groupBy(driveShareFiles.shareId)
+      .all()
+      .map((r) => [r.shareId, r.n]),
+  );
+  const deviceNames = new Map(
+    db
+      .select({ id: driveDevices.id, name: driveDevices.name })
+      .from(driveDevices)
+      .where(inArray(driveDevices.id, [...new Set(rows.map((r) => r.deviceId))]))
+      .all()
+      .map((d) => [d.id, d.name]),
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    slug: r.slug,
+    title: r.title,
+    clientName: r.clientName,
+    kind: r.kind as DriveShareKind,
+    status: r.status === "paused" ? "paused" : "active",
+    hasPin: !!r.pinHash,
+    maxSelect: r.maxSelect,
+    allowOriginal: r.allowOriginal,
+    expiresAt: r.expiresAt?.getTime() ?? null,
+    expired: !!r.expiresAt && r.expiresAt.getTime() < Date.now(),
+    fileCount: r.fileCount,
+    totalBytes: r.totalBytes,
+    viewCount: r.viewCount,
+    pickedCount: picked.get(r.id) ?? 0,
+    submittedAt: r.submittedAt?.getTime() ?? null,
+    submissionNote: r.submissionNote,
+    deviceId: r.deviceId,
+    deviceName: deviceNames.get(r.deviceId) ?? "",
+    createdAt: r.createdAt.getTime(),
+  }));
+}
+
+export function listDriveSharesForDevice(db: AppDb, device: DriveDevice): DriveShareSummary[] {
+  return summarize(
+    db,
+    db.select().from(driveShares).where(eq(driveShares.deviceId, device.id)).orderBy(desc(driveShares.createdAt)).all(),
+  );
+}
+
+export function listDriveSharesForTenant(db: AppDb, actor: ActorContext): DriveShareSummary[] {
+  assertPermission(actor, "albums.view");
+  return summarize(
+    db,
+    db
+      .select()
+      .from(driveShares)
+      .where(eq(driveShares.tenantId, actor.tenantId))
+      .orderBy(desc(driveShares.createdAt))
+      .limit(500)
+      .all(),
+  );
+}
+
+export type DrivePick = { key: string; name: string; note: string | null };
+
+function picksOf(db: AppDb, shareId: string): DrivePick[] {
+  return db
+    .select({ key: driveShareFiles.fileKey, name: driveShareFiles.name, note: driveShareFiles.note })
+    .from(driveShareFiles)
+    .where(and(eq(driveShareFiles.shareId, shareId), eq(driveShareFiles.picked, true)))
+    .orderBy(asc(driveShareFiles.sortIndex))
+    .all();
+}
+
+export function getDrivePicksForDevice(db: AppDb, device: DriveDevice, shareId: string): DrivePick[] {
+  return picksOf(db, getDeviceShare(db, device, shareId).id);
+}
+
+export function getDrivePicksForActor(db: AppDb, actor: ActorContext, shareId: string): DrivePick[] {
+  assertPermission(actor, "albums.view");
+  return picksOf(db, getTenantShare(db, actor, shareId).id);
+}
+
+/** Các link khách đã gửi lựa chọn sau mốc `since` (để máy studio thông báo). */
+export function listDriveSubmissionsSince(db: AppDb, device: DriveDevice, since: number): DriveShareSummary[] {
+  return summarize(
+    db,
+    db
+      .select()
+      .from(driveShares)
+      .where(and(eq(driveShares.deviceId, device.id), gt(driveShares.submittedAt, new Date(since))))
+      .orderBy(asc(driveShares.submittedAt))
+      .all(),
+  );
+}
+
+// ---------------------------------------------------------------- public (khách)
+
+export type DrivePublicState = "ok" | "not_found" | "paused" | "expired";
+
+export function getDriveShareBySlug(db: AppDb, slug: string): { state: DrivePublicState; share: DriveShareRow | null; device: DriveDevice | null } {
+  if (!/^[A-Za-z0-9_-]{8,40}$/.test(slug)) return { state: "not_found", share: null, device: null };
+  const share = db.select().from(driveShares).where(eq(driveShares.slug, slug)).get();
+  if (!share) return { state: "not_found", share: null, device: null };
+  const device = db.select().from(driveDevices).where(eq(driveDevices.id, share.deviceId)).get() ?? null;
+  if (!device || device.revokedAt || share.status !== "active") return { state: "paused", share, device };
+  if (share.expiresAt && share.expiresAt.getTime() < Date.now()) return { state: "expired", share, device };
+  return { state: "ok", share, device };
+}
+
+export function verifyDriveSharePin(db: AppDb, share: DriveShareRow, pin: string, ip: string): { ok: boolean; locked: boolean } {
+  const identifier = `drive:${share.id}`;
+  const since = new Date(Date.now() - PIN_WINDOW_MS);
+  const failures =
+    db
+      .select({ n: count() })
+      .from(loginAttempts)
+      .where(
+        and(
+          eq(loginAttempts.identifier, identifier),
+          eq(loginAttempts.success, false),
+          gt(loginAttempts.createdAt, since),
+        ),
+      )
+      .get()?.n ?? 0;
+  if (failures >= PIN_MAX_FAILURES) return { ok: false, locked: true };
+  const ok = typeof pin === "string" && pin.length <= 12 && verifySecret(pin, share.pinHash);
+  db.insert(loginAttempts)
+    .values({ id: randomUUID(), identifier, ip: ip.slice(0, 64), success: ok, createdAt: new Date() })
+    .run();
+  return { ok, locked: false };
+}
+
+export function driveSharePinVersion(share: DriveShareRow): string {
+  return sha256(`${share.id}:${share.pinHash ?? ""}`).slice(0, 24);
+}
+
+export type DrivePublicFile = {
+  id: string;
+  name: string;
+  kind: DriveFileKind;
+  size: number;
+  picked: boolean;
+  note: string | null;
+};
+
+export function listDrivePublicFiles(db: AppDb, shareId: string): DrivePublicFile[] {
+  return db
+    .select()
+    .from(driveShareFiles)
+    .where(eq(driveShareFiles.shareId, shareId))
+    .orderBy(asc(driveShareFiles.sortIndex))
+    .all()
+    .map((f) => ({
+      id: f.id,
+      name: f.name,
+      kind: f.kind as DriveFileKind,
+      size: f.size,
+      picked: f.picked,
+      note: f.note,
+    }));
+}
+
+export function getDriveShareFile(db: AppDb, shareId: string, fileId: string): DriveShareFileRow | null {
+  return (
+    db
+      .select()
+      .from(driveShareFiles)
+      .where(and(eq(driveShareFiles.id, fileId), eq(driveShareFiles.shareId, shareId)))
+      .get() ?? null
+  );
+}
+
+export function incrementDriveShareViews(db: AppDb, shareId: string): void {
+  db.update(driveShares)
+    .set({ viewCount: sql`${driveShares.viewCount} + 1` })
+    .where(eq(driveShares.id, shareId))
+    .run();
+}
+
+export function setDrivePick(
+  db: AppDb,
+  share: DriveShareRow,
+  fileId: string,
+  input: { picked?: boolean; note?: string | null },
+): { picked: boolean; note: string | null; pickedCount: number } {
+  if (share.kind !== "select") throw new ValidationError("Link này không dùng để chọn ảnh.");
+  if (share.submittedAt) throw new ValidationError("Bạn đã gửi lựa chọn. Hãy liên hệ studio nếu muốn chọn lại.");
+  return db.transaction((tx) => {
+    const file = tx
+      .select()
+      .from(driveShareFiles)
+      .where(and(eq(driveShareFiles.id, fileId), eq(driveShareFiles.shareId, share.id)))
+      .get();
+    if (!file) throw new NotFoundError("Không tìm thấy ảnh.");
+    const picked = input.picked ?? file.picked;
+    const countPicked = () =>
+      tx
+        .select({ n: count() })
+        .from(driveShareFiles)
+        .where(and(eq(driveShareFiles.shareId, share.id), eq(driveShareFiles.picked, true)))
+        .get()?.n ?? 0;
+    if (picked && !file.picked && share.maxSelect > 0 && countPicked() >= share.maxSelect) {
+      throw new ValidationError(`Bạn chỉ được chọn tối đa ${share.maxSelect} ảnh.`);
+    }
+    const note = input.note === undefined ? file.note : cleanText(input.note, 500) || null;
+    tx.update(driveShareFiles)
+      .set({ picked, note: picked ? note : null })
+      .where(eq(driveShareFiles.id, file.id))
+      .run();
+    return { picked, note: picked ? note : null, pickedCount: countPicked() };
+  });
+}
+
+export function submitDriveSelection(db: AppDb, share: DriveShareRow, note: string | null): { pickedCount: number } {
+  if (share.kind !== "select") throw new ValidationError("Link này không dùng để chọn ảnh.");
+  if (share.submittedAt) throw new ValidationError("Bạn đã gửi lựa chọn rồi.");
+  const pickedCount = picksOf(db, share.id).length;
+  if (pickedCount === 0) throw new ValidationError("Hãy chọn ít nhất 1 ảnh trước khi gửi.");
+  db.update(driveShares)
+    .set({ submittedAt: new Date(), submissionNote: cleanText(note, 1000) || null, updatedAt: new Date() })
+    .where(eq(driveShares.id, share.id))
+    .run();
+  return { pickedCount };
+}
+
+/** Mã ảnh = tên tệp bỏ phần mở rộng, dùng để dán vào bộ lọc Lightroom/Capture One. */
+export function drivePickCodes(picks: DrivePick[]): string[] {
+  return picks.map((p) => p.name.replace(/\.[^.]+$/, ""));
 }
