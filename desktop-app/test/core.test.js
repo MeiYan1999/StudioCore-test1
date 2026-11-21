@@ -143,6 +143,27 @@ test("lọc ảnh khách chọn kèm RAW, không ghi đè", async () => {
   assert.equal(safeFolderName('..\\<>:"|?*'), "Khach-chon");
 });
 
+test("giữ thư mục con để chép các ảnh trùng tên riêng biệt", async () => {
+  const dir = tmp();
+  fs.mkdirSync(path.join(dir, "a"));
+  fs.mkdirSync(path.join(dir, "b"));
+  fs.writeFileSync(path.join(dir, "a", "IMG_1.jpg"), "a");
+  fs.writeFileSync(path.join(dir, "b", "IMG_1.jpg"), "b");
+
+  const result = await copyPicks(
+    { folder: dir, files: { a: "a/IMG_1.jpg", b: "b/IMG_1.jpg" } },
+    [
+      { key: "a", name: "IMG_1.jpg", note: null },
+      { key: "b", name: "IMG_1.jpg", note: null },
+    ],
+    "Khach-chon",
+  );
+
+  assert.equal(result.copied, 2);
+  assert.equal(fs.readFileSync(path.join(result.dest, "a", "IMG_1.jpg"), "utf8"), "a");
+  assert.equal(fs.readFileSync(path.join(result.dest, "b", "IMG_1.jpg"), "utf8"), "b");
+});
+
 test("địa chỉ máy chủ, Range và tham số dòng lệnh", () => {
   assert.equal(normalizeServerUrl("https://studiocore.io.vn/abc"), "https://studiocore.io.vn");
   assert.equal(normalizeServerUrl("http://localhost:3000"), "http://localhost:3000");

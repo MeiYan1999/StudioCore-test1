@@ -20,6 +20,7 @@ function safeFolderName(name) {
 async function copyPicks(share, picks, folderName) {
   const dest = path.join(share.folder, safeFolderName(folderName));
   await fs.mkdir(dest, { recursive: true });
+  const realDest = await fs.realpath(dest);
   let copied = 0;
   let missing = 0;
   const codes = [];
@@ -31,6 +32,44 @@ async function copyPicks(share, picks, folderName) {
       continue;
     }
     codes.push(path.basename(source).replace(/\.[^.]+$/, ""));
+    const relativeDir = path.dirname(rel);
+    const targetDir = path.resolve(dest, relativeDir === "." ? "" : relativeDir);
+    const targetDirRelative = path.relative(dest, targetDir);
+    if (
+      targetDirRelative === ".." ||
+      targetDirRelative.startsWith(`..${path.sep}`) ||
+      path.isAbsolute(targetDirRelative)
+    ) {
+      missing += 1;
+      continue;
+    }
+    let targetDirPath = dest;
+    let realTargetDir = realDest;
+    let targetDirIsInside = true;
+    for (const part of targetDirRelative ? targetDirRelative.split(path.sep) : []) {
+      targetDirPath = path.join(targetDirPath, part);
+      try {
+        await fs.mkdir(targetDirPath);
+      } catch (error) {
+        if (error.code !== "EEXIST") throw error;
+      }
+      realTargetDir = await fs.realpath(targetDirPath);
+      const realTargetRelative = path.relative(realDest, realTargetDir);
+      const targetStat = await fs.stat(targetDirPath).catch(() => null);
+      if (
+        realTargetRelative === ".." ||
+        realTargetRelative.startsWith(`..${path.sep}`) ||
+        path.isAbsolute(realTargetRelative) ||
+        !targetStat?.isDirectory()
+      ) {
+        targetDirIsInside = false;
+        break;
+      }
+    }
+    if (!targetDirIsInside) {
+      missing += 1;
+      continue;
+    }
     const targets = [source];
     const dir = path.dirname(source);
     const base = stem(path.basename(source));
@@ -39,7 +78,7 @@ async function copyPicks(share, picks, folderName) {
     }
     for (const file of targets) {
       try {
-        await fs.copyFile(file, path.join(dest, path.basename(file)), fs.constants.COPYFILE_EXCL);
+        await fs.copyFile(file, path.join(realTargetDir, path.basename(file)), fs.constants.COPYFILE_EXCL);
         copied += 1;
       } catch (error) {
         if (error.code !== "EEXIST") throw error;
