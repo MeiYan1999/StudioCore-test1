@@ -47,6 +47,8 @@ class DriveAgent extends EventEmitter {
     this.abort = null;
     this.active = 0;
     this.queue = [];
+    this.lastPendingExportRetryAt = 0;
+    this.exportingShares = new Set();
     this.remoteShares = [];
   }
 
@@ -82,7 +84,6 @@ class DriveAgent extends EventEmitter {
       deviceId: result.deviceId,
       deviceName: result.deviceName,
       studioName: result.studioName,
-      lastSubmissionCheck: Date.now(),
     });
     this.start();
     return { deviceName: result.deviceName, studioName: result.studioName };
@@ -111,7 +112,8 @@ class DriveAgent extends EventEmitter {
     let first = true;
     while (!signal.aborted) {
       try {
-        const since = this.store.get("lastSubmissionCheck") || Date.now();
+        const storedSince = this.store.get("lastSubmissionCheck");
+        const since = typeof storedSince === "number" && storedSince > 0 ? storedSince : 0;
         const result = await this.client().poll(since, first ? 0 : 25000, signal);
         first = false;
         delay = 1000;
@@ -120,9 +122,18 @@ class DriveAgent extends EventEmitter {
           this.store.set({ studioName: result.studioName });
         }
         for (const job of result.jobs || []) this.enqueue(job);
+        const latestSubmittedAt = Math.max(0, ...(result.submissions || []).map((s) => s.submittedAt || 0));
+        this.store.set({
+          lastSubmissionCheck: since > 0 ? Math.max(since, latestSubmittedAt) : Math.max(result.now || 0, latestSubmittedAt),
+        });
+        if (
+          (this.store.get("pendingExports") || []).length > 0 &&
+          Date.now() - this.lastPendingExportRetryAt >= 60_000
+        ) {
+          this.lastPendingExportRetryAt = Date.now();
+          void this.retryPendingExports();
+        }
         if (Array.isArray(result.submissions) && result.submissions.length > 0) {
-          const latest = Math.max(...result.submissions.map((s) => s.submittedAt || 0));
-          this.store.set({ lastSubmissionCheck: Math.max(latest, since) });
           for (const share of result.submissions) void this.onSubmission(share);
         }
       } catch (error) {
@@ -192,14 +203,51 @@ class DriveAgent extends EventEmitter {
 
   async onSubmission(remote) {
     let copied = null;
-    if (this.store.get("autoCopyPicks")) {
+    if (this.store.get("autoCopyPicks") && this.store.getShare(remote.id)) {
+      const pending = this.store.get("pendingExports") || [];
+      if (!pending.includes(remote.id)) this.store.set({ pendingExports: [...pending, remote.id] });
       try {
-        copied = await this.copyPicks(remote.id);
+        copied = await this.copyPendingExport(remote.id);
+        this.removePendingExport(remote.id);
       } catch (error) {
-        copied = { error: error.message };
+        copied = { error: error instanceof Error ? error.message : String(error) };
       }
+    } else {
+      this.removePendingExport(remote.id);
     }
     this.emit("submission", { share: remote, copied });
+  }
+
+  async retryPendingExports() {
+    for (const shareId of [...(this.store.get("pendingExports") || [])]) {
+      if (!this.store.get("autoCopyPicks") || !this.store.getShare(shareId)) {
+        this.removePendingExport(shareId);
+        continue;
+      }
+      try {
+        await this.copyPendingExport(shareId);
+        this.removePendingExport(shareId);
+      } catch {
+        // Keep failed exports queued for a later retry.
+      }
+    }
+  }
+
+  async copyPendingExport(shareId) {
+    if (this.exportingShares.has(shareId)) throw new Error("Lần xuất này đang được xử lý.");
+    this.exportingShares.add(shareId);
+    try {
+      return await this.copyPicks(shareId);
+    } finally {
+      this.exportingShares.delete(shareId);
+    }
+  }
+
+  removePendingExport(shareId) {
+    const pending = this.store.get("pendingExports") || [];
+    if (pending.includes(shareId)) {
+      this.store.set({ pendingExports: pending.filter((id) => id !== shareId) });
+    }
   }
 
   async copyPicks(shareId) {

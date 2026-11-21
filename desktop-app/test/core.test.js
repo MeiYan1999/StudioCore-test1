@@ -6,6 +6,7 @@ const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
 const { parseRange } = require("../src/core/agent");
+const { DriveAgent } = require("../src/core/agent");
 const { normalizeServerUrl } = require("../src/core/api");
 const { copyPicks, safeFolderName } = require("../src/core/picks");
 const { scanFolder, resolveInside } = require("../src/core/scanner");
@@ -44,17 +45,58 @@ test("cài đặt được lưu và đọc lại, token được mã hoá khi c�
   const dir = tmp();
   const cipher = { encrypt: (t) => Buffer.from(t).toString("hex"), decrypt: (t) => Buffer.from(t, "hex").toString() };
   const store = new Store(dir, cipher);
-  store.set({ deviceToken: "scdt-bi-mat", picksFolderName: "Da chon", autoCopyPicks: false });
+  store.set({ deviceToken: "scdt-bi-mat", picksFolderName: "Da chon", autoCopyPicks: false, pendingExports: ["s1"] });
   store.setShare("s1", { folder: "/x", salt: "s", files: {} });
   assert.ok(!fs.readFileSync(path.join(dir, "settings.json"), "utf8").includes("scdt-bi-mat"));
   const again = new Store(dir, cipher);
   assert.equal(again.get("deviceToken"), "scdt-bi-mat");
   assert.equal(again.get("picksFolderName"), "Da chon");
   assert.equal(again.get("autoCopyPicks"), false);
+  assert.deepEqual(again.get("pendingExports"), ["s1"]);
   assert.ok(again.getShare("s1"));
   assert.equal(again.getShare("__proto__"), null);
   fs.writeFileSync(path.join(dir, "settings.json"), "{hong");
   assert.equal(new Store(dir, cipher).get("serverUrl"), "https://studiocore.io.vn");
+});
+
+test("poll initializes the submission cursor from server time", async () => {
+  const store = new Store(tmp());
+  const agent = new DriveAgent({ store, images: {}, appVersion: "test" });
+  const controller = new AbortController();
+  let requestedSince = null;
+  agent.client = () => ({
+    poll: async (since) => {
+      requestedSince = since;
+      controller.abort();
+      return { now: 1234, submissions: [], jobs: [] };
+    },
+  });
+
+  await agent.loop(controller.signal);
+
+  assert.equal(requestedSince, 0);
+  assert.equal(store.get("lastSubmissionCheck"), 1234);
+});
+
+test("failed auto-copy stays pending and retry does not emit another notification", async () => {
+  const store = new Store(tmp());
+  store.setShare("share-1", { folder: "/photos", salt: "salt", files: {} });
+  const agent = new DriveAgent({ store, images: {}, appVersion: "test" });
+  const notifications = [];
+  agent.on("submission", (event) => notifications.push(event));
+  agent.copyPicks = async () => {
+    throw new Error("Mất kết nối");
+  };
+
+  await agent.onSubmission({ id: "share-1" });
+
+  assert.deepEqual(store.get("pendingExports"), ["share-1"]);
+  assert.equal(notifications.length, 1);
+  agent.copyPicks = async () => ({ copied: 1 });
+  await agent.retryPendingExports();
+
+  assert.deepEqual(store.get("pendingExports"), []);
+  assert.equal(notifications.length, 1);
 });
 
 test("lọc ảnh khách chọn kèm RAW, không ghi đè", async () => {

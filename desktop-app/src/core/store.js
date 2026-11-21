@@ -14,6 +14,7 @@ const DEFAULTS = {
   launchAtLogin: false,
   contextMenu: false,
   lastSubmissionCheck: 0,
+  pendingExports: [],
   shares: {},
 };
 
@@ -38,7 +39,14 @@ class Store {
       return;
     }
     if (!raw || typeof raw !== "object") return;
-    const data = { ...DEFAULTS, ...raw, shares: raw.shares && typeof raw.shares === "object" ? raw.shares : {} };
+    const data = {
+      ...DEFAULTS,
+      ...raw,
+      pendingExports: Array.isArray(raw.pendingExports)
+        ? [...new Set(raw.pendingExports.filter((id) => typeof id === "string" && id.length > 0))]
+        : [],
+      shares: raw.shares && typeof raw.shares === "object" ? raw.shares : {},
+    };
     if (typeof raw.deviceTokenEnc === "string" && this.cipher) {
       try {
         data.deviceToken = this.cipher.decrypt(raw.deviceTokenEnc);
