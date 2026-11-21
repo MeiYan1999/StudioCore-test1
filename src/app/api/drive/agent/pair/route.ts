@@ -18,6 +18,7 @@ export async function POST(request: Request): Promise<Response> {
       name: String(body.name ?? ""),
       platform: String(body.platform ?? ""),
       appVersion: String(body.appVersion ?? ""),
+      previousToken: typeof body.previousToken === "string" ? body.previousToken : undefined,
     });
     return NextResponse.json(result);
   } catch (error) {

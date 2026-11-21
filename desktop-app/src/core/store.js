@@ -6,6 +6,7 @@ const path = require("node:path");
 const DEFAULTS = {
   serverUrl: "https://studiocore.io.vn",
   deviceToken: null,
+  previousDeviceToken: null,
   deviceId: null,
   deviceName: null,
   studioName: null,
@@ -54,7 +55,15 @@ class Store {
         data.deviceToken = null;
       }
     }
+    if (typeof raw.previousDeviceTokenEnc === "string" && this.cipher) {
+      try {
+        data.previousDeviceToken = this.cipher.decrypt(raw.previousDeviceTokenEnc);
+      } catch {
+        data.previousDeviceToken = null;
+      }
+    }
     delete data.deviceTokenEnc;
+    delete data.previousDeviceTokenEnc;
     this.data = data;
   }
 
@@ -63,6 +72,10 @@ class Store {
     if (out.deviceToken && this.cipher) {
       out.deviceTokenEnc = this.cipher.encrypt(out.deviceToken);
       delete out.deviceToken;
+    }
+    if (out.previousDeviceToken && this.cipher) {
+      out.previousDeviceTokenEnc = this.cipher.encrypt(out.previousDeviceToken);
+      delete out.previousDeviceToken;
     }
     const tmp = `${this.file}.${process.pid}.tmp`;
     fs.writeFileSync(tmp, JSON.stringify(out, null, 2), { mode: 0o600 });

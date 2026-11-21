@@ -92,6 +92,59 @@ describe("ghép nối thiết bị", () => {
     expect(() => authenticateDriveDevice(db, null)).toThrow(AuthorizationError);
   });
 
+  it("chuyển link sang thiết bị mới khi ghép lại cùng studio", () => {
+    const previous = pair("Máy cũ");
+    const share = createDriveShare(db, previous.device, { title: "A", kind: "select", files: files(1) });
+    const { code } = createDrivePairingCode(db, owner);
+    const paired = pairDriveDevice(db, {
+      code,
+      name: "Máy mới",
+      platform: "win32",
+      appVersion: "2.0.0",
+      previousToken: previous.token,
+    });
+
+    expect(() => authenticateDriveDevice(db, previous.token)).toThrow(AuthorizationError);
+    expect(getDriveShareBySlug(db, share.slug)).toMatchObject({
+      state: "ok",
+      device: { id: paired.deviceId },
+      share: { deviceId: paired.deviceId },
+    });
+  });
+
+  it("bỏ qua token ghép nối từ studio khác", () => {
+    const otherTenantId = "tenant-drive-other";
+    db.insert(tenants)
+      .values({ id: otherTenantId, name: "Studio Khác", slug: "studio-drive-other", status: "active" })
+      .onConflictDoNothing()
+      .run();
+    const otherOwner = { ...owner, tenantId: otherTenantId, tenantName: "Studio Khác", tenantSlug: "studio-drive-other" };
+    const { code: otherCode } = createDrivePairingCode(db, otherOwner);
+    const otherPairing = pairDriveDevice(db, {
+      code: otherCode,
+      name: "Thiết bị khác",
+      platform: "win32",
+      appVersion: "2.0.0",
+    });
+    const otherDevice = authenticateDriveDevice(db, otherPairing.deviceToken);
+    const share = createDriveShare(db, otherDevice, { title: "Khác", kind: "select", files: files(1) });
+    const { code } = createDrivePairingCode(db, owner);
+    pairDriveDevice(db, {
+      code,
+      name: "Thiết bị mới",
+      platform: "win32",
+      appVersion: "2.0.0",
+      previousToken: otherPairing.deviceToken,
+    });
+
+    expect(authenticateDriveDevice(db, otherPairing.deviceToken).id).toBe(otherDevice.id);
+    expect(getDriveShareBySlug(db, share.slug)).toMatchObject({
+      state: "ok",
+      device: { id: otherDevice.id },
+      share: { deviceId: otherDevice.id },
+    });
+  });
+
   it("tạm khóa studio thì thiết bị không thể truy cập và link bị tạm dừng", () => {
     const { device, token } = pair();
     const share = createDriveShare(db, device, { title: "A", kind: "select", files: files(1) });

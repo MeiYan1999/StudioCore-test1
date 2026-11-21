@@ -110,7 +110,7 @@ export function createDrivePairingCode(db: AppDb, actor: ActorContext): { code: 
 
 export function pairDriveDevice(
   db: AppDb,
-  input: { code: string; name: string; platform: string; appVersion: string },
+  input: { code: string; name: string; platform: string; appVersion: string; previousToken?: string },
 ): { deviceToken: string; deviceId: string; deviceName: string; studioName: string } {
   const code = cleanText(input.code, 120);
   if (!code) throw new ValidationError("Thiếu mã kết nối.");
@@ -146,6 +146,21 @@ export function pairDriveDevice(
         lastSeenAt: new Date(),
       })
       .run();
+    const previousToken = input.previousToken;
+    if (previousToken?.startsWith("scdt-")) {
+      const previousDevice = tx
+        .select()
+        .from(driveDevices)
+        .where(eq(driveDevices.tokenHash, sha256(previousToken)))
+        .get();
+      if (previousDevice && !previousDevice.revokedAt && previousDevice.tenantId === row.tenantId) {
+        tx.update(driveShares).set({ deviceId }).where(eq(driveShares.deviceId, previousDevice.id)).run();
+        tx.update(driveDevices)
+          .set({ revokedAt: new Date() })
+          .where(eq(driveDevices.id, previousDevice.id))
+          .run();
+      }
+    }
     writeAudit(tx as unknown as AppDb, {
       tenantId: row.tenantId,
       actorId: row.createdBy,

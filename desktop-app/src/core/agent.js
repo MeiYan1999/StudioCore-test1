@@ -79,10 +79,12 @@ class DriveAgent extends EventEmitter {
       name: os.hostname().slice(0, 80),
       platform: process.platform,
       appVersion: this.appVersion,
+      previousToken: this.store.get("previousDeviceToken") || undefined,
     });
     this.store.set({
       serverUrl: client.serverUrl,
       deviceToken: result.deviceToken,
+      previousDeviceToken: null,
       deviceId: result.deviceId,
       deviceName: result.deviceName,
       studioName: result.studioName,
@@ -93,7 +95,13 @@ class DriveAgent extends EventEmitter {
 
   unpair() {
     this.stop();
-    this.store.set({ deviceToken: null, deviceId: null, deviceName: null, studioName: null, shares: {} });
+    this.store.set({
+      previousDeviceToken: this.store.get("deviceToken"),
+      deviceToken: null,
+      deviceId: null,
+      deviceName: null,
+      studioName: null,
+    });
     this.remoteShares = [];
     this.setStatus("idle");
   }

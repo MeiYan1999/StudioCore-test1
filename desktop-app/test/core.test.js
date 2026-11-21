@@ -56,11 +56,19 @@ test("cài đặt được lưu và đọc lại, token được mã hoá khi c�
   const dir = tmp();
   const cipher = { encrypt: (t) => Buffer.from(t).toString("hex"), decrypt: (t) => Buffer.from(t, "hex").toString() };
   const store = new Store(dir, cipher);
-  store.set({ deviceToken: "scdt-bi-mat", picksFolderName: "Da chon", autoCopyPicks: false, pendingExports: ["s1"] });
+  store.set({
+    deviceToken: "scdt-bi-mat",
+    previousDeviceToken: "scdt-cu",
+    picksFolderName: "Da chon",
+    autoCopyPicks: false,
+    pendingExports: ["s1"],
+  });
   store.setShare("s1", { folder: "/x", salt: "s", files: {} });
   assert.ok(!fs.readFileSync(path.join(dir, "settings.json"), "utf8").includes("scdt-bi-mat"));
+  assert.ok(!fs.readFileSync(path.join(dir, "settings.json"), "utf8").includes("scdt-cu"));
   const again = new Store(dir, cipher);
   assert.equal(again.get("deviceToken"), "scdt-bi-mat");
+  assert.equal(again.get("previousDeviceToken"), "scdt-cu");
   assert.equal(again.get("picksFolderName"), "Da chon");
   assert.equal(again.get("autoCopyPicks"), false);
   assert.deepEqual(again.get("pendingExports"), ["s1"]);
@@ -87,6 +95,47 @@ test("poll initializes the submission cursor from server time", async () => {
 
   assert.equal(requestedSince, 0);
   assert.equal(store.get("lastSubmissionCheck"), 1234);
+});
+
+test("unpair keeps local shares and re-pair sends then clears the previous token", async () => {
+  const store = new Store(tmp());
+  store.set({
+    deviceToken: "scdt-old",
+    deviceId: "device-old",
+    serverUrl: "http://localhost:3000",
+  });
+  store.setShare("share-local", { folder: "/photos", salt: "salt", files: {} });
+  const agent = new DriveAgent({ store, images: {}, appVersion: "test" });
+  agent.start = () => {};
+  agent.unpair();
+
+  assert.equal(store.get("previousDeviceToken"), "scdt-old");
+  assert.equal(store.getShare("share-local").folder, "/photos");
+  agent.client = () => ({ listShares: async () => ({ shares: [] }) });
+  assert.deepEqual(await agent.listShares(), []);
+
+  const originalFetch = global.fetch;
+  let pairInput;
+  global.fetch = async (_url, init) => {
+    pairInput = JSON.parse(init.body);
+    return Response.json({
+      deviceToken: "scdt-new",
+      deviceId: "device-new",
+      deviceName: "Máy mới",
+      studioName: "Studio",
+    });
+  };
+  try {
+    await agent.pair("code", "http://localhost:3000");
+  } finally {
+    global.fetch = originalFetch;
+  }
+
+  assert.equal(pairInput.previousToken, "scdt-old");
+  assert.equal(store.get("previousDeviceToken"), null);
+  assert.equal(store.getShare("share-local").folder, "/photos");
+  agent.unpair();
+  assert.equal(store.get("previousDeviceToken"), "scdt-new");
 });
 
 test("failed auto-copy stays pending and retry does not emit another notification", async () => {
