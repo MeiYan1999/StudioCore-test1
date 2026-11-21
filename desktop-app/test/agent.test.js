@@ -36,13 +36,64 @@ async function fixture(t) {
   });
   const url = (agent, variant = "original") =>
     `http://127.0.0.1:${agent.port}/m/${share.id}/${share.mediaSecret}/image_01/${variant}`;
-  const makeAgent = (fetch) => {
-    const agent = new Agent(store, { api: new AgentApi(store.loadConfig(), { fetch }) });
+  const makeAgent = (fetch, options = {}) => {
+    const agent = new Agent(store, {
+      api: new AgentApi(store.loadConfig(), { fetch }),
+      ...options,
+    });
     agents.push(agent);
     return agent;
   };
   return { root, store, share, url, makeAgent };
 }
+
+for (const [operation, route, period] of [
+  ["heartbeat", "heartbeat", 30000],
+  ["poll", "shares", 60000],
+])
+  test(`initial ${operation} failure retries with bounded backoff and reconnects`, async (t) => {
+    const { share, makeAgent } = await fixture(t);
+    let attempts = 0;
+    const timers = {
+      setTimeout(run, delay) {
+        return { run, delay };
+      },
+      clearTimeout(timer) {
+        if (timer) timer.cancelled = true;
+      },
+    };
+    const api = async (request) => {
+      if (request.endsWith("/" + route) && ++attempts <= 2)
+        return new Response(JSON.stringify({ error: "temporary outage" }), { status: 503 });
+      return new Response(
+        JSON.stringify(request.endsWith("/shares") ? { shares: [share] } : { device: {} }),
+      );
+    };
+    const agent = makeAgent(api, { timers });
+    const states = [];
+    agent.on("connection", (state) => states.push(state));
+    await assert.doesNotReject(agent.start({ noTunnel: true }));
+    assert.equal(agent.stopped, false);
+    assert.equal(agent.media.server.listening, true);
+    assert.equal(states.at(-1).status, "error");
+    if (operation === "poll") {
+      await agent.heartbeat();
+      assert.equal(states.at(-1).status, "error");
+    }
+    const timer = () => agent[operation + "Timer"];
+    assert.equal(timer().delay, 1000);
+    await timer().run();
+    assert.equal(timer().delay, 2000);
+    await timer().run();
+    assert.equal(timer().delay, period);
+    assert.equal(states.at(-1).status, "connected");
+    const pending = timer();
+    await agent.stop();
+    assert.equal(pending.cancelled, true);
+    const before = attempts;
+    await pending.run();
+    assert.equal(attempts, before);
+  });
 
 for (const operation of ["heartbeat", "poll"])
   test(`401 from ${operation} latches revocation and prevents all further media serving`, async (t) => {

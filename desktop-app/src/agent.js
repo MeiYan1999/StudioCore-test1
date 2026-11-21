@@ -19,6 +19,42 @@ class Agent extends EventEmitter {
     this.origin = null;
     this.authenticated = false;
     this.revoked = false;
+    this.connectionErrors = new Map();
+    this.timers = options.timers || { setTimeout, clearTimeout };
+  }
+  connectionResult(operation, error) {
+    if (this.revoked) return;
+    if (error?.status === 401) {
+      this.invalidate(error);
+      return;
+    }
+    if (error) this.connectionErrors.set(operation, error.message);
+    else this.connectionErrors.delete(operation);
+    if (this.connectionErrors.size)
+      this.emit("connection", {
+        status: "error",
+        message: [...this.connectionErrors.values()].join(" · "),
+      });
+    else if (this.authenticated)
+      this.emit("connection", { status: "connected", ...this.lastHeartbeat });
+  }
+  startLoop(operation, work, period) {
+    let failures = 0;
+    const run = async () => {
+      if (this.stopped || this.revoked) return;
+      try {
+        await work();
+        failures = 0;
+      } catch (error) {
+        failures++;
+        this.emit("warning", error.message);
+      }
+      if (!this.stopped && !this.revoked) {
+        const delay = failures ? Math.min(period, 1000 * 2 ** Math.min(failures - 1, 6)) : period;
+        this[operation + "Timer"] = this.timers.setTimeout(run, delay);
+      }
+    };
+    return run();
   }
   invalidate(error) {
     if (this.revoked) return;
@@ -26,8 +62,8 @@ class Agent extends EventEmitter {
     this.authError = error;
     this.authenticated = false;
     this.origin = null;
-    clearInterval(this.heartbeatTimer);
-    clearInterval(this.pollTimer);
+    this.timers.clearTimeout(this.heartbeatTimer);
+    this.timers.clearTimeout(this.pollTimer);
     this.store.updateShares((shares) =>
       shares.map((share) => (share.status === "active" ? { ...share, status: "paused" } : share)),
     );
@@ -89,11 +125,11 @@ class Agent extends EventEmitter {
       const result = await this.heartbeatTask;
       if (this.revoked) throw this.authError;
       this.authenticated = true;
-      this.emit("connection", { status: "connected", ...result });
+      this.lastHeartbeat = result;
+      this.connectionResult("heartbeat");
       return result;
     } catch (error) {
-      if (error.status === 401) this.invalidate(error);
-      else if (!this.revoked) this.emit("connection", { status: "error", message: error.message });
+      this.connectionResult("heartbeat", error);
       throw error;
     } finally {
       this.heartbeatTask = null;
@@ -105,8 +141,9 @@ class Agent extends EventEmitter {
     this.pollTask = this.syncShares();
     try {
       await this.pollTask;
+      this.connectionResult("poll");
     } catch (error) {
-      if (error.status === 401) this.invalidate(error);
+      this.connectionResult("poll", error);
       throw error;
     } finally {
       this.pollTask = null;
@@ -181,18 +218,17 @@ class Agent extends EventEmitter {
       this.port = await this.media.start();
       this.emit("media", { port: this.port });
       if (noTunnel) this.origin = `http://127.0.0.1:${this.port}`;
-      await this.heartbeat();
-      if (this.stopped) return;
-      await this.poll();
+      await Promise.all([
+        this.startLoop("heartbeat", () => this.heartbeat(), 30000),
+        this.startLoop("poll", () => this.poll(), 60000),
+      ]);
       if (this.stopped) return;
       const safely = (work) => work().catch((error) => this.emit("warning", error.message));
-      this.heartbeatTimer = setInterval(() => safely(() => this.heartbeat()), 30000);
-      this.pollTimer = setInterval(() => safely(() => this.poll()), 60000);
       this.cleanupTimer = setInterval(
         () => safely(() => this.cache.cleanup()),
         12 * 60 * 60 * 1000,
       );
-      if (!noTunnel) {
+      if (!noTunnel && !this.revoked) {
         this.tunnel = new TunnelManager(this.config, this.store.directory, this.port);
         this.tunnel.on("status", (state) => {
           this.origin = state.origin;
@@ -209,8 +245,8 @@ class Agent extends EventEmitter {
   async stop() {
     if (this.stopped) return;
     this.stopped = true;
-    clearInterval(this.heartbeatTimer);
-    clearInterval(this.pollTimer);
+    this.timers.clearTimeout(this.heartbeatTimer);
+    this.timers.clearTimeout(this.pollTimer);
     clearInterval(this.cleanupTimer);
     await this.tunnel?.stop();
     await Promise.allSettled([this.heartbeatTask, this.pollTask]);
