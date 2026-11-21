@@ -99,6 +99,37 @@ test("failed auto-copy stays pending and retry does not emit another notificatio
   assert.equal(notifications.length, 1);
 });
 
+test("fast image jobs and bulk jobs use independent concurrency limits", async () => {
+  const store = new Store(tmp());
+  store.setShare("share-1", {
+    folder: "/photos",
+    salt: "salt",
+    files: { image: "a.jpg", video: "b.mp4" },
+  });
+  const agent = new DriveAgent({ store, images: {}, appVersion: "test" });
+  const finish = [];
+  agent.serve = () => new Promise((resolve) => finish.push(resolve));
+
+  for (let index = 0; index < 5; index += 1) {
+    agent.enqueue({ id: `image-${index}`, shareId: "share-1", fileKey: "image", variant: "thumb" });
+  }
+  for (let index = 0; index < 3; index += 1) {
+    agent.enqueue({ id: `video-${index}`, shareId: "share-1", fileKey: "video", variant: "preview" });
+  }
+
+  assert.equal(agent.fastActive, 4);
+  assert.equal(agent.fastQueue.length, 1);
+  assert.equal(agent.bulkActive, 2);
+  assert.equal(agent.bulkQueue.length, 1);
+
+  finish[4]();
+  await Promise.resolve();
+  assert.equal(agent.bulkActive, 2);
+  assert.equal(agent.bulkQueue.length, 0);
+  assert.equal(agent.fastActive, 4);
+  finish.forEach((resolve) => resolve());
+});
+
 test("lọc ảnh khách chọn kèm RAW, không ghi đè", async () => {
   const dir = tmp();
   for (const name of ["IMG_1.jpg", "IMG_1.ARW", "IMG_2.jpg"]) fs.writeFileSync(path.join(dir, name), name);

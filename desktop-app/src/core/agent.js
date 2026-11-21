@@ -45,8 +45,10 @@ class DriveAgent extends EventEmitter {
     this.appVersion = appVersion || "";
     this.status = "idle";
     this.abort = null;
-    this.active = 0;
-    this.queue = [];
+    this.fastActive = 0;
+    this.fastQueue = [];
+    this.bulkActive = 0;
+    this.bulkQueue = [];
     this.lastPendingExportRetryAt = 0;
     this.exportingShares = new Set();
     this.remoteShares = [];
@@ -153,19 +155,31 @@ class DriveAgent extends EventEmitter {
   }
 
   enqueue(job) {
-    this.queue.push(job);
-    this.drain();
+    const lane = this.isFastJob(job) ? "fast" : "bulk";
+    this[`${lane}Queue`].push(job);
+    this.drain(lane);
   }
 
-  drain() {
-    while (this.active < 4 && this.queue.length > 0) {
-      const job = this.queue.shift();
-      this.active += 1;
+  isFastJob(job) {
+    if (job.variant !== "thumb" && job.variant !== "preview") return false;
+    const share = this.store.getShare(job.shareId);
+    const rel = share && Object.prototype.hasOwnProperty.call(share.files, job.fileKey)
+      ? share.files[job.fileKey]
+      : null;
+    return !!rel && (MIME[extOf(rel)] || "").startsWith("image/");
+  }
+
+  drain(lane) {
+    const queue = this[`${lane}Queue`];
+    const maxActive = lane === "fast" ? 4 : 2;
+    while (this[`${lane}Active`] < maxActive && queue.length > 0) {
+      const job = queue.shift();
+      this[`${lane}Active`] += 1;
       this.serve(job)
         .catch(() => undefined)
         .finally(() => {
-          this.active -= 1;
-          this.drain();
+          this[`${lane}Active`] -= 1;
+          this.drain(lane);
         });
     }
   }
