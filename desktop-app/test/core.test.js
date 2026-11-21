@@ -53,6 +53,27 @@ test("config defaults merge, validate, write atomically and keep secrets private
   assert.throws(() => store.loadConfig(), /Không đọc được/);
 });
 
+test("loading an invalid legacy key clears only the in-memory key and preserves other settings", async (t) => {
+  const root = await sandbox(t);
+  const store = new Store(root);
+  const saved = {
+    deviceName: "Old PC",
+    connectKey: "sc_drive_live_legacy",
+    defaults: { maxSelect: 15 },
+  };
+  await fs.writeFile(path.join(root, "config.json"), JSON.stringify(saved));
+  const config = store.loadConfig();
+  assert.equal(config.connectKey, "");
+  assert.equal(config.deviceName, saved.deviceName);
+  assert.equal(config.defaults.maxSelect, 15);
+  assert.equal(store.configWarning, "Khóa cũ không còn dùng được, hãy dán khóa mới");
+  assert.deepEqual(JSON.parse(await fs.readFile(path.join(root, "config.json"), "utf8")), saved);
+  assert.throws(() => store.saveConfig(saved), /connectKey/);
+  store.saveConfig({ ...config, connectKey: "scd_" + "b".repeat(43) });
+  assert.equal(store.loadConfig().connectKey, "scd_" + "b".repeat(43));
+  assert.equal(store.configWarning, undefined);
+});
+
 test("scanner classifies, skips hidden/system/output files and groups RAW+JPG deterministically", async (t) => {
   const root = await sandbox(t);
   await fs.mkdir(path.join(root, "set"));

@@ -75,6 +75,29 @@ test("GUI binds only loopback and rejects missing token, bad Host, foreign Origi
   assert.doesNotMatch(index.headers.get("content-security-policy"), /unsafe-inline/);
   assert.ok((await index.text()).includes(app.token));
 });
+test("GUI tolerates legacy keys and catches agent construction errors", async (t) => {
+  const { app, store, root, origin, headers } = await fixture(t);
+  await fs.writeFile(
+    path.join(root, "config.json"),
+    JSON.stringify({ connectKey: "sc_drive_live_legacy" }),
+  );
+  await assert.doesNotReject(app.startAgent());
+  const response = await fetch(origin + "/api/state", { headers });
+  assert.equal(response.status, 200);
+  const state = await response.json();
+  assert.equal(state.config.connectKey, "");
+  assert.equal(state.connection.status, "unconfigured");
+  assert.equal(state.connection.message, "Khóa cũ không còn dùng được, hãy dán khóa mới");
+  const load = store.loadConfig;
+  store.loadConfig = () => {
+    throw new Error("construction failed");
+  };
+  await assert.doesNotReject(app.startAgent());
+  assert.equal(app.connection.status, "error");
+  assert.equal(app.connection.message, "construction failed");
+  store.loadConfig = load;
+});
+
 test("all settings persist via API across GUI restart; private token is stable", async (t) => {
   const { app, store, root, origin, headers, post } = await fixture(t);
   const original = integration.autoStart;

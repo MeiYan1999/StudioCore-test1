@@ -78,27 +78,32 @@ class DesktopApp {
     this.serial = Promise.resolve();
   }
   async startAgent() {
-    if (this.agent) await this.agent.stop();
-    const agent = new Agent(this.store);
-    this.agent = agent;
-    agent.on("connection", (state) => {
-      if (this.agent === agent) this.connection = state;
-    });
-    agent.on("tunnel", (state) => {
-      if (this.agent === agent) this.tunnel = state;
-    });
-    agent.on("warning", (message) => {
-      this.warning = message;
-    });
-    agent.on("finalized", (event) =>
-      this.onFinalize(event).catch((error) => {
-        this.warning = error.message;
-      }),
-    );
-    this.connection = { status: agent.config.connectKey ? "connecting" : "unconfigured" };
-    this.tunnel = { status: this.noTunnel ? "development" : "stopped", origin: null };
-    if (!agent.config.connectKey) return;
     try {
+      const previous = this.agent;
+      this.agent = null;
+      if (previous) await previous.stop();
+      const agent = new Agent(this.store);
+      this.agent = agent;
+      agent.on("connection", (state) => {
+        if (this.agent === agent) this.connection = state;
+      });
+      agent.on("tunnel", (state) => {
+        if (this.agent === agent) this.tunnel = state;
+      });
+      agent.on("warning", (message) => {
+        this.warning = message;
+      });
+      agent.on("finalized", (event) =>
+        this.onFinalize(event).catch((error) => {
+          this.warning = error.message;
+        }),
+      );
+      this.connection = {
+        status: agent.config.connectKey ? "connecting" : "unconfigured",
+        message: this.store.configWarning,
+      };
+      this.tunnel = { status: this.noTunnel ? "development" : "stopped", origin: null };
+      if (!agent.config.connectKey) return;
       await agent.start({ noTunnel: this.noTunnel });
       if (this.noTunnel) this.tunnel.origin = agent.origin;
     } catch (error) {

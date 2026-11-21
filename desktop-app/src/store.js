@@ -41,6 +41,10 @@ function check(condition, message) {
   if (!condition) throw new Error(`Cấu hình không hợp lệ: ${message}`);
 }
 
+function validConnectKey(value) {
+  return typeof value === "string" && (!value || /^scd_[\w-]{43}$/.test(value));
+}
+
 function validateConfig(value) {
   check(value && typeof value === "object" && !Array.isArray(value), "cần đối tượng JSON");
   const config = merge(defaults, value);
@@ -59,11 +63,7 @@ function validateConfig(value) {
       !url.hash,
     "serverUrl phải là HTTP(S) origin",
   );
-  check(
-    typeof config.connectKey === "string" &&
-      (!config.connectKey || /^scd_[\w-]{43}$/.test(config.connectKey)),
-    "connectKey",
-  );
+  check(validConnectKey(config.connectKey), "connectKey");
   check(
     typeof config.deviceName === "string" &&
       config.deviceName.trim().length > 0 &&
@@ -210,7 +210,13 @@ class Store {
     }
   }
   loadConfig() {
-    return validateConfig(this.read("config.json", {}));
+    const saved = this.read("config.json", {});
+    this.configWarning = undefined;
+    if (saved && saved.connectKey !== undefined && !validConnectKey(saved.connectKey)) {
+      this.configWarning = "Khóa cũ không còn dùng được, hãy dán khóa mới";
+      return validateConfig({ ...saved, connectKey: "" });
+    }
+    return validateConfig(saved);
   }
   saveConfig(config) {
     const value = validateConfig(config);
