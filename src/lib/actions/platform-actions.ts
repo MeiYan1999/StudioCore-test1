@@ -138,8 +138,8 @@ export async function createTenantFromPlatformAction(formData: FormData): Promis
       success: true,
       message: `Đã tạo thành công Studio "${studioName}" với email ${email}!`,
     };
-  } catch (err: any) {
-    return { success: false, error: err?.message || "Lỗi tạo studio." };
+  } catch (err) {
+    return { success: false, error: (err as Error)?.message || "Lỗi tạo studio." };
   }
 }
 
@@ -290,8 +290,8 @@ export async function deleteTenantFromPlatformAction(formData: FormData): Promis
       db.run(sql.raw(`DELETE FROM ${table} WHERE tenant_id = '${tenantId}'`));
     }
     db.run(sql.raw(`DELETE FROM tenants WHERE id = '${tenantId}'`));
-  } catch (err: any) {
-    return { success: false, error: err?.message || "Lỗi xóa studio." };
+  } catch (err) {
+    return { success: false, error: (err as Error)?.message || "Lỗi xóa studio." };
   } finally {
     db.run(sql`PRAGMA foreign_keys = ON`);
   }

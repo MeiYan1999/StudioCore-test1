@@ -4,7 +4,7 @@ async function login(page: import("@playwright/test").Page, email: string) {
   await page.goto("/login");
   await page.locator("#email").fill(email);
   await page.locator("#password").fill("Demo@123");
-  await page.getByRole("button", { name: "Đăng nhập", exact: true }).click();
+  await page.getByRole("button", { name: "Đăng nhập với Email", exact: true }).click();
 }
 
 test.describe("app thật và vai trò", () => {
@@ -106,7 +106,7 @@ test.describe("app thật và vai trò", () => {
   test("platform admin vào /platform, không vào dữ liệu tenant", async ({ page }) => {
     await login(page, "platform@studiocore.demo");
     await page.waitForURL("**/platform");
-    await expect(page.getByRole("heading", { name: "Quản lý tenant nền tảng" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Quản lý Studio Khách hàng & Gói cước" })).toBeVisible();
     await page.goto("/manage/customers");
     await expect(page.getByText("403 — Không có quyền truy cập")).toBeVisible();
   });

@@ -114,7 +114,7 @@ export function createContractWithAppointments(
 
   const result = db.transaction((tx) => {
     // 1. Customer: find existing by phone or create new
-    let customer = tx
+    const customer = tx
       .select({ id: customers.id })
       .from(customers)
       .where(

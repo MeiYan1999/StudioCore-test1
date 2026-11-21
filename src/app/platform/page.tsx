@@ -362,6 +362,7 @@ export default async function PlatformPage({
                 ) : (
                   tenantRows.map((tenant) => {
                     const owner = ownerMap.get(tenant.id);
+                    // eslint-disable-next-line react-hooks/purity -- server component, rendered once per request
                     const nowMs = Date.now();
                     const expiresAt = tenant.planExpiresAt;
                     const daysRemaining = expiresAt
