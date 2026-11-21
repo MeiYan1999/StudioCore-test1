@@ -5,6 +5,7 @@ import { sessions } from "@/lib/db/schema";
 import { createSession } from "@/lib/auth/session-core";
 import { SESSION_COOKIE } from "@/lib/auth/session";
 import { findTenantDemoOwner } from "@/lib/services/onboarding-service";
+import { resolvePublicUrl } from "@/lib/auth/google-auth-service";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,7 +19,7 @@ export async function GET(request: Request): Promise<Response> {
   const owner = findTenantDemoOwner(db);
   if (!owner) {
     return NextResponse.redirect(
-      new URL("/register?reason=demo-unavailable", request.url),
+      resolvePublicUrl("/register?reason=demo-unavailable", request),
     );
   }
   const headerStore = request.headers;
@@ -57,7 +58,7 @@ export async function GET(request: Request): Promise<Response> {
     ttlMinutes: DEMO_TTL_MINUTES,
   });
   const response = NextResponse.redirect(
-    new URL("/manage/dashboard?demo=1", request.url),
+    resolvePublicUrl("/manage/dashboard?demo=1", request),
   );
   response.cookies.set({
     name: SESSION_COOKIE,
