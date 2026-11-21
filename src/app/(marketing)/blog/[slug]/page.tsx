@@ -90,7 +90,7 @@ export default async function BlogPostPage({
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
             <Button asChild><Link href="/register">Dùng thử 30 ngày</Link></Button>
-            <Button asChild variant="outline"><Link href="/demo">Xem trải nghiệm thực tế</Link></Button>
+            <Button asChild variant="outline"><Link href="/demo" prefetch={false}>Xem trải nghiệm thực tế</Link></Button>
           </div>
         </div>
 

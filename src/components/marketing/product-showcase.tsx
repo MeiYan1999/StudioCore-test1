@@ -69,7 +69,7 @@ export function ProductShowcase() {
           </Link>
         </Button>
         <Button asChild variant="outline">
-          <Link href="/demo">Xem trải nghiệm thực tế</Link>
+          <Link href="/demo" prefetch={false}>Xem trải nghiệm thực tế</Link>
         </Button>
       </div>
     </div>

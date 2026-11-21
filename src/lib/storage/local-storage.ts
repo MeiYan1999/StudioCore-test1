@@ -179,3 +179,19 @@ export async function generateDemoAlbumAssets(): Promise<void> {
     );
   }
 }
+
+export async function ensureDemoAlbumAssets(): Promise<boolean> {
+  const { DEMO_ALBUM, demoPhotoThumbnailKey, demoDriveFilePath } =
+    await import("../demo-album");
+  const missing = DEMO_ALBUM.photos.some(
+    (photo) =>
+      !fs.existsSync(resolveStoragePath(demoPhotoThumbnailKey(photo.folder, photo.filename))) ||
+      !fs.existsSync(
+        resolveStoragePath(demoDriveFilePath(photo.folder, photo.filename), DEMO_DRIVE_ROOT),
+      ),
+  );
+  if (missing) {
+    await generateDemoAlbumAssets();
+  }
+  return missing;
+}
