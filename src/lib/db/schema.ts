@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import {
   index,
   integer,
+  real,
   primaryKey,
   sqliteTable,
   text,
@@ -20,6 +21,78 @@ const updatedAtColumn = () =>
   integer("updated_at", { mode: "timestamp_ms" })
     .notNull()
     .default(sql`(unixepoch() * 1000)`);
+
+export const driveDevices = sqliteTable("drive_devices", {
+  id: text("id").primaryKey(),
+  tenantId: text("tenant_id").notNull().references(() => tenants.id),
+  name: text("name").notNull(),
+  os: text("os").notNull().default(""),
+  appVersion: text("app_version").notNull().default(""),
+  keyHash: text("key_hash").notNull(),
+  keyPrefix: text("key_prefix").notNull(),
+  createdByStaffId: text("created_by_staff_id").notNull().references(() => staff.id),
+  createdAt: createdAtColumn(),
+  lastSeenAt: integer("last_seen_at", { mode: "timestamp_ms" }),
+  tunnelOrigin: text("tunnel_origin"),
+  revokedAt: integer("revoked_at", { mode: "timestamp_ms" }),
+}, (t) => [uniqueIndex("drive_devices_key_unique").on(t.keyHash), index("drive_devices_tenant_idx").on(t.tenantId)]);
+
+export const driveShares = sqliteTable("drive_shares", {
+  id: text("id").primaryKey(),
+  tenantId: text("tenant_id").notNull().references(() => tenants.id),
+  deviceId: text("device_id").notNull().references(() => driveDevices.id),
+  tokenHash: text("token_hash").notNull(),
+  tokenEncrypted: text("token_encrypted").notNull(),
+  kind: text("kind", { enum: ["album", "view", "video", "folder"] }).notNull(),
+  title: text("title").notNull(),
+  customerName: text("customer_name"),
+  folderName: text("folder_name").notNull(),
+  mediaSecret: text("media_secret").notNull(),
+  pinHash: text("pin_hash"),
+  allowOriginals: integer("allow_originals", { mode: "boolean" }).notNull(),
+  maxSelect: integer("max_select"),
+  expiresAt: integer("expires_at", { mode: "timestamp_ms" }),
+  status: text("status", { enum: ["active", "paused", "revoked"] }).notNull().default("active"),
+  selectionStatus: text("selection_status", { enum: ["open", "finalized"] }).notNull().default("open"),
+  finalizedAt: integer("finalized_at", { mode: "timestamp_ms" }),
+  viewCount: integer("view_count").notNull().default(0),
+  downloadCount: integer("download_count").notNull().default(0),
+  fileCount: integer("file_count").notNull(),
+  totalBytes: integer("total_bytes").notNull(),
+  createdAt: createdAtColumn(),
+  updatedAt: updatedAtColumn(),
+}, (t) => [uniqueIndex("drive_shares_token_unique").on(t.tokenHash), index("drive_shares_tenant_idx").on(t.tenantId), index("drive_shares_device_idx").on(t.deviceId)]);
+
+export const driveShareFiles = sqliteTable("drive_share_files", {
+  id: text("id").primaryKey(),
+  shareId: text("share_id").notNull().references(() => driveShares.id, { onDelete: "cascade" }),
+  fileKey: text("file_key").notNull(),
+  name: text("name").notNull(),
+  relPath: text("rel_path").notNull(),
+  code: text("code").notNull(),
+  kind: text("kind", { enum: ["image", "raw", "video", "other"] }).notNull(),
+  sizeBytes: integer("size_bytes").notNull(),
+  sortOrder: integer("sort_order").notNull(),
+}, (t) => [uniqueIndex("drive_files_share_key_unique").on(t.shareId, t.fileKey)]);
+
+export const driveSelections = sqliteTable("drive_selections", {
+  id: text("id").primaryKey(),
+  shareId: text("share_id").notNull().references(() => driveShares.id, { onDelete: "cascade" }),
+  fileId: text("file_id").notNull().references(() => driveShareFiles.id, { onDelete: "cascade" }),
+  liked: integer("liked", { mode: "boolean" }).notNull().default(false),
+  note: text("note").notNull().default(""),
+  updatedAt: updatedAtColumn(),
+}, (t) => [uniqueIndex("drive_selections_file_unique").on(t.shareId, t.fileId)]);
+
+export const driveVideoComments = sqliteTable("drive_video_comments", {
+  id: text("id").primaryKey(),
+  shareId: text("share_id").notNull().references(() => driveShares.id, { onDelete: "cascade" }),
+  fileId: text("file_id").notNull().references(() => driveShareFiles.id, { onDelete: "cascade" }),
+  seconds: real("seconds").notNull(),
+  author: text("author").notNull(),
+  content: text("content").notNull(),
+  createdAt: createdAtColumn(),
+}, (t) => [index("drive_comments_share_idx").on(t.shareId)]);
 
 export const tenants = sqliteTable(
   "tenants",

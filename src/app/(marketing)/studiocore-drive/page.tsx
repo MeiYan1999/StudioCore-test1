@@ -23,7 +23,6 @@ import { Button } from "@/components/ui/button";
 import { AmbientGlow } from "@/components/marketing/ambient-glow";
 import { SpotlightCard } from "@/components/marketing/spotlight-card";
 import { LiquidGlassCard } from "@/components/marketing/liquid-glass-card";
-import { DriveOsSimulator } from "@/components/drive/drive-os-simulator";
 import { FloatingContact } from "@/components/marketing/floating-contact";
 import { marketingMetadata } from "@/lib/marketing/metadata";
 
@@ -115,11 +114,6 @@ export default function StudioCoreDrivePage() {
                 Tiếng Việt &amp; English
               </li>
             </ul>
-          </div>
-
-          {/* Interactive OS Simulator */}
-          <div className="mt-12 sm:mt-16">
-            <DriveOsSimulator />
           </div>
 
           <div className="mt-6 text-center text-xs text-muted-foreground">
