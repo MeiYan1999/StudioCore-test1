@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin:$PATH"
 
-SCRIPT_DIR="$(cd "$(dirname "$0")/../../.." && pwd)"
+# Contents/MacOS -> Contents -> StudioCore Drive.app -> macos -> desktop-app
+SCRIPT_DIR="$(cd "$(dirname "$0")/../../../.." && pwd)"
 APP_DIR="$HOME/.studiocore-drive/app"
 
 if [ -f "$SCRIPT_DIR/cli.js" ]; then
@@ -10,6 +11,11 @@ elif [ -f "$APP_DIR/cli.js" ]; then
     CLI_PATH="$APP_DIR/cli.js"
 else
     CLI_PATH="$(which studiocore-drive 2>/dev/null)"
+fi
+
+if [ -z "$CLI_PATH" ]; then
+    osascript -e 'display alert "StudioCore Drive — Thiếu cli.js" message "Không tìm thấy StudioCore Drive. Vui lòng chạy lại install-macos.command." as warning'
+    exit 1
 fi
 
 NODE_BIN=""

@@ -3,7 +3,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const http = require("node:http");
-const { exec, spawnSync } = require("node:child_process");
+const { exec, execFile, spawnSync } = require("node:child_process");
 const { AgentClient, saveConfig } = require("./src/agent-client");
 
 const args = process.argv.slice(2);
@@ -92,7 +92,8 @@ async function handleShareCommand() {
     const errMsg = "Vui lòng cung cấp đường dẫn thư mục: studiocore-drive share <path>";
     console.error(errMsg);
     showDialog("StudioCore Drive — Lỗi", errMsg, true);
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   console.log(`\n📸 StudioCore Drive — Đang quét thư mục: ${targetPath}...`);
@@ -124,6 +125,7 @@ async function handleShareCommand() {
       showDialog("StudioCore Drive — Thành công", dialogMsg, false);
     } else {
       console.error("❌ Không thể tạo link:", result);
+      process.exitCode = 1;
       showDialog(
         "StudioCore Drive — Lỗi",
         "Không thể tạo link chia sẻ cho thư mục này. Vui lòng kiểm tra lại quyền truy cập thư mục.",
@@ -132,6 +134,7 @@ async function handleShareCommand() {
     }
   } catch (err) {
     console.error("❌ Lỗi:", err.message);
+    process.exitCode = 1;
     showDialog(
       "StudioCore Drive — Lỗi",
       `Đã xảy ra lỗi khi tạo link chia sẻ:\n${err.message}`,
@@ -140,91 +143,176 @@ async function handleShareCommand() {
   }
 }
 
+function runFileDialog(file, fileArgs) {
+  return new Promise((resolve) => {
+    execFile(file, fileArgs, { windowsHide: true, timeout: 10 * 60 * 1000 }, (err, stdout) => {
+      if (err) {
+        resolve({ error: err });
+        return;
+      }
+      resolve({ path: String(stdout).trim() || null });
+    });
+  });
+}
+
+// Native folder picker: browsers cannot expose absolute folder paths to the local UI.
+async function pickFolder() {
+  const prompt = "Chọn thư mục ảnh/video cần chia sẻ";
+  let result;
+  if (process.platform === "darwin") {
+    result = await runFileDialog("osascript", [
+      "-e",
+      `POSIX path of (choose folder with prompt "${prompt}")`,
+    ]);
+  } else if (process.platform === "win32") {
+    const ps = [
+      "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8",
+      "Add-Type -AssemblyName System.Windows.Forms",
+      "$owner = New-Object System.Windows.Forms.Form -Property @{TopMost = $true}",
+      "$dialog = New-Object System.Windows.Forms.FolderBrowserDialog",
+      `$dialog.Description = '${prompt}'`,
+      "if ($dialog.ShowDialog($owner) -eq [System.Windows.Forms.DialogResult]::OK) { Write-Output $dialog.SelectedPath }",
+    ].join("; ");
+    result = await runFileDialog("powershell", ["-NoProfile", "-NonInteractive", "-STA", "-Command", ps]);
+  } else {
+    result = await runFileDialog("zenity", ["--file-selection", "--directory", `--title=${prompt}`]);
+    if (result.error && result.error.code === "ENOENT") {
+      return { unsupported: true };
+    }
+  }
+  if (result.path) return { path: result.path };
+  return { cancelled: true };
+}
+
+const MAX_BODY_BYTES = 64 * 1024;
+const CONFIG_FIELDS = {
+  serverUrl: "string",
+  connectKey: "string",
+  autoFilterRaw: "boolean",
+  chimeSound: "boolean",
+};
+
+function sendJson(res, status, data) {
+  res.writeHead(status, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
+  res.end(JSON.stringify(data));
+}
+
+function readJsonBody(req) {
+  return new Promise((resolve, reject) => {
+    let body = "";
+    req.on("data", (chunk) => {
+      body += chunk;
+      if (body.length > MAX_BODY_BYTES) {
+        reject(new Error("Dữ liệu gửi lên quá lớn."));
+        req.destroy();
+      }
+    });
+    req.on("end", () => {
+      try {
+        resolve(body ? JSON.parse(body) : {});
+      } catch {
+        reject(new Error("Dữ liệu JSON không hợp lệ."));
+      }
+    });
+    req.on("error", reject);
+  });
+}
+
+function pickConfigUpdates(updates) {
+  const picked = {};
+  for (const [key, type] of Object.entries(CONFIG_FIELDS)) {
+    if (updates && typeof updates[key] === type) {
+      picked[key] = type === "string" ? updates[key].trim() : updates[key];
+    }
+  }
+  if (picked.serverUrl !== undefined) {
+    const parsed = new URL(picked.serverUrl);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      throw new Error("Server URL phải bắt đầu bằng http:// hoặc https://");
+    }
+  }
+  return picked;
+}
+
+const API_ROUTES = {
+  "POST /api/share-folder": async (body) => {
+    if (typeof body.path !== "string" || !body.path.trim()) {
+      throw new Error("Thiếu đường dẫn thư mục cần chia sẻ.");
+    }
+    return agent.createShare(body.path, body.type || null);
+  },
+  "POST /api/pick-folder": async () => pickFolder(),
+  "POST /api/delete-share": async (body) => agent.deleteShare(body.shareId),
+  "POST /api/toggle-share": async (body) => agent.toggleShareStatus(body.shareId),
+  "POST /api/save-config": async (body) => {
+    Object.assign(agent.config, pickConfigUpdates(body));
+    saveConfig(agent.config);
+    agent.ping().catch(() => {});
+    return { success: true };
+  },
+};
+
+function agentState() {
+  const cfg = agent.reloadConfig();
+  return {
+    hostname: cfg.hostname,
+    os: cfg.os,
+    serverUrl: cfg.serverUrl,
+    connectKey: cfg.connectKey,
+    autoFilterRaw: cfg.autoFilterRaw,
+    chimeSound: cfg.chimeSound,
+    shares: cfg.shares || [],
+    connection: agent.connection,
+  };
+}
+
 function startLocalUiServer(port = 3888) {
   const uiDir = path.join(__dirname, "src", "ui");
+  const host = "127.0.0.1";
+  const allowedHosts = new Set([`localhost:${port}`, `127.0.0.1:${port}`]);
+  const allowedOrigins = new Set([...allowedHosts].map((h) => `http://${h}`));
+  const localUrl = `http://localhost:${port}`;
 
-  const server = http.createServer((req, res) => {
-    const url = new URL(req.url, `http://localhost:${port}`);
-
-    // Internal API for Desktop UI
-    if (url.pathname === "/api/state") {
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify(agent.config));
+  const server = http.createServer(async (req, res) => {
+    // Chặn DNS rebinding: chỉ phục vụ request gửi tới localhost
+    if (!allowedHosts.has(String(req.headers.host || "").toLowerCase())) {
+      sendJson(res, 403, { error: "Host không được phép." });
       return;
     }
 
-    if (url.pathname === "/api/share-folder" && req.method === "POST") {
-      let body = "";
-      req.on("data", (chunk) => (body += chunk));
-      req.on("end", async () => {
-        try {
-          const { path: folderPath, type } = JSON.parse(body);
-          const result = await agent.createShare(folderPath, type);
-          res.writeHead(200, { "Content-Type": "application/json" });
-          res.end(JSON.stringify(result));
-        } catch (e) {
-          res.writeHead(500, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ error: e.message }));
-        }
-      });
+    const url = new URL(req.url, localUrl);
+
+    if (url.pathname === "/api/state" && req.method === "GET") {
+      sendJson(res, 200, agentState());
       return;
     }
 
-    if (url.pathname === "/api/delete-share" && req.method === "POST") {
-      let body = "";
-      req.on("data", (chunk) => (body += chunk));
-      req.on("end", async () => {
-        try {
-          const { shareId } = JSON.parse(body);
-          const result = await agent.deleteShare(shareId);
-          res.writeHead(200, { "Content-Type": "application/json" });
-          res.end(JSON.stringify(result));
-        } catch (e) {
-          res.writeHead(500, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ error: e.message }));
-        }
-      });
+    const route = API_ROUTES[`${req.method} ${url.pathname}`];
+    if (route) {
+      // Chặn CSRF: chỉ nhận POST JSON từ chính giao diện localhost
+      const contentType = String(req.headers["content-type"] || "");
+      if (!allowedOrigins.has(req.headers.origin) || !contentType.startsWith("application/json")) {
+        sendJson(res, 403, { error: "Yêu cầu không hợp lệ." });
+        return;
+      }
+      try {
+        const body = await readJsonBody(req);
+        agent.reloadConfig();
+        sendJson(res, 200, await route(body));
+      } catch (e) {
+        sendJson(res, e.statusCode === 401 || e.statusCode === 403 ? 401 : 500, { error: e.message });
+      }
       return;
     }
 
-    if (url.pathname === "/api/toggle-share" && req.method === "POST") {
-      let body = "";
-      req.on("data", (chunk) => (body += chunk));
-      req.on("end", async () => {
-        try {
-          const { shareId } = JSON.parse(body);
-          const result = await agent.toggleShareStatus(shareId);
-          res.writeHead(200, { "Content-Type": "application/json" });
-          res.end(JSON.stringify(result));
-        } catch (e) {
-          res.writeHead(500, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ error: e.message }));
-        }
-      });
-      return;
-    }
-
-    if (url.pathname === "/api/save-config" && req.method === "POST") {
-      let body = "";
-      req.on("data", (chunk) => (body += chunk));
-      req.on("end", () => {
-        try {
-          const updates = JSON.parse(body);
-          Object.assign(agent.config, updates);
-          saveConfig(agent.config);
-          res.writeHead(200, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ success: true }));
-        } catch (e) {
-          res.writeHead(400, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ error: e.message }));
-        }
-      });
+    if (url.pathname.startsWith("/api/")) {
+      sendJson(res, 404, { error: "Không tìm thấy API." });
       return;
     }
 
     // Static files in src/ui
-    let filePath = path.join(uiDir, url.pathname === "/" ? "index.html" : url.pathname);
-    if (!fs.existsSync(filePath)) {
+    let filePath = path.resolve(uiDir, `.${url.pathname === "/" ? "/index.html" : url.pathname}`);
+    if (!filePath.startsWith(uiDir + path.sep) || !fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
       filePath = path.join(uiDir, "index.html");
     }
 
@@ -241,8 +329,17 @@ function startLocalUiServer(port = 3888) {
     fs.createReadStream(filePath).pipe(res);
   });
 
-  server.listen(port, () => {
-    const localUrl = `http://localhost:${port}`;
+  server.on("error", (err) => {
+    if (err.code === "EADDRINUSE") {
+      console.log(`\nℹ️  StudioCore Drive đã chạy sẵn tại ${localUrl} — mở lại bảng điều khiển.`);
+      openBrowser(localUrl);
+      return;
+    }
+    console.error("❌ Không thể khởi động giao diện StudioCore Drive:", err.message);
+    process.exitCode = 1;
+  });
+
+  server.listen(port, host, () => {
     console.log(`\n======================================================`);
     console.log(`🚀 StudioCore Drive Desktop Agent đang chạy!`);
     console.log(`💻 Bảng điều khiển Desktop: ${localUrl}`);

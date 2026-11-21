@@ -85,10 +85,53 @@ function getLocalNetworkIp() {
   return "127.0.0.1";
 }
 
+function httpError(statusCode, body) {
+  const message =
+    statusCode === 401 || statusCode === 403
+      ? "Khóa kết nối (Studio Connect Key) không hợp lệ hoặc đã bị thu hồi. Vui lòng kiểm tra lại trong Cài đặt kết nối."
+      : (body && body.error) || `Máy chủ StudioCore trả về lỗi HTTP ${statusCode}.`;
+  const err = new Error(message);
+  err.statusCode = statusCode;
+  return err;
+}
+
 class AgentClient {
   constructor(config = loadConfig()) {
     this.config = config;
     this.timer = null;
+    this.connection = { state: "unknown", message: null, checkedAt: null };
+  }
+
+  reloadConfig() {
+    this.config = loadConfig();
+    return this.config;
+  }
+
+  setConnection(err) {
+    let state = "online";
+    if (err) {
+      state = err.statusCode === 401 || err.statusCode === 403 ? "unauthorized" : "offline";
+    }
+    this.connection = {
+      state,
+      message: err ? err.message : null,
+      checkedAt: new Date().toISOString(),
+    };
+  }
+
+  async ping() {
+    try {
+      const res = await this.sendRequest("/api/drive/agent", "POST", {
+        action: "ping",
+        connectKey: this.config.connectKey,
+        agentInfo: { hostname: this.config.hostname, os: this.config.os },
+      });
+      this.setConnection(null);
+      return res;
+    } catch (err) {
+      this.setConnection(err);
+      throw err;
+    }
   }
 
   async sendRequest(endpoint, method = "GET", data = null) {
@@ -109,12 +152,17 @@ class AgentClient {
         let body = "";
         res.on("data", (chunk) => (body += chunk));
         res.on("end", () => {
+          let parsed;
           try {
-            const parsed = JSON.parse(body);
-            resolve(parsed);
+            parsed = JSON.parse(body);
           } catch {
-            resolve({ raw: body });
+            parsed = { raw: body };
           }
+          if (res.statusCode >= 400) {
+            reject(httpError(res.statusCode, parsed));
+            return;
+          }
+          resolve(parsed);
         });
       });
 
@@ -125,7 +173,7 @@ class AgentClient {
   }
 
   async register() {
-    const res = await this.sendRequest("/api/drive/agent", "POST", {
+    const res = await this.trackConnection(() => this.sendRequest("/api/drive/agent", "POST", {
       action: "register",
       connectKey: this.config.connectKey,
       agentInfo: {
@@ -135,9 +183,20 @@ class AgentClient {
         appVersion: "1.0.0",
         activeSharesCount: this.config.shares.length,
       },
-    });
+    }));
     this.syncShares().catch(() => {});
     return res;
+  }
+
+  async trackConnection(request) {
+    try {
+      const res = await request();
+      this.setConnection(null);
+      return res;
+    } catch (err) {
+      this.setConnection(err);
+      throw err;
+    }
   }
 
   async syncShares() {
@@ -190,7 +249,7 @@ class AgentClient {
 
     let res = null;
     try {
-      res = await this.sendRequest("/api/drive/agent", "POST", {
+      res = await this.trackConnection(() => this.sendRequest("/api/drive/agent", "POST", {
         action: "create_share",
         connectKey: this.config.connectKey,
         agentInfo: {
@@ -207,8 +266,9 @@ class AgentClient {
           totalSizeLabel: scan.totalSizeLabel,
           videoMeta: scan.videoMeta,
         },
-      });
-    } catch {
+      }));
+    } catch (err) {
+      if (err.statusCode) throw err;
       // Offline / fallback mode
       res = {
         success: true,
@@ -320,6 +380,7 @@ class AgentClient {
   startDaemon(intervalMs = 15000) {
     this.register().catch(() => {});
     this.timer = setInterval(() => {
+      this.ping().catch(() => {});
       this.pollNotifications().catch(() => {});
     }, intervalMs);
   }
