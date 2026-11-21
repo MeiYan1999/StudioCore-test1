@@ -6,12 +6,10 @@ const { classify } = require("./scanner");
 function parseCodes(value) {
   const seen = new Set();
   return (Array.isArray(value) ? value.map(String) : String(value || "").split(/[\s,;|]+/))
-    .map((code) =>
-      path.posix
-        .basename(code.replace(/\\/g, "/"))
-        .replace(/\.[^.]+$/, "")
-        .trim(),
-    )
+    .map((code) => {
+      const name = path.posix.basename(code.replace(/\\/g, "/")).trim();
+      return classify(name) === "other" ? name : name.slice(0, -path.extname(name).length);
+    })
     .filter((code) => {
       if (!code || seen.has(code.toLocaleLowerCase())) return false;
       seen.add(code.toLocaleLowerCase());

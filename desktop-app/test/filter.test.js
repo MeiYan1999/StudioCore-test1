@@ -54,3 +54,32 @@ test("filter reports matches/missing/ambiguity, skips output, copies without ove
   await assert.rejects(planFilter({ ...input, outputPath: source }));
   await assert.rejects(planFilter({ ...input, mode: "bad" }));
 });
+
+test("filter preserves dotted codes and strips only scanner-recognized media extensions", async (t) => {
+  assert.deepEqual(parseCodes(["IMG_001.edit", "IMG_001.edit.CR3", "img_001.edit.JPG"]), [
+    "IMG_001.edit",
+  ]);
+  assert.deepEqual(parseCodes("a.edit a.final.png b.HEIC c.NEF d.MOV e.backup"), [
+    "a.edit",
+    "a.final",
+    "b",
+    "c",
+    "d",
+    "e.backup",
+  ]);
+  const source = await fs.mkdtemp(path.join(os.tmpdir(), "drive-filter-dotted-"));
+  t.after(() => fs.rm(source, { recursive: true, force: true }));
+  for (const name of ["IMG_001.edit.CR3", "IMG_001.edit.JPG", "IMG_001.CR3"])
+    await fs.writeFile(path.join(source, name), name);
+  const input = { source, mode: "both", codes: parseCodes(["IMG_001.edit.JPG"]) };
+  const plan = await planFilter(input);
+  assert.equal(plan.matched, 1);
+  assert.deepEqual(plan.missing, []);
+  assert.deepEqual(
+    plan.matches[0].files.map((file) => file.name),
+    ["IMG_001.edit.CR3", "IMG_001.edit.JPG"],
+  );
+  const result = await copyFilter(input);
+  assert.equal(result.copied.length, 2);
+  assert.match(result.text, /IMG_001\.edit/);
+});
