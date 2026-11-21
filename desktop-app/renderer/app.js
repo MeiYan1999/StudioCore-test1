@@ -13,6 +13,7 @@ const STATUS_TEXT = {
   idle: "Chưa kết nối",
   online: "Đang trực tuyến",
   offline: "Mất kết nối máy chủ",
+  suspended: "Studio đang bị tạm khóa",
   revoked: "Đã bị gỡ kết nối",
 };
 

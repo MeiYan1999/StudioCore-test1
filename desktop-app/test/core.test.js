@@ -7,7 +7,7 @@ const path = require("node:path");
 const test = require("node:test");
 const { parseRange } = require("../src/core/agent");
 const { DriveAgent } = require("../src/core/agent");
-const { normalizeServerUrl } = require("../src/core/api");
+const { ApiError, normalizeServerUrl } = require("../src/core/api");
 const { copyPicks, safeFolderName } = require("../src/core/picks");
 const { scanFolder, resolveInside } = require("../src/core/scanner");
 const { Store } = require("../src/core/store");
@@ -167,6 +167,38 @@ test("does not send a previous device token to a different server origin", async
   assert.equal(pairInput.previousToken, undefined);
   assert.equal(store.get("previousDeviceToken"), null);
   assert.equal(store.get("previousServerUrl"), null);
+});
+
+test("suspended responses preserve the device token and retry with a 60-second cap", async () => {
+  const store = new Store(tmp());
+  store.set({ deviceToken: "scdt-valid", deviceId: "device-1" });
+  const agent = new DriveAgent({ store, images: {}, appVersion: "test" });
+  const controller = new AbortController();
+  const delays = [];
+  let attempts = 0;
+  const originalSetTimeout = global.setTimeout;
+  agent.client = () => ({
+    poll: async () => {
+      attempts += 1;
+      throw new ApiError("Studio đang bị tạm khóa.", 403);
+    },
+  });
+  global.setTimeout = (callback, delay, ...args) => {
+    delays.push(delay);
+    if (delay >= 60000) controller.abort();
+    queueMicrotask(() => callback(...args));
+    return {};
+  };
+  try {
+    await agent.loop(controller.signal);
+  } finally {
+    global.setTimeout = originalSetTimeout;
+  }
+
+  assert.equal(store.get("deviceToken"), "scdt-valid");
+  assert.equal(agent.status, "suspended");
+  assert.equal(attempts, 7);
+  assert.deepEqual(delays, [1000, 2000, 4000, 8000, 16000, 32000, 60000]);
 });
 
 test("failed auto-copy stays pending and retry does not emit another notification", async () => {

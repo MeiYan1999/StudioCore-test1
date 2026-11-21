@@ -2,9 +2,12 @@ import { NextResponse } from "next/server";
 import { getDb, type AppDb } from "@/lib/db/client";
 import type { DriveDevice } from "@/lib/db/schema";
 import { AuthorizationError, NotFoundError, ValidationError } from "@/lib/errors";
-import { authenticateDriveDevice, touchDriveDevice } from "@/lib/services/drive-service";
+import { authenticateDriveDevice, DriveSuspendedError, touchDriveDevice } from "@/lib/services/drive-service";
 
 export function driveErrorResponse(error: unknown): NextResponse {
+  if (error instanceof DriveSuspendedError) {
+    return NextResponse.json({ error: error.message }, { status: 403 });
+  }
   if (error instanceof AuthorizationError) {
     return NextResponse.json({ error: error.message }, { status: 401 });
   }

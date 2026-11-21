@@ -18,6 +18,13 @@ import type { ActorContext } from "../auth/types";
 import { writeAudit } from "../audit";
 import { AuthorizationError, NotFoundError, ValidationError } from "../errors";
 
+export class DriveSuspendedError extends AuthorizationError {
+  constructor(message = "Studio đang bị tạm khóa.") {
+    super(message);
+    this.name = "DriveSuspendedError";
+  }
+}
+
 export const DRIVE_PAIRING_TTL_MS = 15 * 60 * 1000;
 export const DRIVE_MAX_FILES_PER_SHARE = 20_000;
 export const DRIVE_ONLINE_WINDOW_MS = 75_000;
@@ -191,7 +198,7 @@ export function authenticateDriveDevice(db: AppDb, token: string | null): DriveD
     .where(eq(tenants.id, device.tenantId))
     .get()?.status;
   if (tenantStatus !== "active") {
-    throw new AuthorizationError("Studio đang bị tạm khóa.");
+    throw new DriveSuspendedError();
   }
   return device;
 }

@@ -168,9 +168,10 @@ class DriveAgent extends EventEmitter {
           return;
         }
         first = true;
-        this.setStatus("offline", error.message);
+        const suspended = error instanceof ApiError && error.status === 403;
+        this.setStatus(suspended ? "suspended" : "offline", error.message);
         await new Promise((resolve) => setTimeout(resolve, delay));
-        delay = Math.min(delay * 2, 30000);
+        delay = Math.min(delay * 2, suspended ? 60000 : 30000);
       }
     }
   }

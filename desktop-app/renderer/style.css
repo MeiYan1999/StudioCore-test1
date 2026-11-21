@@ -23,6 +23,7 @@ body { margin: 0; background: var(--bg); }
 .pill { padding: 4px 10px; border-radius: 999px; background: #eceaf6; font-size: 12px; font-weight: 600; }
 .pill.online { background: #e1f5ea; color: var(--ok); }
 .pill.offline, .pill.revoked { background: #fdecea; color: var(--danger); }
+.pill.suspended { background: #fff4d6; color: #7a5700; }
 main { padding: 20px; max-width: 980px; margin: 0 auto; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 24px; }
 .narrow { max-width: 440px; margin: 40px auto; display: grid; gap: 14px; }

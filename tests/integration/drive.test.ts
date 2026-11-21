@@ -5,6 +5,7 @@ import type { ActorContext } from "@/lib/auth/types";
 import type { AppDb } from "@/lib/db/client";
 import { eq } from "drizzle-orm";
 import { tenants, type DriveDevice } from "@/lib/db/schema";
+import { driveErrorResponse } from "@/lib/drive/http";
 import {
   fulfillDriveJob,
   pollDriveJobs,
@@ -13,6 +14,7 @@ import {
 } from "@/lib/drive/relay";
 import { AuthorizationError, NotFoundError, ValidationError } from "@/lib/errors";
 import {
+  DriveSuspendedError,
   authenticateDriveDevice,
   createDrivePairingCode,
   createDriveShare,
@@ -150,7 +152,14 @@ describe("ghép nối thiết bị", () => {
     const share = createDriveShare(db, device, { title: "A", kind: "select", files: files(1) });
     db.update(tenants).set({ status: "suspended" }).where(eq(tenants.id, owner.tenantId)).run();
     try {
-      expect(() => authenticateDriveDevice(db, token)).toThrow(AuthorizationError);
+      let authError: unknown = null;
+      try {
+        authenticateDriveDevice(db, token);
+      } catch (error) {
+        authError = error;
+      }
+      expect(authError).toBeInstanceOf(DriveSuspendedError);
+      expect(driveErrorResponse(authError).status).toBe(403);
       expect(getDriveShareBySlug(db, share.slug).state).toBe("paused");
     } finally {
       db.update(tenants).set({ status: "active" }).where(eq(tenants.id, owner.tenantId)).run();
