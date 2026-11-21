@@ -183,11 +183,17 @@ test("fast image jobs and bulk jobs use independent concurrency limits", async (
   assert.equal(agent.bulkQueue.length, 1);
 
   finish[4]();
-  await Promise.resolve();
+  await new Promise((resolve) => setImmediate(resolve));
   assert.equal(agent.bulkActive, 2);
   assert.equal(agent.bulkQueue.length, 0);
   assert.equal(agent.fastActive, 4);
-  finish.forEach((resolve) => resolve());
+  let resolved = 0;
+  while (resolved < finish.length) {
+    const current = finish.slice(resolved);
+    resolved = finish.length;
+    current.forEach((resolve) => resolve());
+    await new Promise((resolve) => setImmediate(resolve));
+  }
 });
 
 test("lọc ảnh khách chọn kèm RAW, không ghi đè", async () => {
