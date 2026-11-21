@@ -5,6 +5,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
 const { Writable } = require("node:stream");
+const { createHash } = require("node:crypto");
 const { Store } = require("../src/store");
 const { createMediaServer, disposition, AccessLog } = require("../src/media");
 const { writeZip, crc32 } = require("../src/zip");
@@ -102,6 +103,47 @@ test("media rejects symlinks escaping root and invalid mappings", async (t) => {
   assert.throws(() =>
     store.updateShares(() => [{ ...share, files: { escape01: "../outside.jpg" } }]),
   );
+});
+
+test("failed thumbnail conversion never exposes originals without download permission", async (t) => {
+  const { source, store, share, url, cache } = await fixture(t);
+  await fs.writeFile(path.join(source, "private.png"), "private original, not a valid image");
+  store.updateShares(() => [
+    { ...share, allowOriginals: false, files: { image_01: "private.png" } },
+  ]);
+  for (const variant of ["thumb", "preview"])
+    assert.equal((await fetch(url("image_01", variant))).status, 404);
+  store.updateShares(() => [{ ...share, files: { image_01: "private.png" } }]);
+  assert.equal(
+    await (await fetch(url("image_01", "preview"))).text(),
+    "private original, not a valid image",
+  );
+  const image = path.join(source, "ảnh.jpg");
+  const stat = await fs.stat(image);
+  const legacyHash = createHash("sha256")
+    .update(`${image}\0image_01\0${stat.mtimeMs}\0${stat.size}\0thumb`)
+    .digest("hex");
+  await fs.writeFile(path.join(cache.directory, legacyHash + ".jpg"), jpeg());
+  store.updateShares(() => [{ ...share, allowOriginals: false }]);
+  assert.equal((await fetch(url("image_01", "thumb"))).status, 404);
+  const raw = Buffer.concat([
+    Buffer.from("private RAW header"),
+    jpeg(),
+    Buffer.from("private RAW tail"),
+  ]);
+  await fs.writeFile(path.join(source, "photo.CR3"), raw);
+  store.updateShares(() => [{ ...share, allowOriginals: false, files: { image_01: "photo.CR3" } }]);
+  for (const variant of ["thumb", "preview"]) {
+    const response = await fetch(url("image_01", variant));
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("content-type"), "image/jpeg");
+    assert.notDeepEqual(Buffer.from(await response.arrayBuffer()), raw);
+  }
+  const derived = path.join(source, "derived.jpg");
+  await fs.writeFile(derived, jpeg());
+  cache.get = async () => derived;
+  store.updateShares(() => [{ ...share, allowOriginals: false }]);
+  assert.equal((await fetch(url("image_01", "preview"))).status, 200);
 });
 
 test("video supports HTTP Range, suffix, HEAD and 416 responses", async (t) => {

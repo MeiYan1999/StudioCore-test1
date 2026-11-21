@@ -217,7 +217,10 @@ function createMediaServer({
       if (variant === "stream" && classify(file) !== "video") throw httpError(404);
       if (variant === "thumb" || variant === "preview") {
         if (!["image", "raw"].includes(classify(file))) throw httpError(404);
+        const source = file;
         file = await cache.get(file, key, variant);
+        if (!share.allowOriginals && path.resolve(file) === path.resolve(source))
+          throw httpError(404);
         response.setHeader("Cache-Control", "private, max-age=86400");
       } else if (
         variant === "original" &&

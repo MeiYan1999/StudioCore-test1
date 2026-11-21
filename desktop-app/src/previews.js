@@ -130,7 +130,7 @@ class PreviewCache {
     await fs.mkdir(this.directory, { recursive: true, mode: 0o700 });
     const stat = await fs.stat(file);
     const hash = createHash("sha256")
-      .update(`${file}\0${fileKey}\0${stat.mtimeMs}\0${stat.size}\0${variant}`)
+      .update(`safe-preview-v2\0${file}\0${fileKey}\0${stat.mtimeMs}\0${stat.size}\0${variant}`)
       .digest("hex");
     const cached = path.join(this.directory, hash + ".jpg");
     try {
@@ -201,10 +201,8 @@ class PreviewCache {
                 { timeout: 60000 },
               );
           } catch {
-            const fallback =
-              source === extracted ? await fs.readFile(source) : await embeddedJpeg(file);
-            if (fallback) await fs.writeFile(temporary, fallback, { mode: 0o600 });
-            else return file;
+            if (source !== extracted) return file;
+            await fs.copyFile(source, temporary);
           }
         }
         await fs.chmod(temporary, 0o600);
