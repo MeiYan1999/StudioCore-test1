@@ -9,8 +9,29 @@ import {
   addDriveVideoComment,
   getDriveExportRawCodes,
 } from "@/lib/services/drive-service";
+import {
+  DEMO_ALBUM,
+  demoPhotoStorageKey,
+  demoPhotoThumbnailKey,
+  demoPhotoPreviewKey,
+} from "@/lib/demo-album";
 
 describe("StudioCore Drive Service", () => {
+  it("chỉ trỏ tới ảnh demo có thật trong DEMO_ALBUM", () => {
+    const demoKeys = new Set(
+      DEMO_ALBUM.photos.flatMap(({ folder, filename }) => [
+        demoPhotoStorageKey(folder, filename),
+        demoPhotoThumbnailKey(folder, filename),
+        demoPhotoPreviewKey(folder, filename),
+      ]),
+    );
+    const fileKeys = [
+      ...JSON.stringify(listDriveShares()).matchAll(/\/api\/files\/(tenant-demo\/album-demo-01\/[^"?#]+)/g),
+    ].map((match) => match[1]);
+    expect(fileKeys.length).toBeGreaterThan(0);
+    expect(fileKeys.filter((key) => !demoKeys.has(key))).toEqual([]);
+  });
+
   it("liệt kê danh sách demo drive shares đầy đủ 3 loại link", () => {
     const shares = listDriveShares();
     expect(shares.length).toBeGreaterThanOrEqual(3);
