@@ -306,27 +306,6 @@ export function DriveGallery(props: Props) {
               </Button>
             )}
           </div>
-          {selecting && openFile?.picked ? (
-            <div className="px-4 pb-4">
-              <Textarea
-                value={openFile?.note ?? ""}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  setFiles((current) =>
-                    current.map((file) => (file.id === openFileId ? { ...file, note: value || null } : file)),
-                  );
-                }}
-                onBlur={(event) => {
-                  if (!submitted) void savePhotoNote(openFileId, event.currentTarget.value);
-                }}
-                readOnly={submitted}
-                maxLength={500}
-                placeholder={submitted ? "Chưa có ghi chú cho ảnh này." : "Ghi chú cho ảnh này"}
-                aria-label="Ghi chú cho ảnh này"
-                className="mx-auto max-h-20 max-w-2xl border-white/25 bg-white/10 text-white placeholder:text-white/50"
-              />
-            </div>
-          ) : null}
         </div>
       ) : null}
 
@@ -409,6 +388,27 @@ export function DriveGallery(props: Props) {
               </button>
             ) : null}
           </div>
+          {selecting && openFile.picked ? (
+            <div className="border-t border-white/15 bg-black/80 px-4 py-3" onClick={(event) => event.stopPropagation()}>
+              <Textarea
+                value={openFile.note ?? ""}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setFiles((current) =>
+                    current.map((file) => (file.id === openFileId ? { ...file, note: value || null } : file)),
+                  );
+                }}
+                onBlur={(event) => {
+                  if (!submitted) void savePhotoNote(openFileId, event.currentTarget.value);
+                }}
+                readOnly={submitted}
+                maxLength={500}
+                placeholder={submitted ? "Chưa có ghi chú cho ảnh này." : "Ghi chú cho ảnh này"}
+                aria-label="Ghi chú cho ảnh này"
+                className="mx-auto max-h-20 max-w-2xl border-white/25 bg-white/10 text-white placeholder:text-white/50"
+              />
+            </div>
+          ) : null}
         </div>
       ) : null}
     </main>
