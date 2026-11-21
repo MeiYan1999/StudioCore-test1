@@ -3,7 +3,8 @@ import { authenticate } from "@/lib/auth/login-service";
 import { getActorFromToken } from "@/lib/auth/session-core";
 import type { ActorContext } from "@/lib/auth/types";
 import type { AppDb } from "@/lib/db/client";
-import type { DriveDevice } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
+import { tenants, type DriveDevice } from "@/lib/db/schema";
 import {
   fulfillDriveJob,
   pollDriveJobs,
@@ -89,6 +90,18 @@ describe("ghép nối thiết bị", () => {
     expect(() => authenticateDriveDevice(db, "sc_drive_live_tenant_demo_984f7b2e1a")).toThrow(AuthorizationError);
     expect(() => authenticateDriveDevice(db, "scdt-khong-ton-tai")).toThrow(AuthorizationError);
     expect(() => authenticateDriveDevice(db, null)).toThrow(AuthorizationError);
+  });
+
+  it("tạm khóa studio thì thiết bị không thể truy cập và link bị tạm dừng", () => {
+    const { device, token } = pair();
+    const share = createDriveShare(db, device, { title: "A", kind: "select", files: files(1) });
+    db.update(tenants).set({ status: "suspended" }).where(eq(tenants.id, owner.tenantId)).run();
+    try {
+      expect(() => authenticateDriveDevice(db, token)).toThrow(AuthorizationError);
+      expect(getDriveShareBySlug(db, share.slug).state).toBe("paused");
+    } finally {
+      db.update(tenants).set({ status: "active" }).where(eq(tenants.id, owner.tenantId)).run();
+    }
   });
 
   it("gỡ thiết bị thì token hết hiệu lực và link tạm dừng", () => {

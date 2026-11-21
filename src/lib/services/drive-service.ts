@@ -170,6 +170,14 @@ export function authenticateDriveDevice(db: AppDb, token: string | null): DriveD
   if (!device || device.revokedAt) {
     throw new AuthorizationError("Thiết bị đã bị gỡ kết nối.");
   }
+  const tenantStatus = db
+    .select({ status: tenants.status })
+    .from(tenants)
+    .where(eq(tenants.id, device.tenantId))
+    .get()?.status;
+  if (tenantStatus !== "active") {
+    throw new AuthorizationError("Studio đang bị tạm khóa.");
+  }
   return device;
 }
 
@@ -590,6 +598,12 @@ export function getDriveShareBySlug(db: AppDb, slug: string): { state: DrivePubl
   if (!share) return { state: "not_found", share: null, device: null };
   const device = db.select().from(driveDevices).where(eq(driveDevices.id, share.deviceId)).get() ?? null;
   if (!device || device.revokedAt || share.status !== "active") return { state: "paused", share, device };
+  const tenantStatus = db
+    .select({ status: tenants.status })
+    .from(tenants)
+    .where(eq(tenants.id, device.tenantId))
+    .get()?.status;
+  if (tenantStatus !== "active") return { state: "paused", share, device };
   if (share.expiresAt && share.expiresAt.getTime() < Date.now()) return { state: "expired", share, device };
   return { state: "ok", share, device };
 }
