@@ -16,7 +16,8 @@ const DETAIL_ROUTES: { pattern: RegExp; lookup: DetailLookup }[] = [
   { pattern: /^\/manage\/customers\/([^/]+)$/, lookup: getCustomerDetail },
   { pattern: /^\/manage\/albums\/([^/]+)(?:\/(?:filter|notes))?$/, lookup: getAlbumDetail },
   { pattern: /^\/manage\/equipment\/([^/]+)$/, lookup: getEquipmentDetail },
-  { pattern: /^\/manage\/wardrobe\/([^/]+)$/, lookup: getWardrobeItemDetail },
+  // `rentals` is a static sibling route of wardrobe/[id].
+  { pattern: /^\/manage\/wardrobe\/(?!rentals$)([^/]+)$/, lookup: getWardrobeItemDetail },
   { pattern: /^\/manage\/calendar\/([^/]+)$/, lookup: getAppointmentDetail },
   { pattern: /^\/manage\/settings\/users\/([^/]+)$/, lookup: getStaffDetail },
 ];

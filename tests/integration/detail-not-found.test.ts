@@ -41,6 +41,8 @@ describe("isMissingDetailRecord", () => {
     expect(isMissingDetailRecord(db, owner, "/manage/customers/customer-demo-01")).toBe(false);
     expect(isMissingDetailRecord(db, owner, "/manage/orders")).toBe(false);
     expect(isMissingDetailRecord(db, owner, "/manage/dashboard")).toBe(false);
+    expect(isMissingDetailRecord(db, owner, "/manage/wardrobe/rentals")).toBe(false);
+    expect(isMissingDetailRecord(db, owner, "/manage/wardrobe/missing")).toBe(true);
   });
 
   it("leaves permission failures to the page", () => {
