@@ -300,7 +300,7 @@ export function ContractCreateModal({
   const updateSession = (
     id: string,
     field: keyof ContractSessionState,
-    value: any,
+    value: ContractSessionState[keyof ContractSessionState],
   ) => {
     setSessions((prev) =>
       prev.map((s) => (s.id === id ? { ...s, [field]: value } : s)),

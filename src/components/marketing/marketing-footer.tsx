@@ -23,7 +23,7 @@ export function MarketingFooter() {
             <li><Link href="/crm-studio-chup-anh" className="hover:text-primary">CRM studio</Link></li>
             <li><Link href="/#features" className="hover:text-primary">Tính năng</Link></li>
             <li><Link href="/pricing" className="hover:text-primary">Bảng giá</Link></li>
-            <li><Link href="/demo" className="hover:text-primary">Xem trải nghiệm</Link></li>
+            <li><Link href="/demo" prefetch={false} className="hover:text-primary">Xem trải nghiệm</Link></li>
           </ul>
         </div>
         <div>

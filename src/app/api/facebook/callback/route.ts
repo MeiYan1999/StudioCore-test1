@@ -4,6 +4,7 @@ import { requireActor } from "@/lib/auth/session";
 import { getDb, facebookOauth, facebookPages } from "@/lib/db/client";
 import { digest, graph, metaConfig, seal } from "@/lib/omnichannel/meta";
 import { writeAudit } from "@/lib/audit";
+import { redirectToPath } from "@/lib/http/redirect";
 export async function GET(request: Request) {
   const actor = await requireActor();
   const db = getDb();
@@ -94,9 +95,7 @@ export async function GET(request: Request) {
       action: "facebook.oauth",
       entity: "integration",
     });
-    return NextResponse.redirect(
-      new URL("/manage/settings/facebook", request.url),
-    );
+    return redirectToPath("/manage/settings/facebook");
   } catch (error) {
     return NextResponse.json(
       { error: (error as Error).message },

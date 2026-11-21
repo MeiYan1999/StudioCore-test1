@@ -129,10 +129,10 @@ export async function createContractAction(
       customerId: result.customerId,
       message: `Tạo thành công hợp đồng ${result.code}!`,
     };
-  } catch (err: any) {
+  } catch (err) {
     return {
       success: false,
-      error: err?.message || "Không thể tạo hợp đồng. Vui lòng kiểm tra lại thông tin.",
+      error: (err as Error)?.message || "Không thể tạo hợp đồng. Vui lòng kiểm tra lại thông tin.",
     };
   }
 }

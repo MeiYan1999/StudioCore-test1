@@ -7,15 +7,7 @@ import { getR2Config } from "../storage/r2-storage";
 const DB_OBJECT_KEY = "db/studiocore.db";
 
 function getS3Client() {
-  let cfg = getR2Config();
-  if (!cfg && process.env.NODE_ENV !== "test" && !process.env.VITEST) {
-    cfg = {
-      accountId: process.env.R2_ACCOUNT_ID || "b23b61dca3b7bcb70fb3e044e8943dad",
-      accessKeyId: process.env.R2_ACCESS_KEY_ID || "8d28087a0b082f353b6b0487fbafb0ef",
-      secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || "d9866b88d3d2e51a9869b1d98be4075bc800c2036fe6bcb4c36061457a3124a0",
-      bucketName: process.env.R2_BUCKET_NAME || "studiocore-data",
-    };
-  }
+  const cfg = getR2Config();
   if (!cfg) return null;
 
   return {
@@ -84,7 +76,7 @@ export async function backupDbToR2(sourcePath?: string): Promise<boolean> {
     try {
       const { getDb } = await import("./client");
       const db = getDb();
-      (db as any).$client?.pragma?.("wal_checkpoint(TRUNCATE)");
+      (db as unknown as { $client?: { pragma?: (source: string) => unknown } }).$client?.pragma?.("wal_checkpoint(TRUNCATE)");
     } catch {}
 
     const buffer = fs.readFileSync(/*turbopackIgnore: true*/ dbPath);

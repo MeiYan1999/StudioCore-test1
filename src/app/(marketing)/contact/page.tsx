@@ -70,7 +70,7 @@ export default async function ContactPage({
               Bạn có thể xem trước giao diện ứng dụng hoặc đăng ký tài khoản dùng thử 30 ngày hoàn toàn miễn phí cho studio của mình.
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
-              <Link href="/demo" className="font-medium text-primary hover:underline">Xem trải nghiệm</Link>
+              <Link href="/demo" prefetch={false} className="font-medium text-primary hover:underline">Xem trải nghiệm</Link>
               <Link href="/register" className="font-medium text-primary hover:underline">Đăng ký dùng thử</Link>
               <Link href="/guide" className="font-medium text-primary hover:underline">Hướng dẫn sử dụng</Link>
             </div>

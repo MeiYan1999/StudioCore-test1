@@ -68,7 +68,7 @@ Repo có Blueprint `render.yaml`: Docker web service `studiocore-test1`, region 
 
 Sau khi kết nối Render với GitHub và duyệt Blueprint:
 
-- Render tự sinh `AUTH_SECRET` và `TOKEN_ENCRYPTION_KEY`.
+- `AUTH_SECRET`, `TOKEN_ENCRYPTION_KEY`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` khai báo `sync: false` trong `render.yaml`: không commit giá trị, nhập trực tiếp trên Render Dashboard (Environment).
 - Container chạy migration, sau đó seed demo idempotent khi `SEED_DEMO=true`; DB và uploads nằm trên persistent disk.
 - URL dự kiến: https://studiocore-test1.onrender.com. Nếu tên service bị trùng, đổi `name` và `NEXT_PUBLIC_SITE_URL` trong `render.yaml` trước khi deploy.
 - Persistent disk yêu cầu plan trả phí (Starter trở lên); free plan không giữ dữ liệu qua restart/redeploy.

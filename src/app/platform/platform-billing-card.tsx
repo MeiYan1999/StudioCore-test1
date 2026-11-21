@@ -105,8 +105,8 @@ export function PlatformBillingCard({
         } else {
           setErrorMsg(res.error || "Không thể lưu cấu hình.");
         }
-      } catch (err: any) {
-        setErrorMsg(err?.message || "Lỗi lưu cấu hình.");
+      } catch (err) {
+        setErrorMsg((err as Error)?.message || "Lỗi lưu cấu hình.");
       }
     });
   };

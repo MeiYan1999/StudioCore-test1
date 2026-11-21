@@ -4,26 +4,26 @@ test.describe("landing và public website", () => {
   test("landing đủ section, tabs, FAQ, pricing và responsive", async ({ page }) => {
     await page.goto("/");
     await expect(page.locator("h1")).toHaveCount(1);
-    await expect(page.getByRole("heading", { name: /Quản lý studio, CRM, lịch chụp/ })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Vận hành Studio Tinh gọn/ })).toBeVisible();
     for (const text of [
-      "Bạn đang gặp những vấn đề này?",
-      "Vài bước để đi vào vận hành.",
-      "Hơn 20 tính năng cho mọi nhu cầu.",
+      "Từ thủ công rời rạc đến hệ thống tự động thông minh.",
+      "Bắt đầu vận hành trong 4 bước đơn giản.",
+      "Thiết kế chuẩn mực cho Studio & Áo cưới Việt Nam.",
       "Một nền tảng. Mọi hoạt động.",
-      "Trực quan, dễ sử dụng.",
-      "Gói cước phù hợp mọi quy mô studio.",
+      "Trực quan, tinh gọn & dễ làm quen.",
+      "Gói cước linh hoạt cho mọi quy mô studio.",
       "Studio nói gì về StudioCore?",
       "Câu hỏi thường gặp.",
       "Tài liệu hướng dẫn chi tiết.",
-      "Bắt đầu quản lý studio ngay hôm nay.",
+      "Bắt đầu nâng tầm studio ngay hôm nay.",
     ]) {
       await expect(page.getByText(text, { exact: false }).first()).toBeVisible();
     }
 
     await page.getByRole("tab", { name: "Đơn hàng" }).click();
     await expect(page.getByRole("img", { name: "Quản lý đơn hàng" }).first()).toBeVisible();
-    await page.getByRole("button", { name: "Tôi cần kiến thức kỹ thuật để dùng không?" }).click();
-    await expect(page.getByText("Không. Giao diện tiếng Việt")).toBeVisible();
+    await page.getByRole("button", { name: "Tôi có thể thanh toán theo hình thức nào?" }).click();
+    await expect(page.getByText("Hệ thống hỗ trợ thanh toán linh hoạt")).toBeVisible();
     await page.getByRole("button", { name: "Theo năm (tiết kiệm 2 tháng)" }).click();
     await expect(page.getByText("4.990.000 ₫", { exact: false }).first()).toBeVisible();
 

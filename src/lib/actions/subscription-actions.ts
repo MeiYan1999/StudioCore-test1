@@ -34,10 +34,10 @@ export async function createSubscriptionInvoiceAction(
       billingCycle,
     );
     return { success: true, data: result };
-  } catch (err: any) {
+  } catch (err) {
     return {
       success: false,
-      error: err?.message || "Không thể khởi tạo hóa đơn thanh toán.",
+      error: (err as Error)?.message || "Không thể khởi tạo hóa đơn thanh toán.",
     };
   }
 }

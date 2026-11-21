@@ -1,10 +1,10 @@
-import { NextResponse } from "next/server";
 import { and, count, eq, gte } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { sessions } from "@/lib/db/schema";
 import { createSession } from "@/lib/auth/session-core";
 import { SESSION_COOKIE } from "@/lib/auth/session";
 import { findTenantDemoOwner } from "@/lib/services/onboarding-service";
+import { redirectToPath } from "@/lib/http/redirect";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,9 +17,7 @@ export async function GET(request: Request): Promise<Response> {
   const db = getDb();
   const owner = findTenantDemoOwner(db);
   if (!owner) {
-    return NextResponse.redirect(
-      new URL("/register?reason=demo-unavailable", request.url),
-    );
+    return redirectToPath("/register?reason=demo-unavailable");
   }
   const headerStore = request.headers;
   const forwardedFor = headerStore.get("x-forwarded-for");
@@ -56,9 +54,7 @@ export async function GET(request: Request): Promise<Response> {
     readOnly: true,
     ttlMinutes: DEMO_TTL_MINUTES,
   });
-  const response = NextResponse.redirect(
-    new URL("/manage/dashboard?demo=1", request.url),
-  );
+  const response = redirectToPath("/manage/dashboard?demo=1");
   response.cookies.set({
     name: SESSION_COOKIE,
     value: session.token,

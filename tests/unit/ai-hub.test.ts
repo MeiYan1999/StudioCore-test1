@@ -89,7 +89,7 @@ describe("AI Hub v2 Service", () => {
       usedUsd: 0.25,
     });
 
-    let current = getAiHubData(db, TEST_TENANT_ID);
+    const current = getAiHubData(db, TEST_TENANT_ID);
     let msgr = current.features.find((f) => f.id === "messenger_assistant");
     expect(msgr?.tokensUsed).toBe(12500);
     expect(msgr?.callsCount).toBe(42);

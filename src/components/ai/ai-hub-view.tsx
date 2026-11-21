@@ -97,8 +97,8 @@ export function AiHubView({ initialData, recentJobs = [] }: AiHubViewProps) {
           setData(res.data);
           showFeedback(`Đã ${nextEnabled ? "bật" : "tắt"} tính năng thành công.`);
         }
-      } catch (err: any) {
-        showFeedback(err?.message || "Lỗi cập nhật tính năng.");
+      } catch (err) {
+        showFeedback((err as Error)?.message || "Lỗi cập nhật tính năng.");
       }
     });
   };
@@ -106,7 +106,7 @@ export function AiHubView({ initialData, recentJobs = [] }: AiHubViewProps) {
   const handleUpdateFeatureField = (
     featureId: AiHubFeatureId,
     field: "model" | "budgetUsd" | "warningPercent",
-    value: any,
+    value: string | number,
   ) => {
     const numValue = field === "model" ? value : Number(value);
 
@@ -153,8 +153,8 @@ export function AiHubView({ initialData, recentJobs = [] }: AiHubViewProps) {
           setData(res.data);
           showFeedback(`Đã reset số liệu cho ${featureName}.`);
         }
-      } catch (err: any) {
-        showFeedback(err?.message || "Không thể reset số liệu.");
+      } catch (err) {
+        showFeedback((err as Error)?.message || "Không thể reset số liệu.");
       }
     });
   };
@@ -176,8 +176,8 @@ export function AiHubView({ initialData, recentJobs = [] }: AiHubViewProps) {
         } else {
           setAddKeyError(res.error || "Không thể thêm API Key.");
         }
-      } catch (err: any) {
-        setAddKeyError(err?.message || "Lỗi hệ thống khi thêm API key.");
+      } catch (err) {
+        setAddKeyError((err as Error)?.message || "Lỗi hệ thống khi thêm API key.");
       }
     });
   };
@@ -191,8 +191,8 @@ export function AiHubView({ initialData, recentJobs = [] }: AiHubViewProps) {
           setData(res.data);
           showFeedback(`Đã ${nextActive ? "bật" : "tạm dừng"} API Key.`);
         }
-      } catch (err: any) {
-        showFeedback(err?.message || "Lỗi cập nhật key.");
+      } catch (err) {
+        showFeedback((err as Error)?.message || "Lỗi cập nhật key.");
       }
     });
   };
@@ -208,8 +208,8 @@ export function AiHubView({ initialData, recentJobs = [] }: AiHubViewProps) {
           setData(res.data);
           showFeedback(`Đã xóa API Key "${name}".`);
         }
-      } catch (err: any) {
-        showFeedback(err?.message || "Lỗi xóa API key.");
+      } catch (err) {
+        showFeedback((err as Error)?.message || "Lỗi xóa API key.");
       }
     });
   };
@@ -219,8 +219,8 @@ export function AiHubView({ initialData, recentJobs = [] }: AiHubViewProps) {
       try {
         const res = await testAiHubApiKeyAction(keyId);
         showFeedback(res.message);
-      } catch (err: any) {
-        showFeedback(err?.message || "Lỗi kiểm tra key.");
+      } catch (err) {
+        showFeedback((err as Error)?.message || "Lỗi kiểm tra key.");
       }
     });
   };
