@@ -1,17 +1,19 @@
 {
   "name": "studiocore-drive-desktop",
-  "version": "1.0.0",
+  "version": "2.0.0",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=18"
+  },
   "description": "StudioCore Drive Desktop Agent cho Windows & macOS — Gửi ảnh & video cho khách thẳng từ máy tính",
   "main": "cli.js",
   "bin": {
     "studiocore-drive": "./cli.js"
   },
   "scripts": {
-    "start": "node cli.js start",
-    "gui": "node cli.js gui",
+    "start": "node cli.js daemon",
     "daemon": "node cli.js daemon",
-    "install:context": "node cli.js install-context",
-    "uninstall:context": "node cli.js uninstall-context"
+    "test": "node --test"
   },
   "keywords": [
     "studiocore",

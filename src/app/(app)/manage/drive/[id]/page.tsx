@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { DRIVE_KIND_LABELS } from "@/lib/drive-labels";
 import { notFound } from "next/navigation";
 import { requireActor } from "@/lib/auth/session";
 import { hasPermission } from "@/lib/auth/permissions";
@@ -43,7 +44,7 @@ export default async function DriveDetailPage({ params }: { params: Promise<{ id
       </Link>
       <PageHeader
         title={share.title}
-        description={`${share.kind} · ${share.fileCount} tệp · ${share.customerName || "Chưa có tên khách"}`}
+        description={`${DRIVE_KIND_LABELS[share.kind]} · ${share.fileCount} tệp · ${share.customerName || "Chưa có tên khách"}`}
       />
       <Card>
         <CardHeader>

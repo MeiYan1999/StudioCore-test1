@@ -1,151 +1,113 @@
-const fs = require("node:fs");
+const fs = require("node:fs/promises");
 const path = require("node:path");
+const { createHash } = require("node:crypto");
+const { execFile } = require("node:child_process");
+const { promisify } = require("node:util");
 
-const RAW_EXTS = new Set([".cr3", ".cr2", ".arw", ".nef", ".raf", ".dng", ".rw2", ".orf"]);
-const IMG_EXTS = new Set([".jpg", ".jpeg", ".png", ".webp", ".tiff", ".psd"]);
-const VIDEO_EXTS = new Set([".mp4", ".mov", ".avi", ".mkv", ".m4v"]);
-const DOC_EXTS = new Set([".pdf", ".zip", ".rar", ".7z"]);
+const IMAGE = new Set("jpg jpeg png webp heic".split(" "));
+const RAW = new Set("cr2 cr3 nef nrw arw srf sr2 raf orf rw2 pef dng srw 3fr iiq x3f".split(" "));
+const VIDEO = new Set("mp4 mov m4v webm mkv".split(" "));
+const extension = (name) => path.extname(name).slice(1).toLowerCase();
+const classify = (name) =>
+  IMAGE.has(extension(name))
+    ? "image"
+    : RAW.has(extension(name))
+      ? "raw"
+      : VIDEO.has(extension(name))
+        ? "video"
+        : "other";
+const fileKey = (relative) =>
+  createHash("sha256").update(relative.split(path.sep).join("/")).digest("base64url").slice(0, 24);
+const code = (name) => name.replace(/\.[^.]+$/, "");
 
-const DEMO_PREVIEWS = [
-  { folder: "duoi-ca", name: "anh-001" },
-  { folder: "duoi-ca", name: "anh-002" },
-  { folder: "duoi-ca", name: "anh-003" },
-  { folder: "duoi-ca", name: "anh-004" },
-  { folder: "truyen-thong", name: "anh-005" },
-  { folder: "truyen-thong", name: "anh-006" },
-  { folder: "truyen-thong", name: "anh-007" },
-  { folder: "truyen-thong", name: "anh-008" },
-  { folder: "le-gia-tien", name: "anh-009" },
-  { folder: "le-gia-tien", name: "anh-010" },
-  { folder: "le-gia-tien", name: "anh-011" },
-  { folder: "le-gia-tien", name: "anh-012" },
-];
-
-function formatBytes(bytes) {
-  if (bytes === 0) return "0 B";
-  const k = 1024;
-  const sizes = ["B", "KB", "MB", "GB", "TB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
-}
-
-function scanFolder(folderPath, maxFiles = 2000) {
-  const normalizedPath = path.resolve(folderPath);
-
-  if (!fs.existsSync(normalizedPath)) {
-    throw new Error(`Thư mục không tồn tại: ${normalizedPath}`);
-  }
-
-  const stat = fs.statSync(normalizedPath);
-  if (!stat.isDirectory()) {
-    // Single file mode (e.g. video)
-    const ext = path.extname(normalizedPath).toLowerCase();
-    const isVideo = VIDEO_EXTS.has(ext);
-    return {
-      title: path.basename(normalizedPath),
-      localPath: normalizedPath,
-      type: isVideo ? "video" : "folder",
-      totalFiles: 1,
-      totalSizeBytes: stat.size,
-      totalSizeLabel: formatBytes(stat.size),
-      items: [
-        {
-          id: `f-1`,
-          name: path.basename(normalizedPath),
-          filename: path.basename(normalizedPath),
-          path: normalizedPath,
-          sizeBytes: stat.size,
-          sizeLabel: formatBytes(stat.size),
-          type: isVideo ? "video" : "document",
-          format: ext.replace(".", "").toUpperCase(),
-          thumbnailUrl: "/api/files/tenant-demo/album-demo-01/duoi-ca/anh-001-thumb.jpg",
-          previewUrl: "/api/files/tenant-demo/album-demo-01/duoi-ca/anh-001.jpg",
-          downloadUrl: "#",
-        },
-      ],
-      videoMeta: isVideo
-        ? {
-            videoUrl: "#",
-            durationSeconds: 180,
-            durationLabel: "03:00",
-            resolution: "4K UHD (3840 x 2160)",
-            coverUrl: "/marketing/dashboard.jpg",
-          }
-        : undefined,
-    };
-  }
-
-  // Directory scan
-  const dirents = fs.readdirSync(normalizedPath, { withFileTypes: true });
-  const items = [];
-  let totalSizeBytes = 0;
-  let rawCount = 0;
-  let videoCount = 0;
-
-  for (const dirent of dirents) {
-    if (dirent.name.startsWith(".") || dirent.name.startsWith("$")) continue;
-    if (items.length >= maxFiles) break;
-
-    const fullPath = path.join(normalizedPath, dirent.name);
-    try {
-      const fileStat = fs.statSync(fullPath);
-      if (fileStat.isFile()) {
-        const ext = path.extname(dirent.name).toLowerCase();
-        let fileType = "document";
-        if (RAW_EXTS.has(ext)) {
-          fileType = "raw";
-          rawCount++;
-        } else if (IMG_EXTS.has(ext)) {
-          fileType = "image";
-        } else if (VIDEO_EXTS.has(ext)) {
-          fileType = "video";
-          videoCount++;
-        } else if (DOC_EXTS.has(ext)) {
-          fileType = "document";
-        }
-
-        totalSizeBytes += fileStat.size;
-        const sample = DEMO_PREVIEWS[items.length % DEMO_PREVIEWS.length];
-        items.push({
-          id: `item-${items.length + 1}`,
-          name: dirent.name,
-          filename: dirent.name,
-          path: fullPath,
-          sizeBytes: fileStat.size,
-          sizeLabel: formatBytes(fileStat.size),
-          type: fileType,
-          format: ext.replace(".", "").toUpperCase(),
-          thumbnailUrl: `/api/files/tenant-demo/album-demo-01/${sample.folder}/${sample.name}-thumb.jpg`,
-          previewUrl: `/api/files/tenant-demo/album-demo-01/${sample.folder}/${sample.name}.jpg`,
-          downloadUrl: "#",
-        });
-      }
-    } catch {
-      // Skip inaccessible file
+async function scan(target, kind, outputName = "Anh_Chon_Goc") {
+  if (!["album", "view", "video", "folder"].includes(kind))
+    throw new Error("Loại chia sẻ không hợp lệ.");
+  const absolute = await fs.realpath(path.resolve(target));
+  const stat = await fs.stat(absolute);
+  if (!stat.isDirectory() && !(stat.isFile() && kind === "video"))
+    throw new Error("Vui lòng chọn thư mục (hoặc một tệp video).");
+  const rootPath = stat.isDirectory() ? absolute : path.dirname(absolute);
+  const hidden = new Set(
+    process.platform === "win32"
+      ? JSON.parse(
+          (
+            await promisify(execFile)(
+              "powershell.exe",
+              [
+                "-NoProfile",
+                "-NonInteractive",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                path.join(__dirname, "hidden.ps1"),
+                "-RootPath",
+                rootPath,
+              ],
+              { timeout: 120000, maxBuffer: 16 * 1024 * 1024, windowsHide: true },
+            )
+          ).stdout
+            .trim()
+            .replace(/^\uFEFF/, "") || "[]",
+        ).map((file) => file.toLowerCase())
+      : [],
+  );
+  const candidates = [];
+  async function visit(relative) {
+    const entries = await fs.readdir(path.join(rootPath, relative), { withFileTypes: true });
+    entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+    for (const entry of entries) {
+      if (
+        entry.name.startsWith(".") ||
+        /^(thumbs\.db|desktop\.ini|\$recycle\.bin|system volume information)$/i.test(entry.name) ||
+        entry.name.toLowerCase() === outputName.toLowerCase() ||
+        entry.isSymbolicLink()
+      )
+        continue;
+      const child = relative ? `${relative}/${entry.name}` : entry.name;
+      if (hidden.has(path.join(rootPath, child).toLowerCase())) continue;
+      if (entry.isDirectory()) await visit(child);
+      else if (entry.isFile()) candidates.push(child);
     }
   }
-
-  let detectedType = "folder";
-  if (items.length > 0 && rawCount / items.length > 0.3) {
-    detectedType = "album";
-  } else if (items.length > 0 && (items[0].type === "image" || items[0].type === "raw")) {
-    detectedType = "album";
-  } else if (items.length === 1 && videoCount === 1) {
-    detectedType = "video";
+  if (stat.isDirectory()) await visit("");
+  else if (!path.basename(absolute).startsWith(".") && !hidden.has(absolute.toLowerCase()))
+    candidates.push(path.basename(absolute));
+  const accepted = candidates.filter(
+    (name) =>
+      kind === "folder" ||
+      (kind === "video" ? classify(name) === "video" : ["raw", "image"].includes(classify(name))),
+  );
+  const groups = new Map();
+  for (const relative of accepted) {
+    const group = ["album", "view"].includes(kind) ? code(relative).toLowerCase() : relative;
+    const existing = groups.get(group) || [];
+    existing.push(relative);
+    groups.set(group, existing);
   }
-
-  return {
-    title: path.basename(normalizedPath),
-    localPath: normalizedPath,
-    type: detectedType,
-    totalFiles: items.length,
-    totalSizeBytes,
-    totalSizeLabel: formatBytes(totalSizeBytes),
-    items,
-  };
+  if (groups.size > 20000) throw new Error("Mỗi link chỉ được chia sẻ tối đa 20.000 tệp.");
+  const files = [];
+  const mapping = {};
+  const previews = {};
+  for (const relatives of groups.values()) {
+    const preview =
+      relatives.find((name) => ["jpg", "jpeg"].includes(extension(name))) ||
+      relatives.find((name) => classify(name) === "image") ||
+      relatives[0];
+    const original = relatives.find((name) => classify(name) === "raw") || preview;
+    const key = fileKey(preview);
+    const info = await fs.stat(path.join(rootPath, original));
+    mapping[key] = original;
+    previews[key] = preview;
+    files.push({
+      fileKey: key,
+      name: path.posix.basename(preview),
+      relPath: preview,
+      kind: classify(preview),
+      sizeBytes: info.size,
+    });
+  }
+  return { rootPath, folderName: path.basename(rootPath) || "Thư mục", files, mapping, previews };
 }
 
-module.exports = {
-  scanFolder,
-  formatBytes,
-};
+module.exports = { scan, classify, fileKey, RAW };

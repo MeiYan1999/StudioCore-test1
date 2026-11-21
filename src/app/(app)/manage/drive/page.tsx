@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { DRIVE_KIND_LABELS } from "@/lib/drive-labels";
 import { Download, Monitor, ExternalLink, HardDrive } from "lucide-react";
 import { requireActor } from "@/lib/auth/session";
 import { assertPermission, hasPermission } from "@/lib/auth/permissions";
@@ -142,7 +143,7 @@ export default async function ManageDrivePage() {
             <TableRow key={share.id}>
               <TableCell>
                 <div className="space-y-1">
-                  <Badge>{share.kind}</Badge>
+                  <Badge>{DRIVE_KIND_LABELS[share.kind]}</Badge>
                   <Link
                     className="block font-medium hover:underline"
                     href={`/manage/drive/${share.id}`}
