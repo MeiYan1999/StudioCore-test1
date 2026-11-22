@@ -10,6 +10,7 @@ const { DriveAgent } = require("../src/core/agent");
 const { ApiError, normalizeServerUrl } = require("../src/core/api");
 const { copyPicks, safeFolderName } = require("../src/core/picks");
 const { scanFolder, resolveInside } = require("../src/core/scanner");
+const { APP_USER_MODEL_ID, setWindowsAppUserModelId } = require("../src/platform/app-identity");
 const { Store } = require("../src/core/store");
 const { sharePathFromArgv } = require("../src/platform/context-menu");
 const { getMacSigningOptions } = require("../src/platform/mac-signing");
@@ -334,4 +335,12 @@ test("macOS build explicitly ad-hoc signs without credentials and supports CSC_L
     hardenedRuntime: true,
     enableIdentityAutoDiscovery: false,
   });
+});
+
+test("Windows notification identity matches the packaged app id and is set before launch", () => {
+  const packageJson = require("../package.json");
+  let actualId = null;
+  setWindowsAppUserModelId({ setAppUserModelId: (id) => { actualId = id; } }, "win32");
+  assert.equal(APP_USER_MODEL_ID, packageJson.build.appId);
+  assert.equal(actualId, packageJson.build.appId);
 });

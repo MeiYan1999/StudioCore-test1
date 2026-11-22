@@ -22,7 +22,10 @@ const { normalizeServerUrl } = require("./src/core/api");
 const { ImageCache } = require("./src/core/images");
 const { safeFolderName } = require("./src/core/picks");
 const { Store } = require("./src/core/store");
+const { setWindowsAppUserModelId } = require("./src/platform/app-identity");
 const { setWindowsContextMenu, sharePathFromArgv } = require("./src/platform/context-menu");
+
+setWindowsAppUserModelId(app);
 
 const RENDERER_FILE = path.join(__dirname, "renderer", "index.html");
 const RENDERER_URL = pathToFileURL(RENDERER_FILE).href;
