@@ -251,8 +251,68 @@ test("apex-to-www re-pair keeps the previous device token", async () => {
 
   assert.equal(requests.length, 2);
   assert.equal(requests[1].url, "https://www.studiocore.io.vn/api/drive/agent/pair");
+  assert.equal(requests[0].body.previousToken, undefined);
   assert.equal(requests[1].body.previousToken, "old");
   assert.equal(store.get("serverUrl"), "https://www.studiocore.io.vn");
+});
+
+test("same-origin www re-pair sends the previous device token on the first request", async () => {
+  const serverUrl = "https://www.studiocore.io.vn";
+  const store = new Store(tmp());
+  store.set({ previousServerUrl: serverUrl, previousDeviceToken: "old" });
+  const agent = new DriveAgent({ store, images: {}, appVersion: "test" });
+  agent.start = () => {};
+
+  const originalFetch = global.fetch;
+  let request;
+  global.fetch = async (url, init) => {
+    request = { url: String(url), body: JSON.parse(init.body) };
+    return Response.json({
+      deviceToken: "new",
+      deviceId: "device-new",
+      deviceName: "Máy mới",
+      studioName: "Studio",
+    });
+  };
+  try {
+    await agent.pair("code", serverUrl);
+  } finally {
+    global.fetch = originalFetch;
+  }
+
+  assert.equal(request.url, `${serverUrl}/api/drive/agent/pair`);
+  assert.equal(request.body.previousToken, "old");
+});
+
+test("re-pair with an unrelated server never sends the previous device token", async () => {
+  const store = new Store(tmp());
+  store.set({
+    previousServerUrl: "https://www.studiocore.io.vn",
+    previousDeviceToken: "old",
+  });
+  const agent = new DriveAgent({ store, images: {}, appVersion: "test" });
+  agent.start = () => {};
+
+  const originalFetch = global.fetch;
+  const requests = [];
+  global.fetch = async (url, init) => {
+    requests.push({ url: String(url), body: JSON.parse(init.body) });
+    return Response.json({
+      deviceToken: "new",
+      deviceId: "device-new",
+      deviceName: "Máy mới",
+      studioName: "Studio",
+    });
+  };
+  try {
+    await agent.pair("code", "https://example.com");
+  } finally {
+    global.fetch = originalFetch;
+  }
+
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].url, "https://example.com/api/drive/agent/pair");
+  assert.ok(requests.every(({ body }) => body.previousToken === undefined));
 });
 
 test("Node fetch exposes redirect status and Location in manual mode", async (t) => {

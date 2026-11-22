@@ -89,13 +89,18 @@ class DriveAgent extends EventEmitter {
     )
       ? this.store.get("previousDeviceToken") || undefined
       : undefined;
+    let previousOrigin = null;
+    try {
+      previousOrigin = new URL(previousServerUrl).origin;
+    } catch {
+      previousOrigin = null;
+    }
     const result = await client.pair({
       code: String(code || "").trim(),
       name: os.hostname().slice(0, 80),
       platform: process.platform,
       appVersion: this.appVersion,
-      previousToken,
-    });
+    }, { previousToken, previousOrigin });
     this.store.set({
       serverUrl: client.serverUrl,
       deviceToken: result.deviceToken,

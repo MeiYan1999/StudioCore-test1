@@ -74,9 +74,18 @@ class ApiClient {
     return returnResponse ? response : parseResponse(response);
   }
 
-  async pair(input) {
+  async pair(input, { previousToken, previousOrigin } = {}) {
     const pathname = "/api/drive/agent/pair";
-    const response = await this.json("POST", pathname, input, { redirect: "manual", returnResponse: true });
+    const bodyForOrigin = (origin) => {
+      const body = { ...input };
+      delete body.previousToken;
+      if (previousToken && origin === previousOrigin) body.previousToken = previousToken;
+      return body;
+    };
+    const response = await this.json("POST", pathname, bodyForOrigin(this.serverUrl), {
+      redirect: "manual",
+      returnResponse: true,
+    });
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.get("location");
       let target = null;
@@ -93,7 +102,7 @@ class ApiClient {
         target.pathname === pathname
       ) {
         this.serverUrl = target.origin;
-        return this.json("POST", pathname, input, { redirect: "error" });
+        return this.json("POST", pathname, bodyForOrigin(this.serverUrl), { redirect: "error" });
       }
       throw new ApiError(
         `Máy chủ chuyển hướng tới địa chỉ khác: ${targetOrigin}. Hãy nhập đúng địa chỉ trong mục Nâng cao.`,
