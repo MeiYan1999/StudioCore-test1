@@ -76,10 +76,13 @@ class ApiClient {
 
   async pair(input, { previousToken, previousOrigin } = {}) {
     const pathname = "/api/drive/agent/pair";
+    const firstOrigin = this.serverUrl;
     const bodyForOrigin = (origin) => {
       const body = { ...input };
       delete body.previousToken;
-      if (previousToken && origin === previousOrigin) body.previousToken = previousToken;
+      if (previousToken && (origin === previousOrigin || firstOrigin === previousOrigin)) {
+        body.previousToken = previousToken;
+      }
       return body;
     };
     const response = await this.json("POST", pathname, bodyForOrigin(this.serverUrl), {

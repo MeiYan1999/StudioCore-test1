@@ -256,6 +256,43 @@ test("apex-to-www re-pair keeps the previous device token", async () => {
   assert.equal(store.get("serverUrl"), "https://www.studiocore.io.vn");
 });
 
+test("previous token follows an apex-to-www redirect from its own origin", async () => {
+  const serverUrl = "https://studiocore.io.vn";
+  const store = new Store(tmp());
+  store.set({ previousServerUrl: serverUrl, previousDeviceToken: "old" });
+  const agent = new DriveAgent({ store, images: {}, appVersion: "test" });
+  agent.start = () => {};
+
+  const originalFetch = global.fetch;
+  const requests = [];
+  global.fetch = async (url, init) => {
+    requests.push({ url: String(url), body: JSON.parse(init.body) });
+    if (requests.length === 1) {
+      return new Response(null, {
+        status: 307,
+        headers: { location: "https://www.studiocore.io.vn/api/drive/agent/pair" },
+      });
+    }
+    return Response.json({
+      deviceToken: "new",
+      deviceId: "device-new",
+      deviceName: "Máy mới",
+      studioName: "Studio",
+    });
+  };
+  try {
+    await agent.pair("code", serverUrl);
+  } finally {
+    global.fetch = originalFetch;
+  }
+
+  assert.equal(requests.length, 2);
+  assert.equal(requests[0].url, `${serverUrl}/api/drive/agent/pair`);
+  assert.equal(requests[0].body.previousToken, "old");
+  assert.equal(requests[1].url, "https://www.studiocore.io.vn/api/drive/agent/pair");
+  assert.equal(requests[1].body.previousToken, "old");
+});
+
 test("same-origin www re-pair sends the previous device token on the first request", async () => {
   const serverUrl = "https://www.studiocore.io.vn";
   const store = new Store(tmp());
