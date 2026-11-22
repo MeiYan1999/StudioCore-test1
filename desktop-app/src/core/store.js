@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const DEFAULTS = {
-  serverUrl: "https://studiocore.io.vn",
+  serverUrl: "https://www.studiocore.io.vn",
   deviceToken: null,
   previousDeviceToken: null,
   previousServerUrl: null,
@@ -51,6 +51,12 @@ class Store {
         : [],
       shares: raw.shares && typeof raw.shares === "object" ? raw.shares : {},
     };
+    if (data.serverUrl === "https://studiocore.io.vn") {
+      data.serverUrl = "https://www.studiocore.io.vn";
+    }
+    if (data.previousServerUrl === "https://studiocore.io.vn") {
+      data.previousServerUrl = "https://www.studiocore.io.vn";
+    }
     if (typeof raw.deviceTokenEnc === "string" && this.cipher) {
       try {
         data.deviceToken = this.cipher.decrypt(raw.deviceTokenEnc);
