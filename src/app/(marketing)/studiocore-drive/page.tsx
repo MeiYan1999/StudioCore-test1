@@ -91,6 +91,45 @@ export default function StudioCoreDrivePage() {
               <Link href="/manage/drive">Mở trang quản lý</Link>
             </Button>
           </div>
+          <p className="mt-3 text-sm text-muted-foreground">
+            <Link className="underline underline-offset-4 hover:text-foreground" href="#mo-app-lan-dau">
+              Hướng dẫn mở app lần đầu
+            </Link>
+          </p>
+        </div>
+      </section>
+
+      <section id="mo-app-lan-dau" className="scroll-mt-24 border-b border-border bg-surface py-16">
+        <div className="mx-auto max-w-5xl px-4 sm:px-6">
+          <h2 className="text-center text-2xl font-bold">Mở ứng dụng lần đầu</h2>
+          <div className="mt-8 grid gap-4 sm:grid-cols-2">
+            <div className="rounded-2xl border border-border bg-background p-6">
+              <h3 className="text-lg font-semibold">macOS</h3>
+              <p className="mt-3 text-sm text-muted-foreground">
+                StudioCore Drive chưa được Apple công chứng, nên lần đầu mở app macOS sẽ chặn. Chỉ cần cho phép một
+                lần:
+              </p>
+              <ol className="mt-4 list-decimal space-y-2 pl-5 text-sm text-muted-foreground">
+                <li>Mở file .dmg, kéo StudioCore Drive vào thư mục Applications.</li>
+                <li>Mở app. Khi macOS báo không thể kiểm tra app, bấm “Xong”.</li>
+                <li>
+                  Vào Cài đặt hệ thống › Quyền riêng tư &amp; Bảo mật, kéo xuống và bấm “Vẫn mở” cạnh dòng StudioCore
+                  Drive.
+                </li>
+                <li>Nhập mật khẩu máy và bấm “Mở”. Từ lần sau app mở bình thường.</li>
+              </ol>
+              <p className="mt-4 text-xs text-muted-foreground">
+                macOS 14 trở về trước: chuột phải vào app trong Applications › Mở › Mở.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-border bg-background p-6">
+              <h3 className="text-lg font-semibold">Windows</h3>
+              <ol className="mt-4 list-decimal space-y-2 pl-5 text-sm text-muted-foreground">
+                <li>Nếu Windows báo “Windows đã bảo vệ PC của bạn”, bấm “Thông tin thêm”.</li>
+                <li>Bấm “Vẫn chạy” rồi cài như bình thường.</li>
+              </ol>
+            </div>
+          </div>
         </div>
       </section>
 

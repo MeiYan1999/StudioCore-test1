@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Apple,
@@ -216,6 +217,12 @@ export function DriveManager({ devices, shares, canManage, siteUrl }: Props) {
               <li>Bấm “Tạo mã kết nối”, dán mã vào ứng dụng.</li>
               <li>Chuột phải thư mục ảnh → “Chia sẻ bằng StudioCore Drive”.</li>
             </ol>
+            <p className="text-xs text-muted-foreground">
+              Mac/Windows chặn app khi mở lần đầu?{" "}
+              <Link className="font-medium text-primary hover:underline" href="/studiocore-drive#mo-app-lan-dau">
+                Xem cách cho phép
+              </Link>
+            </p>
           </CardContent>
         </Card>
       </div>
