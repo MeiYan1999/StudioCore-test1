@@ -16,7 +16,13 @@ const {
   applyLoginItem,
   setWindowsAppUserModelId,
 } = require("../src/platform/app-identity");
+const { macBundlePath, removeMacLoginItems } = require("../src/platform/mac-login-cleanup");
 const { Store } = require("../src/core/store");
+const {
+  QUICK_ACTION_NAME,
+  installMacQuickAction,
+  removeMacQuickAction,
+} = require("../src/platform/mac-quick-action");
 const {
   CONTEXT_MENU_KEY,
   WINDOWS_RUN_KEY,
@@ -73,6 +79,7 @@ test("cài đặt được lưu và đọc lại, token được mã hoá khi c�
     previousDeviceToken: "scdt-cu",
     picksFolderName: "Da chon",
     autoCopyPicks: false,
+    macLoginCleanupDone: true,
     pendingExports: ["s1"],
   });
   store.setShare("s1", { folder: "/x", salt: "s", files: {} });
@@ -83,11 +90,16 @@ test("cài đặt được lưu và đọc lại, token được mã hoá khi c�
   assert.equal(again.get("previousDeviceToken"), "scdt-cu");
   assert.equal(again.get("picksFolderName"), "Da chon");
   assert.equal(again.get("autoCopyPicks"), false);
+  assert.equal(again.get("macLoginCleanupDone"), true);
   assert.deepEqual(again.get("pendingExports"), ["s1"]);
   assert.ok(again.getShare("s1"));
   assert.equal(again.getShare("__proto__"), null);
   fs.writeFileSync(path.join(dir, "settings.json"), "{hong");
   assert.equal(new Store(dir, cipher).get("serverUrl"), "https://studiocore.io.vn");
+});
+
+test("macOS Finder Quick Action is enabled by default", () => {
+  assert.equal(new Store(tmp()).get("macQuickAction"), true);
 });
 
 test("poll initializes the submission cursor from server time", async () => {
@@ -406,6 +418,159 @@ test("login-item settings clean the Windows legacy value and preserve platform o
   const calls = [];
   applyLoginItem({ setLoginItemSettings: (settings) => calls.push(settings) }, true, "darwin");
   assert.deepEqual(calls, [{ openAtLogin: true, args: ["--hidden"] }]);
+});
+
+test("macOS login cleanup finds the app bundle path", () => {
+  assert.equal(
+    macBundlePath("/Applications/StudioCore Drive.app/Contents/MacOS/StudioCore Drive"),
+    "/Applications/StudioCore Drive.app",
+  );
+  assert.equal(macBundlePath("/usr/bin/node"), null);
+});
+
+test("macOS login cleanup passes the bundle path to osascript as an argument", async () => {
+  const bundlePath = "/Applications/StudioCore Drive.app";
+  let invocation = null;
+  const result = await removeMacLoginItems(bundlePath, (command, args, options, callback) => {
+    invocation = { command, args, options };
+    callback(null, "", "");
+  });
+
+  assert.deepEqual(result, { ok: true });
+  assert.deepEqual(invocation, {
+    command: "osascript",
+    args: [
+      "-e",
+      "on run argv",
+      "-e",
+      'tell application "System Events" to delete (every login item whose path is (item 1 of argv))',
+      "-e",
+      "end run",
+      bundlePath,
+    ],
+    options: { timeout: 30000 },
+  });
+});
+
+test("macOS login cleanup resolves errors instead of rejecting", async () => {
+  const error = new Error("Automation permission denied");
+  const cleanup = removeMacLoginItems("/Applications/StudioCore Drive.app", (_command, _args, _options, callback) =>
+    callback(error),
+  );
+
+  await assert.doesNotReject(cleanup);
+  assert.deepEqual(await cleanup, { ok: false, error: error.message });
+});
+
+test("macOS Quick Action install copies templates and refreshes Finder only when changed", async () => {
+  const templateDir = path.join(__dirname, "..", "assets", "mac-quick-action");
+  const servicesDir = tmp();
+  const contentsDir = path.join(servicesDir, `${QUICK_ACTION_NAME}.workflow`, "Contents");
+  const calls = [];
+  const execFileImpl = (command, args, options, callback) => {
+    calls.push({ command, args, options });
+    callback(null, "", "");
+  };
+
+  assert.deepEqual(await installMacQuickAction({ templateDir, servicesDir, execFileImpl }), { changed: true });
+  for (const fileName of ["Info.plist", "document.wflow"]) {
+    assert.deepEqual(
+      await fs.promises.readFile(path.join(contentsDir, fileName)),
+      await fs.promises.readFile(path.join(templateDir, fileName)),
+    );
+  }
+  assert.deepEqual(calls, [
+    {
+      command: "/System/Library/CoreServices/pbs",
+      args: ["-update"],
+      options: { timeout: 15000 },
+    },
+  ]);
+
+  assert.deepEqual(await installMacQuickAction({ templateDir, servicesDir, execFileImpl }), { changed: false });
+  assert.equal(calls.length, 1);
+});
+
+test("macOS Quick Action install ignores pbs errors", async () => {
+  const result = await installMacQuickAction({
+    templateDir: path.join(__dirname, "..", "assets", "mac-quick-action"),
+    servicesDir: tmp(),
+    execFileImpl: (_command, _args, _options, callback) => callback(new Error("pbs failed")),
+  });
+
+  assert.deepEqual(result, { changed: true });
+});
+
+test("macOS Quick Action removal deletes the workflow and refreshes Finder only when present", async () => {
+  const servicesDir = tmp();
+  const bundlePath = path.join(servicesDir, `${QUICK_ACTION_NAME}.workflow`);
+  const calls = [];
+  const execFileImpl = (command, args, options, callback) => {
+    calls.push({ command, args, options });
+    callback(new Error("pbs failed"));
+  };
+  fs.mkdirSync(path.join(bundlePath, "Contents"), { recursive: true });
+  fs.writeFileSync(path.join(bundlePath, "Contents", "Info.plist"), "fixture");
+
+  await removeMacQuickAction({ servicesDir, execFileImpl });
+  assert.equal(fs.existsSync(bundlePath), false);
+  assert.deepEqual(calls, [
+    {
+      command: "/System/Library/CoreServices/pbs",
+      args: ["-update"],
+      options: { timeout: 15000 },
+    },
+  ]);
+
+  await removeMacQuickAction({ servicesDir, execFileImpl });
+  assert.equal(calls.length, 1);
+});
+
+test("macOS Quick Action templates describe a Finder folder service and have valid XML", () => {
+  const templateDir = path.join(__dirname, "..", "assets", "mac-quick-action");
+  const infoPlist = fs.readFileSync(path.join(templateDir, "Info.plist"), "utf8");
+  const workflow = fs.readFileSync(path.join(templateDir, "document.wflow"), "utf8");
+
+  const assertWellFormedXml = (xml) => {
+    try {
+      require("plist").parse(xml);
+      return;
+    } catch (error) {
+      if (error.code !== "MODULE_NOT_FOUND") throw error;
+    }
+
+    const stack = [];
+    for (const [, token] of xml.matchAll(/<([^>]+)>/g)) {
+      if (token.startsWith("?") || token.startsWith("!")) continue;
+      if (token.startsWith("/")) {
+        assert.equal(stack.pop(), token.slice(1).trim());
+      } else if (!token.endsWith("/")) {
+        stack.push(token.split(/[\s/>]/, 1)[0]);
+      }
+    }
+    assert.deepEqual(stack, []);
+  };
+  assertWellFormedXml(infoPlist);
+  assertWellFormedXml(workflow);
+
+  assert.match(infoPlist, /<key>CFBundleIdentifier<\/key>\s*<string>vn\.io\.studiocore\.drive\.share-folder<\/string>/);
+  assert.match(infoPlist, /<key>NSSendFileTypes<\/key>\s*<array>\s*<string>public\.folder<\/string>/);
+  assert.match(infoPlist, /<key>NSRequiredContext<\/key>\s*<dict>\s*<key>NSApplicationIdentifier<\/key>\s*<string>com\.apple\.finder<\/string>/);
+  assert.match(infoPlist, /<key>NSMessage<\/key>\s*<string>runWorkflowAsService<\/string>/);
+  const menuTitle = infoPlist.match(
+    /<key>NSMenuItem<\/key>\s*<dict>\s*<key>default<\/key>\s*<string>([^<]+)<\/string>/,
+  )?.[1];
+  assert.equal(menuTitle, QUICK_ACTION_NAME);
+
+  const command = workflow.match(/<key>COMMAND_STRING<\/key>\s*<string>([^<]+)<\/string>/)?.[1];
+  assert.equal(command, `open -b ${APP_USER_MODEL_ID} "$@"`);
+  const uuids = ["InputUUID", "OutputUUID", "UUID"].map((key) => {
+    const value = workflow.match(new RegExp(`<key>${key}</key>\\s*<string>([^<]+)</string>`))?.[1];
+    assert.match(value || "", /^[0-9A-F]{8}-(?:[0-9A-F]{4}-){3}[0-9A-F]{12}$/);
+    return value;
+  });
+  assert.equal(new Set(uuids).size, 3);
+  assert.ok(require("../package.json").build.files.includes("assets/mac-quick-action/**/*"));
 });
 
 test("Windows uninstall removes the registered context menu and login-item values", () => {
