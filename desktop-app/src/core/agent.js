@@ -7,7 +7,7 @@ const fsp = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
 const { Readable } = require("node:stream");
-const { ApiClient, ApiError } = require("./api");
+const { ApiClient, ApiError, wwwVariant } = require("./api");
 const { copyPicks } = require("./picks");
 const { scanFolder, resolveInside, extOf } = require("./scanner");
 
@@ -82,7 +82,11 @@ class DriveAgent extends EventEmitter {
 
   async pair(code, serverUrl) {
     const client = new ApiClient({ serverUrl: serverUrl || this.store.get("serverUrl"), appVersion: this.appVersion });
-    const previousToken = sameServerOrigin(client.serverUrl, this.store.get("previousServerUrl"))
+    const previousServerUrl = this.store.get("previousServerUrl");
+    const previousToken = (
+      sameServerOrigin(client.serverUrl, previousServerUrl) ||
+      sameServerOrigin(wwwVariant(client.serverUrl), previousServerUrl)
+    )
       ? this.store.get("previousDeviceToken") || undefined
       : undefined;
     const result = await client.pair({

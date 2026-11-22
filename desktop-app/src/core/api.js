@@ -143,4 +143,4 @@ class ApiClient {
   }
 }
 
-module.exports = { ApiClient, ApiError, normalizeServerUrl };
+module.exports = { ApiClient, ApiError, normalizeServerUrl, wwwVariant };
