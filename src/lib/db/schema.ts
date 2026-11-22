@@ -1759,3 +1759,106 @@ export const inboxReplies = sqliteTable("inbox_replies", {
   tenantId: text("tenant_id").notNull().references(() => tenants.id),
   content: text("content").notNull(),
 });
+
+// ---------------------------------------------------------------------------
+// StudioCore Drive: ảnh nằm trên máy studio, máy chủ chỉ giữ danh mục và lựa chọn.
+// ---------------------------------------------------------------------------
+
+export const drivePairingCodes = sqliteTable(
+  "drive_pairing_codes",
+  {
+    id: text("id").primaryKey(),
+    tenantId: text("tenant_id")
+      .notNull()
+      .references(() => tenants.id),
+    codeHash: text("code_hash").notNull(),
+    createdBy: text("created_by").references(() => staff.id),
+    expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
+    usedAt: integer("used_at", { mode: "timestamp_ms" }),
+    createdAt: createdAtColumn(),
+  },
+  (table) => [uniqueIndex("drive_pairing_codes_hash_unique").on(table.codeHash)],
+);
+
+export const driveDevices = sqliteTable(
+  "drive_devices",
+  {
+    id: text("id").primaryKey(),
+    tenantId: text("tenant_id")
+      .notNull()
+      .references(() => tenants.id),
+    name: text("name").notNull(),
+    platform: text("platform").notNull().default("unknown"),
+    appVersion: text("app_version").notNull().default(""),
+    tokenHash: text("token_hash").notNull(),
+    pairedBy: text("paired_by").references(() => staff.id),
+    lastSeenAt: integer("last_seen_at", { mode: "timestamp_ms" }),
+    revokedAt: integer("revoked_at", { mode: "timestamp_ms" }),
+    createdAt: createdAtColumn(),
+  },
+  (table) => [
+    uniqueIndex("drive_devices_token_unique").on(table.tokenHash),
+    index("drive_devices_tenant_idx").on(table.tenantId),
+  ],
+);
+
+export const driveShares = sqliteTable(
+  "drive_shares",
+  {
+    id: text("id").primaryKey(),
+    tenantId: text("tenant_id")
+      .notNull()
+      .references(() => tenants.id),
+    deviceId: text("device_id")
+      .notNull()
+      .references(() => driveDevices.id),
+    slug: text("slug").notNull(),
+    title: text("title").notNull(),
+    clientName: text("client_name"),
+    kind: text("kind").notNull().default("select"),
+    status: text("status").notNull().default("active"),
+    pinHash: text("pin_hash"),
+    maxSelect: integer("max_select").notNull().default(0),
+    allowOriginal: integer("allow_original", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    expiresAt: integer("expires_at", { mode: "timestamp_ms" }),
+    fileCount: integer("file_count").notNull().default(0),
+    totalBytes: integer("total_bytes").notNull().default(0),
+    viewCount: integer("view_count").notNull().default(0),
+    submittedAt: integer("submitted_at", { mode: "timestamp_ms" }),
+    submissionNote: text("submission_note"),
+    createdAt: createdAtColumn(),
+    updatedAt: updatedAtColumn(),
+  },
+  (table) => [
+    uniqueIndex("drive_shares_slug_unique").on(table.slug),
+    index("drive_shares_tenant_idx").on(table.tenantId, table.createdAt),
+    index("drive_shares_device_idx").on(table.deviceId),
+  ],
+);
+
+export const driveShareFiles = sqliteTable(
+  "drive_share_files",
+  {
+    id: text("id").primaryKey(),
+    shareId: text("share_id")
+      .notNull()
+      .references(() => driveShares.id, { onDelete: "cascade" }),
+    fileKey: text("file_key").notNull(),
+    name: text("name").notNull(),
+    kind: text("kind").notNull().default("image"),
+    size: integer("size").notNull().default(0),
+    sortIndex: integer("sort_index").notNull().default(0),
+    picked: integer("picked", { mode: "boolean" }).notNull().default(false),
+    note: text("note"),
+  },
+  (table) => [
+    uniqueIndex("drive_share_files_key_unique").on(table.shareId, table.fileKey),
+    index("drive_share_files_share_idx").on(table.shareId, table.sortIndex),
+  ],
+);
+
+export type DriveDevice = typeof driveDevices.$inferSelect;
+export type DriveShareRow = typeof driveShares.$inferSelect;
+export type DriveShareFileRow = typeof driveShareFiles.$inferSelect;
