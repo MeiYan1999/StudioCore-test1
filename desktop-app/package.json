@@ -1,27 +1,68 @@
 {
-  "name": "studiocore-drive-desktop",
-  "version": "1.0.0",
-  "description": "StudioCore Drive Desktop Agent cho Windows & macOS — Gửi ảnh & video cho khách thẳng từ máy tính",
-  "main": "cli.js",
-  "bin": {
-    "studiocore-drive": "./cli.js"
-  },
+  "name": "studiocore-drive",
+  "productName": "StudioCore Drive",
+  "version": "2.0.0",
+  "description": "Gửi ảnh và video cho khách thẳng từ máy tính studio.",
+  "author": "StudioCore",
+  "license": "UNLICENSED",
+  "private": true,
+  "main": "main.js",
   "scripts": {
-    "start": "node cli.js start",
-    "gui": "node cli.js gui",
-    "daemon": "node cli.js daemon",
-    "install:context": "node cli.js install-context",
-    "uninstall:context": "node cli.js uninstall-context"
+    "start": "electron .",
+    "test": "node --test",
+    "dist:win": "electron-builder --win nsis --x64 --publish never",
+    "dist:mac": "electron-builder --mac dmg --x64 --arm64 --publish never"
   },
-  "keywords": [
-    "studiocore",
-    "drive",
-    "zero-cloud",
-    "photobooth",
-    "photography",
-    "raw-filter",
-    "lightroom"
-  ],
-  "author": "StudioCore Team",
-  "license": "MIT"
+  "dependencies": {
+    "sharp": "0.35.5"
+  },
+  "devDependencies": {
+    "electron": "43.7.7",
+    "electron-builder": "26.16.1"
+  },
+  "build": {
+    "appId": "vn.io.studiocore.drive",
+    "productName": "StudioCore Drive",
+    "artifactName": "StudioCore-Drive-${version}-${os}-${arch}.${ext}",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**/*",
+      "renderer/**/*",
+      "assets/icon.png",
+      "assets/tray.png"
+    ],
+    "asarUnpack": [
+      "node_modules/sharp/**/*",
+      "node_modules/@img/**/*"
+    ],
+    "win": {
+      "icon": "assets/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "mac": {
+      "icon": "assets/icon.png",
+      "category": "public.app-category.photography",
+      "hardenedRuntime": true,
+      "extendInfo": {
+        "CFBundleDocumentTypes": [
+          {
+            "CFBundleTypeName": "Folder",
+            "CFBundleTypeRole": "Viewer",
+            "LSHandlerRank": "Alternate",
+            "LSItemContentTypes": [
+              "public.folder"
+            ]
+          }
+        ]
+      }
+    }
+  }
 }

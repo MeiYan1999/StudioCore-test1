@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>StudioCore Drive</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="top">
+      <div class="brand">
+        <img src="../assets/icon.png" alt="" width="36" height="36" />
+        <div>
+          <strong>StudioCore Drive</strong>
+          <span id="studio" class="muted"></span>
+        </div>
+      </div>
+      <span id="status" class="pill">Đang khởi động…</span>
+    </header>
+
+    <main id="view-pair" hidden>
+      <form id="pair-form" class="card narrow">
+        <h1>Kết nối với studio</h1>
+        <p class="muted">
+          Trên web, mở <b>Quản lý → StudioCore Drive</b>, bấm <b>Tạo mã kết nối</b> rồi dán mã vào đây.
+        </p>
+        <label>Mã kết nối
+          <input id="pair-code" autocomplete="off" spellcheck="false" placeholder="scd-…" required />
+        </label>
+        <details>
+          <summary>Nâng cao</summary>
+          <label>Địa chỉ máy chủ
+            <input id="pair-server" autocomplete="off" spellcheck="false" />
+          </label>
+        </details>
+        <p id="pair-error" class="error" role="alert" hidden></p>
+        <button class="primary" type="submit">Kết nối</button>
+      </form>
+    </main>
+
+    <main id="view-main" hidden>
+      <section class="toolbar">
+        <button id="btn-share" class="primary" type="button">+ Chia sẻ thư mục</button>
+        <button id="btn-refresh" type="button">Làm mới</button>
+        <span class="spacer"></span>
+        <button id="btn-settings" type="button">Cài đặt</button>
+      </section>
+      <p id="drop-hint" class="muted">Kéo thả thư mục vào cửa sổ này, hoặc chuột phải thư mục và chọn StudioCore Drive.</p>
+      <p id="main-error" class="error" role="alert" hidden></p>
+      <ul id="shares" class="shares"></ul>
+      <p id="empty" class="empty" hidden>Chưa có link nào. Bấm “Chia sẻ thư mục” để tạo link đầu tiên.</p>
+    </main>
+
+    <dialog id="dlg-share">
+      <form id="share-form" method="dialog">
+        <h2>Chia sẻ thư mục</h2>
+        <p id="share-folder" class="path"></p>
+        <p id="share-summary" class="muted"></p>
+        <label>Tên link
+          <input id="share-title" maxlength="160" required />
+        </label>
+        <label>Tên khách (không bắt buộc)
+          <input id="share-client" maxlength="120" />
+        </label>
+        <fieldset>
+          <legend>Mục đích</legend>
+          <label class="radio"><input type="radio" name="kind" value="select" checked /> Khách chọn ảnh</label>
+          <label class="radio"><input type="radio" name="kind" value="deliver" /> Giao file (cho tải gốc)</label>
+        </fieldset>
+        <div class="grid">
+          <label>Mã PIN (4–12 ký tự, bỏ trống nếu không cần)
+            <input id="share-pin" maxlength="12" pattern="[0-9A-Za-z]{4,12}" autocomplete="off" />
+          </label>
+          <label>Hết hạn sau (ngày, 0 = không hết hạn)
+            <input id="share-days" type="number" min="0" max="3650" value="30" />
+          </label>
+          <label id="row-max">Số ảnh tối đa được chọn (0 = không giới hạn)
+            <input id="share-max" type="number" min="0" max="100000" value="0" />
+          </label>
+          <label id="row-original" class="check"><input id="share-original" type="checkbox" /> Cho khách tải ảnh gốc</label>
+        </div>
+        <p id="share-error" class="error" role="alert" hidden></p>
+        <div class="actions">
+          <button type="button" id="share-cancel">Hủy</button>
+          <button class="primary" type="submit" id="share-submit">Tạo link</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="dlg-settings">
+      <form method="dialog">
+        <h2>Cài đặt</h2>
+        <label class="check"><input id="set-autocopy" type="checkbox" /> Tự chép ảnh khách chọn (kèm RAW) ra thư mục riêng</label>
+        <label>Tên thư mục chứa ảnh đã chọn
+          <input id="set-folder" maxlength="60" />
+        </label>
+        <label class="check"><input id="set-login" type="checkbox" /> Mở cùng máy tính</label>
+        <label class="check" id="row-context"><input id="set-context" type="checkbox" /> Thêm “Chia sẻ bằng StudioCore Drive” vào menu chuột phải thư mục</label>
+        <p id="mac-hint" class="muted" hidden>Trên macOS: chuột phải thư mục → Mở bằng → StudioCore Drive, hoặc kéo thư mục vào biểu tượng ứng dụng.</p>
+        <p class="muted" id="set-device"></p>
+        <p id="set-error" class="error" role="alert" hidden></p>
+        <div class="actions">
+          <button type="button" id="set-unpair" class="danger">Ngắt kết nối studio</button>
+          <span class="spacer"></span>
+          <button type="button" id="set-close">Đóng</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div id="toast" role="status" hidden></div>
+    <script src="app.js"></script>
+  </body>
+</html>

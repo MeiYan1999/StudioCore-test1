@@ -1,84 +1,40 @@
-# StudioCore Drive — Desktop Companion App (Windows & macOS)
+# StudioCore Drive (ứng dụng máy tính)
 
-Ứng dụng Desktop chạy nền cho **Windows 10/11** và **macOS (Apple Silicon & Intel)** kết nối trực tiếp với nền tảng **StudioCore SaaS**.
+Ứng dụng Electron cho Windows và macOS: biến một thư mục ảnh/video trên máy studio thành link để khách xem,
+chọn ảnh và tải file. Ảnh gốc nằm trên máy studio; máy chủ StudioCore chỉ chuyển tiếp khi khách đang xem.
 
----
+## Cách hoạt động
 
-## 🌟 Tính Năng Nổi Bật
+1. **Kết nối**: trên web vào *Quản lý → StudioCore Drive → Tạo mã kết nối* (dùng một lần, hết hạn sau 15 phút),
+   dán vào ứng dụng. Ứng dụng nhận token thiết bị riêng, lưu bằng kho khoá của hệ điều hành (`safeStorage`).
+2. **Chia sẻ**: chọn thư mục (nút trong ứng dụng, kéo thả, chuột phải thư mục trên Windows, hoặc
+   *Mở bằng → StudioCore Drive* trên macOS). Ứng dụng quét ảnh/video, gửi **danh mục tên tệp** lên máy chủ và nhận link.
+3. **Khách xem**: máy chủ xếp yêu cầu vào hàng đợi; ứng dụng (long-poll) tạo ảnh xem trước bằng `sharp` và đẩy
+   ngược lên, máy chủ chuyển tiếp cho khách. Tải gốc và video được truyền theo luồng, hỗ trợ `Range`.
+4. **Khách chọn xong**: ứng dụng hiện thông báo và (tuỳ cài đặt) chép ảnh đã chọn kèm RAW cùng tên vào
+   thư mục `Khach-chon` bên trong thư mục gốc, cùng `danh-sach-chon.txt` chứa mã ảnh cho Lightroom.
 
-1. **Chuột phải thư mục trên PC/Mac → Có ngay link gửi khách**:
-   - Tích hợp sâu vào menu chuột phải Windows Explorer và Finder Quick Actions trên macOS.
-   - Quét file RAW (`.CR3`, `.ARW`, `.NEF`, `.RAF`, `.DNG`), JPG và Video (`.MP4`, `.MOV`).
-   - Tự động copy link chia sẻ (`https://studiocore.vn/drive/...`) vào clipboard và hiển thị thông báo Desktop.
+## Bảo mật
 
-2. **Công nghệ Zero-Cloud Storage**:
-   - Dữ liệu ở nguyên trên máy tính hoặc ổ NAS của studio.
-   - Không tốn dung lượng Google Drive / Dropbox.
-   - Khách xem trước ảnh và duyệt album siêu tốc.
+- Không mở cổng mạng nào trên máy: giao diện là cửa sổ Electron tải tệp đóng gói sẵn, giao tiếp qua IPC.
+- `contextIsolation`, `sandbox`, tắt `nodeIntegration`, CSP `default-src 'none'`, chặn điều hướng và cửa sổ mới;
+  IPC chỉ nhận từ khung chính của cửa sổ ứng dụng.
+- Giao diện chỉ dựng DOM bằng `textContent`, nên tên thư mục/tệp/khách chứa HTML không thể chạy mã.
+- Đường dẫn trên máy không bao giờ gửi lên máy chủ; mỗi tệp có khoá ngẫu nhiên theo từng link, và mọi lần đọc tệp
+  đều kiểm tra đường dẫn thật nằm trong thư mục đã chia sẻ (chặn `..` và symlink).
+- Chỉ kết nối máy chủ qua `https` (hoặc `http://localhost` khi phát triển).
 
-3. **Tự động gom file RAW khi khách chốt (Auto RAW Filter)**:
-   - Khi khách hàng bấm "Chốt danh sách gửi Studio", Desktop App nhận thông báo thời gian thực và phát chuông báo.
-   - Tự động quét và copy toàn bộ các file RAW gốc tương ứng vào thư mục con `Retouch_Final/`.
-   - Xuất file `lightroom_filter_codes.txt` chứa danh sách mã để dán vào bộ lọc Lightroom trong 1 click.
-   - Xuất file `client_retouch_notes.txt` chứa toàn bộ yêu cầu chỉnh sửa chi tiết của khách.
+## Phát triển
 
-4. **Trình phát Video & Góp ý theo giây**:
-   - Video phóng sự cưới được phát trực tiếp từ máy studio, tua mượt mà không nén mờ.
-   - Đồng bộ phản hồi theo từng giây (timestamp feedback) về máy tính studio.
-
----
-
-## 🚀 Hướng Dẫn Cài Đặt
-
-### 1. Trên macOS (Finder Quick Actions)
-Mở Terminal và chạy:
 ```bash
 cd desktop-app
-bash macos/install-quick-actions.sh
+npm install
+npm start          # chạy ứng dụng
+npm test           # kiểm thử phần lõi (không cần Electron)
+npm run dist:win   # bộ cài Windows (NSIS) — chạy trên Windows
+npm run dist:mac   # DMG macOS (x64 + arm64) — chạy trên macOS
 ```
-Sau đó:
-- Chuột phải vào bất kỳ thư mục ảnh hoặc file video nào trong Finder.
-- Chọn **Thao tác nhanh (Quick Actions)** › **StudioCore Drive: Tạo link gửi khách**.
-- Link khách sẽ được copy ngay lập tức vào clipboard của bạn!
 
-### 2. Trên Windows (Explorer Context Menu)
-1. Giải nén file `StudioCore-Drive-Windows.zip`.
-2. Nhấp đúp vào file `windows\install.bat` (hoặc nhấp chuột phải chọn **Run as administrator**).
-   - Hệ thống sẽ tự động cài ứng dụng vào `%USERPROFILE%\.studiocore-drive\app`.
-   - Tự động đăng ký menu chuột phải vào Windows Explorer với hỗ trợ đầy đủ tiếng Việt Unicode.
-3. Chuột phải vào bất kỳ thư mục ảnh hoặc video nào trong Windows Explorer:
-   - Chọn **StudioCore Drive** › **Tạo link Album (chọn ảnh duyệt)** hoặc **Tạo link Thư mục** hoặc **Tạo link Video**.
-   - Trình duyệt sẽ tự động mở xem thử album, link được sao chép vào bộ nhớ tạm (Ctrl+V) và hộp thoại xác nhận sẽ hiện lên màn hình.
-4. Nếu muốn gỡ bỏ menu chuột phải, chỉ cần nhấp đúp vào `windows\uninstall.bat`.
-
----
-
-## 💻 Chạy Giao Diện Bảng Điều Khiển Desktop
-
-Để mở bảng điều khiển quản lý trên máy tính:
-```bash
-cd desktop-app
-npm start
-# Hoặc: node cli.js gui
-```
-Ứng dụng sẽ tự động mở giao diện tại `http://localhost:3888` để bạn:
-- Nhập **Studio Connect Key** (`sc_drive_live_...`).
-- Kéo thả thư mục để tạo link.
-- Quản lý các link đang share và máy tính kết nối.
-
----
-
-## 🛠️ Lệnh CLI (Dòng lệnh)
-
-- **Tạo link chia sẻ cho 1 thư mục:**
-  ```bash
-  node cli.js share --path "/Volumes/Data/Cuoi_Minh_Lan" --type album
-  ```
-- **Chạy Agent ở chế độ nền (Background Daemon):**
-  ```bash
-  node cli.js daemon
-  ```
-- **Kiểm tra trạng thái kết nối:**
-  ```bash
-  node cli.js status
-  ```
+Bộ cài được dựng bằng workflow `.github/workflows/drive-desktop.yml` khi đẩy tag `drive-v*` và đính kèm vào
+GitHub Release. Bản dựng chưa ký số: Windows SmartScreen và macOS Gatekeeper sẽ cảnh báo cho tới khi cấu hình
+chứng chỉ ký (`CSC_LINK`, `CSC_KEY_PASSWORD`, và thông tin notarize của Apple) trong secrets của repo.
