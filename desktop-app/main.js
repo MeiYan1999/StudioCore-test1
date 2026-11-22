@@ -288,6 +288,13 @@ function init() {
       console.warn("Không thể cập nhật mục chia sẻ trong Explorer:", error);
     });
   }
+  if (store.get("launchAtLogin")) {
+    try {
+      applyLoginItem(app, true);
+    } catch (error) {
+      console.warn("Không thể khôi phục cài đặt khởi động cùng hệ thống:", error);
+    }
+  }
   agent = new DriveAgent({
     store,
     images: new ImageCache(path.join(app.getPath("userData"), "cache"), { fallback: osThumbnail }),

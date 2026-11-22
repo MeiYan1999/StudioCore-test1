@@ -413,6 +413,17 @@ test("Windows uninstall removes the registered context menu and login-item value
   const runKeyPath = WINDOWS_RUN_KEY.replace(/^HKCU\\/, "");
   const contextMenuKeyPath = CONTEXT_MENU_KEY.replace(/^HKCU\\/, "");
 
+  assert.ok(
+    installer.includes([
+      "!macro customUnInstall",
+      "  ${ifNot} ${isUpdated}",
+      `    DeleteRegKey HKCU "${contextMenuKeyPath}"`,
+      `    DeleteRegValue HKCU "${runKeyPath}" "${APP_USER_MODEL_ID}"`,
+      `    DeleteRegValue HKCU "${runKeyPath}" "electron.app.StudioCore Drive"`,
+      "  ${endIf}",
+      "!macroend",
+    ].join("\n")),
+  );
   assert.ok(installer.includes(`DeleteRegKey HKCU "${contextMenuKeyPath}"`));
   assert.ok(installer.includes(`DeleteRegValue HKCU "${runKeyPath}" "${APP_USER_MODEL_ID}"`));
   assert.ok(installer.includes(`DeleteRegValue HKCU "${runKeyPath}" "electron.app.StudioCore Drive"`));
