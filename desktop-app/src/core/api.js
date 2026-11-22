@@ -22,6 +22,33 @@ function normalizeServerUrl(value) {
   return url.origin;
 }
 
+function wwwVariant(origin) {
+  let url;
+  try {
+    url = new URL(origin);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "https:") return null;
+  url.hostname = url.hostname.startsWith("www.")
+    ? url.hostname.slice(4)
+    : `www.${url.hostname}`;
+  return url.origin;
+}
+
+async function parseResponse(response) {
+  let data = null;
+  try {
+    data = await response.json();
+  } catch {
+    data = null;
+  }
+  if (!response.ok) {
+    throw new ApiError((data && typeof data.error === "string" && data.error) || `Lỗi máy chủ (${response.status}).`, response.status);
+  }
+  return data || {};
+}
+
 class ApiClient {
   constructor({ serverUrl, token, appVersion }) {
     this.serverUrl = normalizeServerUrl(serverUrl);
@@ -35,29 +62,57 @@ class ApiClient {
     return headers;
   }
 
-  async json(method, pathname, body, { signal, timeoutMs = 30000 } = {}) {
+  async json(method, pathname, body, { signal, timeoutMs = 30000, redirect = "error", returnResponse = false } = {}) {
     const timeout = AbortSignal.timeout(timeoutMs);
     const response = await fetch(`${this.serverUrl}${pathname}`, {
       method,
       headers: this.headers(body === undefined ? {} : { "content-type": "application/json" }),
       body: body === undefined ? undefined : JSON.stringify(body),
       signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
-      redirect: "error",
+      redirect,
     });
-    let data = null;
-    try {
-      data = await response.json();
-    } catch {
-      data = null;
-    }
-    if (!response.ok) {
-      throw new ApiError((data && typeof data.error === "string" && data.error) || `Lỗi máy chủ (${response.status}).`, response.status);
-    }
-    return data || {};
+    return returnResponse ? response : parseResponse(response);
   }
 
-  pair(input) {
-    return this.json("POST", "/api/drive/agent/pair", input);
+  async pair(input, { previousToken, previousOrigin } = {}) {
+    const pathname = "/api/drive/agent/pair";
+    const firstOrigin = this.serverUrl;
+    const bodyForOrigin = (origin) => {
+      const body = { ...input };
+      delete body.previousToken;
+      if (previousToken && (origin === previousOrigin || firstOrigin === previousOrigin)) {
+        body.previousToken = previousToken;
+      }
+      return body;
+    };
+    const response = await this.json("POST", pathname, bodyForOrigin(this.serverUrl), {
+      redirect: "manual",
+      returnResponse: true,
+    });
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get("location");
+      let target = null;
+      try {
+        if (location) target = new URL(location, `${this.serverUrl}${pathname}`);
+      } catch {
+        target = null;
+      }
+      const targetOrigin = target ? target.origin : "không xác định";
+      if (
+        [301, 302, 303, 307, 308].includes(response.status) &&
+        target?.protocol === "https:" &&
+        target.origin === wwwVariant(this.serverUrl) &&
+        target.pathname === pathname
+      ) {
+        this.serverUrl = target.origin;
+        return this.json("POST", pathname, bodyForOrigin(this.serverUrl), { redirect: "error" });
+      }
+      throw new ApiError(
+        `Máy chủ chuyển hướng tới địa chỉ khác: ${targetOrigin}. Hãy nhập đúng địa chỉ trong mục Nâng cao.`,
+        response.status,
+      );
+    }
+    return parseResponse(response);
   }
   poll(since, wait, signal) {
     return this.json("GET", `/api/drive/agent/poll?since=${since}&wait=${wait}`, undefined, { signal, timeoutMs: wait + 15000 });
@@ -100,4 +155,4 @@ class ApiClient {
   }
 }
 
-module.exports = { ApiClient, ApiError, normalizeServerUrl };
+module.exports = { ApiClient, ApiError, normalizeServerUrl, wwwVariant };

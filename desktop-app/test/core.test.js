@@ -2,12 +2,13 @@
 
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
+const http = require("node:http");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
 const { parseRange } = require("../src/core/agent");
 const { DriveAgent } = require("../src/core/agent");
-const { ApiError, normalizeServerUrl } = require("../src/core/api");
+const { ApiClient, ApiError, normalizeServerUrl } = require("../src/core/api");
 const { copyPicks, safeFolderName } = require("../src/core/picks");
 const { scanFolder, resolveInside } = require("../src/core/scanner");
 const {
@@ -95,7 +96,29 @@ test("cài đặt được lưu và đọc lại, token được mã hoá khi c�
   assert.ok(again.getShare("s1"));
   assert.equal(again.getShare("__proto__"), null);
   fs.writeFileSync(path.join(dir, "settings.json"), "{hong");
-  assert.equal(new Store(dir, cipher).get("serverUrl"), "https://studiocore.io.vn");
+  assert.equal(new Store(dir, cipher).get("serverUrl"), "https://www.studiocore.io.vn");
+});
+
+test("Store defaults to the canonical host and migrates exact apex URLs", () => {
+  assert.equal(new Store(tmp()).get("serverUrl"), "https://www.studiocore.io.vn");
+
+  const legacyDir = tmp();
+  fs.writeFileSync(path.join(legacyDir, "settings.json"), JSON.stringify({
+    serverUrl: "https://studiocore.io.vn",
+    previousServerUrl: "https://studiocore.io.vn",
+  }));
+  const migrated = new Store(legacyDir);
+  assert.equal(migrated.get("serverUrl"), "https://www.studiocore.io.vn");
+  assert.equal(migrated.get("previousServerUrl"), "https://www.studiocore.io.vn");
+
+  const otherDir = tmp();
+  fs.writeFileSync(path.join(otherDir, "settings.json"), JSON.stringify({
+    serverUrl: "https://example.com",
+    previousServerUrl: "http://localhost:3000",
+  }));
+  const unchanged = new Store(otherDir);
+  assert.equal(unchanged.get("serverUrl"), "https://example.com");
+  assert.equal(unchanged.get("previousServerUrl"), "http://localhost:3000");
 });
 
 test("macOS Finder Quick Action is enabled by default", () => {
@@ -191,6 +214,241 @@ test("does not send a previous device token to a different server origin", async
   assert.equal(pairInput.previousToken, undefined);
   assert.equal(store.get("previousDeviceToken"), null);
   assert.equal(store.get("previousServerUrl"), null);
+});
+
+test("apex-to-www re-pair keeps the previous device token", async () => {
+  const store = new Store(tmp());
+  store.set({
+    serverUrl: "https://www.studiocore.io.vn",
+    previousServerUrl: "https://www.studiocore.io.vn",
+    previousDeviceToken: "old",
+  });
+  const agent = new DriveAgent({ store, images: {}, appVersion: "test" });
+  agent.start = () => {};
+
+  const originalFetch = global.fetch;
+  const requests = [];
+  global.fetch = async (url, init) => {
+    requests.push({ url: String(url), body: JSON.parse(init.body) });
+    if (requests.length === 1) {
+      return new Response(null, {
+        status: 307,
+        headers: { location: "https://www.studiocore.io.vn/api/drive/agent/pair" },
+      });
+    }
+    return Response.json({
+      deviceToken: "new",
+      deviceId: "device-new",
+      deviceName: "Máy mới",
+      studioName: "Studio",
+    });
+  };
+  try {
+    await agent.pair("code", "https://studiocore.io.vn");
+  } finally {
+    global.fetch = originalFetch;
+  }
+
+  assert.equal(requests.length, 2);
+  assert.equal(requests[1].url, "https://www.studiocore.io.vn/api/drive/agent/pair");
+  assert.equal(requests[0].body.previousToken, undefined);
+  assert.equal(requests[1].body.previousToken, "old");
+  assert.equal(store.get("serverUrl"), "https://www.studiocore.io.vn");
+});
+
+test("previous token follows an apex-to-www redirect from its own origin", async () => {
+  const serverUrl = "https://studiocore.io.vn";
+  const store = new Store(tmp());
+  store.set({ previousServerUrl: serverUrl, previousDeviceToken: "old" });
+  const agent = new DriveAgent({ store, images: {}, appVersion: "test" });
+  agent.start = () => {};
+
+  const originalFetch = global.fetch;
+  const requests = [];
+  global.fetch = async (url, init) => {
+    requests.push({ url: String(url), body: JSON.parse(init.body) });
+    if (requests.length === 1) {
+      return new Response(null, {
+        status: 307,
+        headers: { location: "https://www.studiocore.io.vn/api/drive/agent/pair" },
+      });
+    }
+    return Response.json({
+      deviceToken: "new",
+      deviceId: "device-new",
+      deviceName: "Máy mới",
+      studioName: "Studio",
+    });
+  };
+  try {
+    await agent.pair("code", serverUrl);
+  } finally {
+    global.fetch = originalFetch;
+  }
+
+  assert.equal(requests.length, 2);
+  assert.equal(requests[0].url, `${serverUrl}/api/drive/agent/pair`);
+  assert.equal(requests[0].body.previousToken, "old");
+  assert.equal(requests[1].url, "https://www.studiocore.io.vn/api/drive/agent/pair");
+  assert.equal(requests[1].body.previousToken, "old");
+});
+
+test("same-origin www re-pair sends the previous device token on the first request", async () => {
+  const serverUrl = "https://www.studiocore.io.vn";
+  const store = new Store(tmp());
+  store.set({ previousServerUrl: serverUrl, previousDeviceToken: "old" });
+  const agent = new DriveAgent({ store, images: {}, appVersion: "test" });
+  agent.start = () => {};
+
+  const originalFetch = global.fetch;
+  let request;
+  global.fetch = async (url, init) => {
+    request = { url: String(url), body: JSON.parse(init.body) };
+    return Response.json({
+      deviceToken: "new",
+      deviceId: "device-new",
+      deviceName: "Máy mới",
+      studioName: "Studio",
+    });
+  };
+  try {
+    await agent.pair("code", serverUrl);
+  } finally {
+    global.fetch = originalFetch;
+  }
+
+  assert.equal(request.url, `${serverUrl}/api/drive/agent/pair`);
+  assert.equal(request.body.previousToken, "old");
+});
+
+test("re-pair with an unrelated server never sends the previous device token", async () => {
+  const store = new Store(tmp());
+  store.set({
+    previousServerUrl: "https://www.studiocore.io.vn",
+    previousDeviceToken: "old",
+  });
+  const agent = new DriveAgent({ store, images: {}, appVersion: "test" });
+  agent.start = () => {};
+
+  const originalFetch = global.fetch;
+  const requests = [];
+  global.fetch = async (url, init) => {
+    requests.push({ url: String(url), body: JSON.parse(init.body) });
+    return Response.json({
+      deviceToken: "new",
+      deviceId: "device-new",
+      deviceName: "Máy mới",
+      studioName: "Studio",
+    });
+  };
+  try {
+    await agent.pair("code", "https://example.com");
+  } finally {
+    global.fetch = originalFetch;
+  }
+
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].url, "https://example.com/api/drive/agent/pair");
+  assert.ok(requests.every(({ body }) => body.previousToken === undefined));
+});
+
+test("Node fetch exposes redirect status and Location in manual mode", async (t) => {
+  const server = http.createServer((_request, response) => {
+    response.writeHead(307, { location: "/destination" });
+    response.end();
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+
+  const response = await fetch(`http://127.0.0.1:${server.address().port}/source`, { redirect: "manual" });
+
+  assert.equal(response.status, 307);
+  assert.equal(response.headers.get("location"), "/destination");
+  assert.notEqual(response.type, "opaqueredirect");
+});
+
+test("pair follows one apex/www redirect in either direction", async () => {
+  const path = "/api/drive/agent/pair";
+  const directions = [
+    ["https://studiocore.io.vn", "https://www.studiocore.io.vn"],
+    ["https://www.studiocore.io.vn", "https://studiocore.io.vn"],
+  ];
+  const originalFetch = global.fetch;
+  try {
+    for (const [source, target] of directions) {
+      const requests = [];
+      global.fetch = async (url, options) => {
+        requests.push({ url: String(url), options });
+        if (requests.length === 1) {
+          return new Response(null, { status: 307, headers: { location: `${target}${path}` } });
+        }
+        return Response.json({ deviceToken: "scdt-test" });
+      };
+
+      const client = new ApiClient({ serverUrl: source, appVersion: "test" });
+      assert.deepEqual(await client.pair({ code: "pair-code" }), { deviceToken: "scdt-test" });
+      assert.equal(client.serverUrl, target);
+      assert.deepEqual(requests.map(({ url }) => url), [`${source}${path}`, `${target}${path}`]);
+      assert.deepEqual(requests.map(({ options }) => options.redirect), ["manual", "error"]);
+      assert.ok(requests.every(({ options }) => options.method === "POST"));
+    }
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test("pair rejects redirects to another host, path, or port without retrying", async () => {
+  const path = "/api/drive/agent/pair";
+  const redirects = [
+    ["https://evil.example/api/drive/agent/pair", "https://evil.example"],
+    ["https://www.studiocore.io.vn/api/drive/agent/other", "https://www.studiocore.io.vn"],
+    ["https://www.studiocore.io.vn:8443/api/drive/agent/pair", "https://www.studiocore.io.vn:8443"],
+  ];
+  const originalFetch = global.fetch;
+  try {
+    for (const [location, origin] of redirects) {
+      const requests = [];
+      global.fetch = async (url, options) => {
+        requests.push({ url: String(url), options });
+        return new Response(null, { status: 307, headers: { location } });
+      };
+      const client = new ApiClient({ serverUrl: "https://studiocore.io.vn", appVersion: "test" });
+
+      await assert.rejects(client.pair({ code: "pair-code" }), (error) => {
+        assert.ok(error instanceof ApiError);
+        assert.equal(error.status, 307);
+        assert.ok(error.message.includes(`Máy chủ chuyển hướng tới địa chỉ khác: ${origin}.`));
+        return true;
+      });
+      assert.equal(requests.length, 1);
+      assert.equal(requests[0].url, `https://studiocore.io.vn${path}`);
+      assert.equal(requests[0].options.redirect, "manual");
+    }
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test("authenticated non-pair requests continue to reject redirects", async () => {
+  const client = new ApiClient({
+    serverUrl: "https://www.studiocore.io.vn",
+    token: "scdt-secret",
+    appVersion: "test",
+  });
+  const originalFetch = global.fetch;
+  let request;
+  global.fetch = async (url, options) => {
+    request = { url: String(url), options };
+    return Response.json({ now: 0, submissions: [], jobs: [] });
+  };
+  try {
+    await client.poll(0, 0);
+  } finally {
+    global.fetch = originalFetch;
+  }
+
+  assert.equal(request.options.redirect, "error");
+  assert.equal(request.options.headers.authorization, "Bearer scdt-secret");
 });
 
 test("suspended responses preserve the device token and retry with a 60-second cap", async () => {
