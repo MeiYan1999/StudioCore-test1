@@ -7,12 +7,16 @@ chọn ảnh và tải file. Ảnh gốc nằm trên máy studio; máy chủ Stu
 
 1. **Kết nối**: trên web vào *Quản lý → StudioCore Drive → Tạo mã kết nối* (dùng một lần, hết hạn sau 15 phút),
    dán vào ứng dụng. Ứng dụng nhận token thiết bị riêng, lưu bằng kho khoá của hệ điều hành (`safeStorage`).
-2. **Chia sẻ**: chọn thư mục (nút trong ứng dụng, kéo thả, chuột phải thư mục trên Windows, hoặc
-   *Mở bằng → StudioCore Drive* trên macOS). Ứng dụng quét ảnh/video, gửi **danh mục tên tệp** lên máy chủ và nhận link.
+2. **Chia sẻ**: chọn thư mục (nút trong ứng dụng, kéo thả, chuột phải thư mục trên Windows, hoặc trên macOS chuột
+   phải thư mục → “Chia sẻ bằng StudioCore Drive” (có thể nằm trong mục Dịch vụ), hoặc kéo thư mục vào biểu tượng
+   ứng dụng). Ứng dụng quét ảnh/video, gửi **danh mục tên tệp** lên máy chủ và nhận link.
 3. **Khách xem**: máy chủ xếp yêu cầu vào hàng đợi; ứng dụng (long-poll) tạo ảnh xem trước bằng `sharp` và đẩy
    ngược lên, máy chủ chuyển tiếp cho khách. Tải gốc và video được truyền theo luồng, hỗ trợ `Range`.
 4. **Khách chọn xong**: ứng dụng hiện thông báo và (tuỳ cài đặt) chép ảnh đã chọn kèm RAW cùng tên vào
    thư mục `Khach-chon` bên trong thư mục gốc, cùng `danh-sach-chon.txt` chứa mã ảnh cho Lightroom.
+
+Trên macOS, Quick Action được cài tại `~/Library/Services` và không bị gỡ khi kéo ứng dụng vào Thùng rác. Hãy tắt
+mục này trong Cài đặt trước khi xóa ứng dụng hoặc tự xóa `~/Library/Services/Chia sẻ bằng StudioCore Drive.workflow`.
 
 ## Bảo mật
 

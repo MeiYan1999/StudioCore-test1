@@ -2,6 +2,7 @@
 
 const path = require("node:path");
 const fs = require("node:fs");
+const os = require("node:os");
 const { pathToFileURL } = require("node:url");
 const {
   app,
@@ -25,6 +26,7 @@ const { Store } = require("./src/core/store");
 const { applyLoginItem, setWindowsAppUserModelId } = require("./src/platform/app-identity");
 const { setWindowsContextMenu, sharePathFromArgv } = require("./src/platform/context-menu");
 const { macBundlePath, removeMacLoginItems } = require("./src/platform/mac-login-cleanup");
+const { installMacQuickAction, removeMacQuickAction } = require("./src/platform/mac-quick-action");
 
 setWindowsAppUserModelId(app);
 
@@ -78,7 +80,8 @@ function publicState() {
       autoCopyPicks: !!store.get("autoCopyPicks"),
       picksFolderName: store.get("picksFolderName"),
       launchAtLogin: !!store.get("launchAtLogin"),
-      contextMenu: !!store.get("contextMenu"),
+      contextMenu:
+        process.platform === "darwin" ? !!store.get("macQuickAction") : !!store.get("contextMenu"),
     },
     platform: process.platform,
     version: app.getVersion(),
@@ -278,9 +281,22 @@ function registerIpc() {
         }
       }
     }
-    if (typeof p.contextMenu === "boolean" && process.platform === "win32") {
-      await setWindowsContextMenu(p.contextMenu, process.execPath);
-      patch.contextMenu = p.contextMenu;
+    if (typeof p.contextMenu === "boolean") {
+      if (process.platform === "win32") {
+        await setWindowsContextMenu(p.contextMenu, process.execPath);
+        patch.contextMenu = p.contextMenu;
+      } else if (process.platform === "darwin") {
+        if (p.contextMenu) {
+          await installMacQuickAction({
+            templateDir: path.join(__dirname, "assets", "mac-quick-action"),
+          });
+        } else {
+          await removeMacQuickAction({
+            servicesDir: path.join(os.homedir(), "Library", "Services"),
+          });
+        }
+        patch.macQuickAction = p.contextMenu;
+      }
     }
     store.set(patch);
     return publicState();
@@ -330,6 +346,13 @@ function init() {
   if (process.platform === "win32" && store.get("contextMenu")) {
     setWindowsContextMenu(true, process.execPath).catch((error) => {
       console.warn("Không thể cập nhật mục chia sẻ trong Explorer:", error);
+    });
+  }
+  if (process.platform === "darwin" && store.get("macQuickAction")) {
+    installMacQuickAction({
+      templateDir: path.join(__dirname, "assets", "mac-quick-action"),
+    }).catch((error) => {
+      console.warn("Không thể cài mục chia sẻ trong Finder:", error);
     });
   }
   if (store.get("launchAtLogin")) {

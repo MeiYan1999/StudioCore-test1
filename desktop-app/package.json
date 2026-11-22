@@ -33,7 +33,8 @@
       "src/**/*",
       "renderer/**/*",
       "assets/icon.png",
-      "assets/tray.png"
+      "assets/tray.png",
+      "assets/mac-quick-action/**/*"
     ],
     "asarUnpack": [
       "node_modules/sharp/**/*",

@@ -67,7 +67,7 @@ function applyState(next) {
   $("pair-server").value = state.serverUrl;
   $("drop-hint").textContent =
     state.platform === "darwin"
-      ? "Kéo thả thư mục vào cửa sổ này, hoặc chuột phải thư mục → Mở bằng → StudioCore Drive."
+      ? "Kéo thả thư mục vào cửa sổ này; chuột phải thư mục → “Chia sẻ bằng StudioCore Drive” (có thể nằm trong mục Dịch vụ), hoặc kéo thư mục vào biểu tượng ứng dụng."
       : "Kéo thả thư mục vào cửa sổ này, hoặc bật menu chuột phải trong Cài đặt.";
   if (state.paired) void refresh();
 }
@@ -272,7 +272,7 @@ $("btn-settings").addEventListener("click", () => {
   $("set-folder").value = s.picksFolderName;
   $("set-login").checked = s.launchAtLogin;
   $("set-context").checked = s.contextMenu;
-  $("row-context").hidden = state.platform !== "win32";
+  $("row-context").hidden = state.platform !== "win32" && state.platform !== "darwin";
   $("mac-hint").hidden = state.platform !== "darwin";
   $("set-device").textContent = `${state.deviceName || ""} · ${state.serverUrl} · v${state.version}`;
   showError("set-error", "");
