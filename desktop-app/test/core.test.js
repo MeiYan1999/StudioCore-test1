@@ -10,7 +10,12 @@ const { DriveAgent } = require("../src/core/agent");
 const { ApiError, normalizeServerUrl } = require("../src/core/api");
 const { copyPicks, safeFolderName } = require("../src/core/picks");
 const { scanFolder, resolveInside } = require("../src/core/scanner");
-const { APP_USER_MODEL_ID, setWindowsAppUserModelId } = require("../src/platform/app-identity");
+const {
+  APP_USER_MODEL_ID,
+  LEGACY_WINDOWS_LOGIN_ITEM_NAME,
+  applyLoginItem,
+  setWindowsAppUserModelId,
+} = require("../src/platform/app-identity");
 const { Store } = require("../src/core/store");
 const {
   CONTEXT_MENU_KEY,
@@ -386,6 +391,21 @@ test("Windows notification identity matches the packaged app id and is set befor
   setWindowsAppUserModelId({ setAppUserModelId: (id) => { actualId = id; } }, "win32");
   assert.equal(APP_USER_MODEL_ID, packageJson.build.appId);
   assert.equal(actualId, packageJson.build.appId);
+});
+
+test("login-item settings clean the Windows legacy value and preserve platform options", () => {
+  for (const enabled of [false, true]) {
+    const calls = [];
+    applyLoginItem({ setLoginItemSettings: (settings) => calls.push(settings) }, enabled, "win32");
+    assert.deepEqual(calls, [
+      { openAtLogin: false, name: LEGACY_WINDOWS_LOGIN_ITEM_NAME },
+      { openAtLogin: enabled, args: ["--hidden"], name: APP_USER_MODEL_ID },
+    ]);
+  }
+
+  const calls = [];
+  applyLoginItem({ setLoginItemSettings: (settings) => calls.push(settings) }, true, "darwin");
+  assert.deepEqual(calls, [{ openAtLogin: true, args: ["--hidden"] }]);
 });
 
 test("Windows uninstall removes the registered context menu and login-item values", () => {
