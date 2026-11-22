@@ -8,6 +8,7 @@ const bridge = window.drive;
 let state = null;
 let currentFolder = null;
 let toastTimer = null;
+let queuedShareRequest = null;
 
 const STATUS_TEXT = {
   idle: "Chưa kết nối",
@@ -210,6 +211,14 @@ async function openShareDialog(folder) {
   }
 }
 
+function handleShareRequest(folder) {
+  if (!state) {
+    queuedShareRequest = folder;
+    return;
+  }
+  void openShareDialog(folder);
+}
+
 $("pair-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   showError("pair-error", "");
@@ -312,7 +321,7 @@ bridge.on("status", ({ status }) => {
   else renderStatus(status);
 });
 bridge.on("submission", () => void refresh());
-bridge.on("share-request", (folder) => void openShareDialog(folder));
+bridge.on("share-request", handleShareRequest);
 
 setInterval(() => {
   if (state && state.paired && !document.hidden) void refresh();
@@ -320,5 +329,7 @@ setInterval(() => {
 
 call("state").then((initial) => {
   applyState(initial);
-  if (initial.pendingShare) void openShareDialog(initial.pendingShare);
+  const folder = queuedShareRequest ?? initial.pendingShare;
+  queuedShareRequest = null;
+  if (folder) void openShareDialog(folder);
 });

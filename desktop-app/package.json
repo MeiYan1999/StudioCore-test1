@@ -57,8 +57,12 @@
             "CFBundleTypeName": "Folder",
             "CFBundleTypeRole": "Viewer",
             "LSHandlerRank": "Alternate",
+            "CFBundleTypeOSTypes": [
+              "fold"
+            ],
             "LSItemContentTypes": [
-              "public.folder"
+              "public.folder",
+              "public.directory"
             ]
           }
         ]

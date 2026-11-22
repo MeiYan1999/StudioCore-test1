@@ -305,6 +305,8 @@ test("địa chỉ máy chủ, Range và tham số dòng lệnh", () => {
   assert.equal(parseRange("bytes=2000-", 1000), "invalid");
   assert.equal(parseRange(null, 1000), null);
   assert.equal(sharePathFromArgv(["app.exe", "--share", "C:\\Ảnh cưới & <b>"]), "C:\\Ảnh cưới & <b>");
+  assert.equal(sharePathFromArgv(["app.exe", "--share=C:\\Ảnh cưới"]), "C:\\Ảnh cưới");
+  assert.equal(sharePathFromArgv(["app.exe", "--share", "C:\\Ảnh cưới", "--hidden"]), "C:\\Ảnh cưới");
   assert.equal(sharePathFromArgv(["app.exe", "--share"]), null);
   assert.equal(sharePathFromArgv(["app.exe", "--share", "--hidden"]), null);
 });
@@ -335,6 +337,13 @@ test("macOS build explicitly ad-hoc signs without credentials and supports CSC_L
     hardenedRuntime: true,
     enableIdentityAutoDiscovery: false,
   });
+});
+
+test("macOS registers Finder folder and directory document types", () => {
+  const documentTypes = require("../package.json").build.mac.extendInfo.CFBundleDocumentTypes;
+  assert.equal(documentTypes[0].LSHandlerRank, "Alternate");
+  assert.deepEqual(documentTypes[0].CFBundleTypeOSTypes, ["fold"]);
+  assert.deepEqual(documentTypes[0].LSItemContentTypes, ["public.folder", "public.directory"]);
 });
 
 test("Windows notification identity matches the packaged app id and is set before launch", () => {

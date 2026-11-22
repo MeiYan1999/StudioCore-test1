@@ -31,6 +31,8 @@ async function setWindowsContextMenu(enabled, exePath) {
 
 /** Lấy thư mục cần chia sẻ từ tham số dòng lệnh (`--share <đường dẫn>`). */
 function sharePathFromArgv(argv) {
+  const inlineArg = argv.find((arg) => typeof arg === "string" && arg.startsWith("--share="));
+  if (inlineArg) return inlineArg.slice("--share=".length) || null;
   const index = argv.indexOf("--share");
   if (index < 0 || index + 1 >= argv.length) return null;
   const value = argv[index + 1];
