@@ -12,6 +12,7 @@ const { copyPicks, safeFolderName } = require("../src/core/picks");
 const { scanFolder, resolveInside } = require("../src/core/scanner");
 const { Store } = require("../src/core/store");
 const { sharePathFromArgv } = require("../src/platform/context-menu");
+const { getMacSigningOptions } = require("../src/platform/mac-signing");
 
 function tmp() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "scdrive-"));
@@ -317,4 +318,20 @@ test("giao diện không dùng innerHTML và có CSP chặt", () => {
   assert.match(main, /sandbox: true/);
   assert.match(main, /nodeIntegration: false/);
   assert.ok(!/createServer|\.listen\(/.test(main));
+});
+
+test("macOS build explicitly ad-hoc signs without credentials and supports CSC_LINK signing", () => {
+  assert.deepEqual(getMacSigningOptions({ CSC_IDENTITY_AUTO_DISCOVERY: "false" }), {
+    identity: "-",
+    hardenedRuntime: false,
+    enableIdentityAutoDiscovery: false,
+  });
+  assert.deepEqual(getMacSigningOptions({ CSC_LINK: "certificate.p12", CSC_IDENTITY_AUTO_DISCOVERY: "false" }), {
+    hardenedRuntime: true,
+    enableIdentityAutoDiscovery: true,
+  });
+  assert.deepEqual(getMacSigningOptions({ CSC_NAME: "Developer ID Application: StudioCore" }), {
+    hardenedRuntime: true,
+    enableIdentityAutoDiscovery: false,
+  });
 });

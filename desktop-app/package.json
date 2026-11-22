@@ -11,7 +11,7 @@
     "start": "electron .",
     "test": "node --test",
     "dist:win": "electron-builder --win nsis --x64 --publish never",
-    "dist:mac": "electron-builder --mac dmg --x64 --arm64 --publish never"
+    "dist:mac": "electron-builder --config electron-builder.config.js --mac dmg --x64 --arm64 --publish never"
   },
   "dependencies": {
     "sharp": "0.35.5"
