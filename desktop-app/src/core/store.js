@@ -14,6 +14,7 @@ const DEFAULTS = {
   autoCopyPicks: true,
   picksFolderName: "Khach-chon",
   launchAtLogin: false,
+  macLoginCleanupDone: false,
   contextMenu: false,
   lastSubmissionCheck: 0,
   pendingExports: [],

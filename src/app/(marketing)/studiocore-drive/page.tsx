@@ -111,12 +111,17 @@ export default function StudioCoreDrivePage() {
               </p>
               <ol className="mt-4 list-decimal space-y-2 pl-5 text-sm text-muted-foreground">
                 <li>Mở file .dmg, kéo StudioCore Drive vào thư mục Applications.</li>
-                <li>Mở app. Khi macOS báo không thể kiểm tra app, bấm “Xong”.</li>
+                <li>Mở app. Khi macOS báo không mở được StudioCore Drive, bấm “Xong”.</li>
                 <li>
                   Vào Cài đặt hệ thống › Quyền riêng tư &amp; Bảo mật, kéo xuống và bấm “Vẫn mở” cạnh dòng StudioCore
-                  Drive.
+                  Drive bị chặn.
                 </li>
-                <li>Nhập mật khẩu máy và bấm “Mở”. Từ lần sau app mở bình thường.</li>
+                <li>Ở hộp thoại hỏi lại, bấm “Vẫn mở” lần nữa rồi nhập mật khẩu máy.</li>
+                <li>
+                  Nếu macOS hỏi cho “StudioCore Drive Safe Storage” dùng Chuỗi khóa (Keychain), nhập mật khẩu máy và
+                  bấm “Luôn cho phép”. Ứng dụng dùng mục này để mã hóa khóa kết nối studio. Từ lần sau app mở bình
+                  thường.
+                </li>
               </ol>
               <p className="mt-4 text-xs text-muted-foreground">
                 macOS 14 trở về trước: chuột phải vào app trong Applications › Mở › Mở.

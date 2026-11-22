@@ -16,6 +16,7 @@ const {
   applyLoginItem,
   setWindowsAppUserModelId,
 } = require("../src/platform/app-identity");
+const { macBundlePath, removeMacLoginItems } = require("../src/platform/mac-login-cleanup");
 const { Store } = require("../src/core/store");
 const {
   CONTEXT_MENU_KEY,
@@ -73,6 +74,7 @@ test("cài đặt được lưu và đọc lại, token được mã hoá khi c�
     previousDeviceToken: "scdt-cu",
     picksFolderName: "Da chon",
     autoCopyPicks: false,
+    macLoginCleanupDone: true,
     pendingExports: ["s1"],
   });
   store.setShare("s1", { folder: "/x", salt: "s", files: {} });
@@ -83,6 +85,7 @@ test("cài đặt được lưu và đọc lại, token được mã hoá khi c�
   assert.equal(again.get("previousDeviceToken"), "scdt-cu");
   assert.equal(again.get("picksFolderName"), "Da chon");
   assert.equal(again.get("autoCopyPicks"), false);
+  assert.equal(again.get("macLoginCleanupDone"), true);
   assert.deepEqual(again.get("pendingExports"), ["s1"]);
   assert.ok(again.getShare("s1"));
   assert.equal(again.getShare("__proto__"), null);
@@ -406,6 +409,48 @@ test("login-item settings clean the Windows legacy value and preserve platform o
   const calls = [];
   applyLoginItem({ setLoginItemSettings: (settings) => calls.push(settings) }, true, "darwin");
   assert.deepEqual(calls, [{ openAtLogin: true, args: ["--hidden"] }]);
+});
+
+test("macOS login cleanup finds the app bundle path", () => {
+  assert.equal(
+    macBundlePath("/Applications/StudioCore Drive.app/Contents/MacOS/StudioCore Drive"),
+    "/Applications/StudioCore Drive.app",
+  );
+  assert.equal(macBundlePath("/usr/bin/node"), null);
+});
+
+test("macOS login cleanup passes the bundle path to osascript as an argument", async () => {
+  const bundlePath = "/Applications/StudioCore Drive.app";
+  let invocation = null;
+  const result = await removeMacLoginItems(bundlePath, (command, args, options, callback) => {
+    invocation = { command, args, options };
+    callback(null, "", "");
+  });
+
+  assert.deepEqual(result, { ok: true });
+  assert.deepEqual(invocation, {
+    command: "osascript",
+    args: [
+      "-e",
+      "on run argv",
+      "-e",
+      'tell application "System Events" to delete (every login item whose path is (item 1 of argv))',
+      "-e",
+      "end run",
+      bundlePath,
+    ],
+    options: { timeout: 30000 },
+  });
+});
+
+test("macOS login cleanup resolves errors instead of rejecting", async () => {
+  const error = new Error("Automation permission denied");
+  const cleanup = removeMacLoginItems("/Applications/StudioCore Drive.app", (_command, _args, _options, callback) =>
+    callback(error),
+  );
+
+  await assert.doesNotReject(cleanup);
+  assert.deepEqual(await cleanup, { ok: false, error: error.message });
 });
 
 test("Windows uninstall removes the registered context menu and login-item values", () => {

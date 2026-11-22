@@ -1,7 +1,7 @@
 {
   "name": "studiocore-drive",
   "productName": "StudioCore Drive",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "description": "Gửi ảnh và video cho khách thẳng từ máy tính studio.",
   "author": "StudioCore",
   "license": "UNLICENSED",
@@ -53,6 +53,7 @@
       "category": "public.app-category.photography",
       "hardenedRuntime": true,
       "extendInfo": {
+        "NSAppleEventsUsageDescription": "StudioCore Drive cần quyền này một lần để gỡ mục khởi động cùng máy cũ còn sót trong Cài đặt hệ thống.",
         "CFBundleDocumentTypes": [
           {
             "CFBundleTypeName": "Folder",

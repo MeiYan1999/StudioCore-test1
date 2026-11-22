@@ -24,6 +24,7 @@ const { safeFolderName } = require("./src/core/picks");
 const { Store } = require("./src/core/store");
 const { applyLoginItem, setWindowsAppUserModelId } = require("./src/platform/app-identity");
 const { setWindowsContextMenu, sharePathFromArgv } = require("./src/platform/context-menu");
+const { macBundlePath, removeMacLoginItems } = require("./src/platform/mac-login-cleanup");
 
 setWindowsAppUserModelId(app);
 
@@ -261,6 +262,21 @@ function registerIpc() {
     if (typeof p.launchAtLogin === "boolean") {
       applyLoginItem(app, p.launchAtLogin);
       patch.launchAtLogin = p.launchAtLogin;
+      if (process.platform === "darwin" && !p.launchAtLogin && !store.get("macLoginCleanupDone")) {
+        const bundlePath = macBundlePath(process.execPath);
+        if (bundlePath) {
+          const result = await removeMacLoginItems(bundlePath);
+          store.set({ macLoginCleanupDone: true });
+          if (!result.ok) {
+            await dialog.showMessageBox(win, {
+              type: "info",
+              title: "Không thể xóa mục khởi động cũ",
+              message:
+                "Nếu Cài đặt hệ thống › Cài đặt chung › Mục đăng nhập vẫn còn “StudioCore Drive”, hãy chọn mục đó và bấm “−”.",
+            });
+          }
+        }
+      }
     }
     if (typeof p.contextMenu === "boolean" && process.platform === "win32") {
       await setWindowsContextMenu(p.contextMenu, process.execPath);
@@ -269,6 +285,34 @@ function registerIpc() {
     store.set(patch);
     return publicState();
   });
+}
+
+function cleanupMacLoginItemsAtStartup() {
+  try {
+    if (process.platform !== "darwin" || store.get("launchAtLogin") || store.get("macLoginCleanupDone")) return;
+    if (!app.getLoginItemSettings().wasOpenedAtLogin) return;
+    const bundlePath = macBundlePath(process.execPath);
+    if (!bundlePath) return;
+
+    void (async () => {
+      let result;
+      try {
+        result = await removeMacLoginItems(bundlePath);
+      } catch (error) {
+        result = { ok: false, error: error.message || String(error) };
+      }
+      try {
+        store.set({ macLoginCleanupDone: true });
+      } catch (error) {
+        console.warn("Không thể lưu trạng thái dọn mục khởi động cũ:", error);
+      }
+      if (!result.ok) console.warn("Không thể gỡ mục khởi động cũ của StudioCore Drive:", result.error);
+    })().catch((error) => {
+      console.warn("Không thể hoàn tất việc dọn mục khởi động cũ:", error);
+    });
+  } catch (error) {
+    console.warn("Không thể kiểm tra mục khởi động cũ:", error);
+  }
 }
 
 function init() {
@@ -295,6 +339,7 @@ function init() {
       console.warn("Không thể khôi phục cài đặt khởi động cùng hệ thống:", error);
     }
   }
+  cleanupMacLoginItemsAtStartup();
   agent = new DriveAgent({
     store,
     images: new ImageCache(path.join(app.getPath("userData"), "cache"), { fallback: osThumbnail }),

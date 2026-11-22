@@ -37,6 +37,15 @@ npm run dist:mac   # DMG macOS (x64 + arm64) — chạy trên macOS
 
 Bộ cài được dựng bằng workflow `.github/workflows/drive-desktop.yml` khi đẩy tag `drive-v*` và đính kèm vào
 GitHub Release. Bản dựng Windows chưa ký số. Bản dựng macOS không có chứng chỉ Developer ID được ký ad-hoc,
-nhưng chưa notarize; khi Gatekeeper chặn ứng dụng, người dùng cần cho phép tại **Cài đặt hệ thống › Quyền riêng tư
-& Bảo mật**. Khi có chứng chỉ Developer ID, cấu hình `CSC_LINK` và `CSC_KEY_PASSWORD` trong secrets để ký chính
-thức. Notarization cần thông tin xác thực Apple và tài khoản Apple Developer của MeiYing.
+nhưng chưa notarize. Lần đầu mở trên macOS:
+
+1. Mở file .dmg, kéo StudioCore Drive vào thư mục Applications.
+2. Mở app. Khi macOS báo không mở được StudioCore Drive, bấm “Xong”.
+3. Vào **Cài đặt hệ thống › Quyền riêng tư & Bảo mật**, kéo xuống và bấm “Vẫn mở” cạnh dòng StudioCore Drive bị
+   chặn.
+4. Ở hộp thoại hỏi lại, bấm “Vẫn mở” lần nữa rồi nhập mật khẩu máy.
+5. Nếu macOS hỏi cho “StudioCore Drive Safe Storage” dùng Chuỗi khóa (Keychain), nhập mật khẩu máy và bấm “Luôn cho
+   phép”. Ứng dụng dùng mục này để mã hóa khóa kết nối studio. Từ lần sau app mở bình thường.
+
+Khi có chứng chỉ Developer ID, cấu hình `CSC_LINK` và `CSC_KEY_PASSWORD` trong secrets để ký chính thức.
+Notarization cần thông tin xác thực Apple và tài khoản Apple Developer của MeiYing.
