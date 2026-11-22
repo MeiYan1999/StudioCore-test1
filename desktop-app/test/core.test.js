@@ -12,7 +12,12 @@ const { copyPicks, safeFolderName } = require("../src/core/picks");
 const { scanFolder, resolveInside } = require("../src/core/scanner");
 const { APP_USER_MODEL_ID, setWindowsAppUserModelId } = require("../src/platform/app-identity");
 const { Store } = require("../src/core/store");
-const { CONTEXT_MENU_KEY, WINDOWS_RUN_KEY, sharePathFromArgv } = require("../src/platform/context-menu");
+const {
+  CONTEXT_MENU_KEY,
+  WINDOWS_RUN_KEY,
+  buildContextMenuCommand,
+  sharePathFromArgv,
+} = require("../src/platform/context-menu");
 const { getMacSigningOptions } = require("../src/platform/mac-signing");
 
 function tmp() {
@@ -306,9 +311,38 @@ test("địa chỉ máy chủ, Range và tham số dòng lệnh", () => {
   assert.equal(parseRange(null, 1000), null);
   assert.equal(sharePathFromArgv(["app.exe", "--share", "C:\\Ảnh cưới & <b>"]), "C:\\Ảnh cưới & <b>");
   assert.equal(sharePathFromArgv(["app.exe", "--share=C:\\Ảnh cưới"]), "C:\\Ảnh cưới");
+  assert.equal(
+    sharePathFromArgv([
+      "C:\\Program Files\\StudioCore Drive\\StudioCore Drive.exe",
+      "--share",
+      "--allow-file-access-from-files",
+      "--original-process-start-time=1",
+      "C:\\Users\\A\\Pictures\\Drive Test",
+    ]),
+    "C:\\Users\\A\\Pictures\\Drive Test",
+  );
+  assert.equal(
+    sharePathFromArgv([
+      "C:\\Program Files\\StudioCore Drive\\StudioCore Drive.exe",
+      "--allow-file-access-from-files",
+      "--share=C:\\Users\\A\\Pictures\\Drive Test",
+    ]),
+    "C:\\Users\\A\\Pictures\\Drive Test",
+  );
   assert.equal(sharePathFromArgv(["app.exe", "--share", "C:\\Ảnh cưới", "--hidden"]), "C:\\Ảnh cưới");
   assert.equal(sharePathFromArgv(["app.exe", "--share"]), null);
-  assert.equal(sharePathFromArgv(["app.exe", "--share", "--hidden"]), null);
+  assert.equal(
+    sharePathFromArgv(["StudioCore Drive.exe", ".", "--share", "--hidden"]),
+    null,
+  );
+  assert.equal(
+    sharePathFromArgv(["StudioCore Drive.exe", path.resolve(__dirname, ".."), "--share", "--hidden"]),
+    null,
+  );
+  assert.equal(
+    buildContextMenuCommand("C:\\Program Files\\StudioCore Drive\\StudioCore Drive.exe"),
+    '"C:\\Program Files\\StudioCore Drive\\StudioCore Drive.exe" --share="%1"',
+  );
 });
 
 test("giao diện không dùng innerHTML và có CSP chặt", () => {

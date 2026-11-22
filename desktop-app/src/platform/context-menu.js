@@ -1,15 +1,21 @@
 "use strict";
 
 const { execFile } = require("node:child_process");
+const path = require("node:path");
 
 const CONTEXT_MENU_KEY = "HKCU\\Software\\Classes\\Directory\\shell\\StudioCoreDrive";
 const WINDOWS_RUN_KEY = "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run";
 const KEYS = [CONTEXT_MENU_KEY];
+const APP_DIRECTORY = path.resolve(__dirname, "../..");
 
 function reg(args) {
   return new Promise((resolve, reject) => {
     execFile("reg.exe", args, { windowsHide: true }, (error) => (error ? reject(error) : resolve()));
   });
+}
+
+function buildContextMenuCommand(exePath) {
+  return `"${exePath}" --share="%1"`;
 }
 
 /**
@@ -23,7 +29,7 @@ async function setWindowsContextMenu(enabled, exePath) {
     if (enabled) {
       await reg(["add", key, "/ve", "/d", "Chia sẻ bằng StudioCore Drive", "/f"]);
       await reg(["add", key, "/v", "Icon", "/d", `"${exePath}"`, "/f"]);
-      await reg(["add", `${key}\\command`, "/ve", "/d", `"${exePath}" --share "%1"`, "/f"]);
+      await reg(["add", `${key}\\command`, "/ve", "/d", buildContextMenuCommand(exePath), "/f"]);
     } else {
       await reg(["delete", key, "/f"]).catch(() => undefined);
     }
@@ -31,14 +37,47 @@ async function setWindowsContextMenu(enabled, exePath) {
   return true;
 }
 
+function isApplicationArgument(argv, index) {
+  if (index === 0) return true;
+  if (index !== 1 || typeof argv[index] !== "string") return false;
+  return argv[index] === "." || path.resolve(argv[index]) === APP_DIRECTORY;
+}
+
 /** Lấy thư mục cần chia sẻ từ tham số dòng lệnh (`--share <đường dẫn>`). */
 function sharePathFromArgv(argv) {
   const inlineArg = argv.find((arg) => typeof arg === "string" && arg.startsWith("--share="));
-  if (inlineArg) return inlineArg.slice("--share=".length) || null;
+  if (inlineArg) {
+    const value = inlineArg.slice("--share=".length);
+    if (value) return value;
+  }
+
   const index = argv.indexOf("--share");
-  if (index < 0 || index + 1 >= argv.length) return null;
+  if (index < 0) return null;
+
   const value = argv[index + 1];
-  return typeof value === "string" && value.length > 0 && !value.startsWith("--") ? value : null;
+  if (
+    typeof value === "string" &&
+    value.length > 0 &&
+    !value.startsWith("--") &&
+    !isApplicationArgument(argv, index + 1)
+  ) {
+    return value;
+  }
+
+  const candidates = argv.filter(
+    (arg, argIndex) =>
+      typeof arg === "string" &&
+      arg.length > 0 &&
+      !arg.startsWith("--") &&
+      !isApplicationArgument(argv, argIndex),
+  );
+  return candidates.length > 0 ? candidates[candidates.length - 1] : null;
 }
 
-module.exports = { CONTEXT_MENU_KEY, WINDOWS_RUN_KEY, setWindowsContextMenu, sharePathFromArgv };
+module.exports = {
+  CONTEXT_MENU_KEY,
+  WINDOWS_RUN_KEY,
+  buildContextMenuCommand,
+  setWindowsContextMenu,
+  sharePathFromArgv,
+};

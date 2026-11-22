@@ -283,6 +283,11 @@ function init() {
       }
     : null;
   store = new Store(app.getPath("userData"), cipher);
+  if (process.platform === "win32" && store.get("contextMenu")) {
+    setWindowsContextMenu(true, process.execPath).catch((error) => {
+      console.warn("Không thể cập nhật mục chia sẻ trong Explorer:", error);
+    });
+  }
   agent = new DriveAgent({
     store,
     images: new ImageCache(path.join(app.getPath("userData"), "cache"), { fallback: osThumbnail }),
