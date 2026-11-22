@@ -22,7 +22,7 @@ const { normalizeServerUrl } = require("./src/core/api");
 const { ImageCache } = require("./src/core/images");
 const { safeFolderName } = require("./src/core/picks");
 const { Store } = require("./src/core/store");
-const { setWindowsAppUserModelId } = require("./src/platform/app-identity");
+const { APP_USER_MODEL_ID, setWindowsAppUserModelId } = require("./src/platform/app-identity");
 const { setWindowsContextMenu, sharePathFromArgv } = require("./src/platform/context-menu");
 
 setWindowsAppUserModelId(app);
@@ -259,7 +259,7 @@ function registerIpc() {
     if (typeof p.autoCopyPicks === "boolean") patch.autoCopyPicks = p.autoCopyPicks;
     if (typeof p.picksFolderName === "string") patch.picksFolderName = safeFolderName(p.picksFolderName);
     if (typeof p.launchAtLogin === "boolean") {
-      app.setLoginItemSettings({ openAtLogin: p.launchAtLogin, args: ["--hidden"] });
+      app.setLoginItemSettings({ openAtLogin: p.launchAtLogin, args: ["--hidden"], name: APP_USER_MODEL_ID });
       patch.launchAtLogin = p.launchAtLogin;
     }
     if (typeof p.contextMenu === "boolean" && process.platform === "win32") {

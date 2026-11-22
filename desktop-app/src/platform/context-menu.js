@@ -2,7 +2,9 @@
 
 const { execFile } = require("node:child_process");
 
-const KEYS = ["HKCU\\Software\\Classes\\Directory\\shell\\StudioCoreDrive"];
+const CONTEXT_MENU_KEY = "HKCU\\Software\\Classes\\Directory\\shell\\StudioCoreDrive";
+const WINDOWS_RUN_KEY = "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run";
+const KEYS = [CONTEXT_MENU_KEY];
 
 function reg(args) {
   return new Promise((resolve, reject) => {
@@ -39,4 +41,4 @@ function sharePathFromArgv(argv) {
   return typeof value === "string" && value.length > 0 && !value.startsWith("--") ? value : null;
 }
 
-module.exports = { setWindowsContextMenu, sharePathFromArgv };
+module.exports = { CONTEXT_MENU_KEY, WINDOWS_RUN_KEY, setWindowsContextMenu, sharePathFromArgv };

@@ -12,7 +12,8 @@ const { copyPicks, safeFolderName } = require("../src/core/picks");
 const { scanFolder, resolveInside } = require("../src/core/scanner");
 const { APP_USER_MODEL_ID, setWindowsAppUserModelId } = require("../src/platform/app-identity");
 const { Store } = require("../src/core/store");
-const { sharePathFromArgv } = require("../src/platform/context-menu");
+const { CONTEXT_MENU_KEY, WINDOWS_RUN_KEY, sharePathFromArgv } = require("../src/platform/context-menu");
+const { APP_USER_MODEL_ID, setWindowsAppUserModelId } = require("../src/platform/app-identity");
 const { getMacSigningOptions } = require("../src/platform/mac-signing");
 
 function tmp() {
@@ -352,4 +353,14 @@ test("Windows notification identity matches the packaged app id and is set befor
   setWindowsAppUserModelId({ setAppUserModelId: (id) => { actualId = id; } }, "win32");
   assert.equal(APP_USER_MODEL_ID, packageJson.build.appId);
   assert.equal(actualId, packageJson.build.appId);
+});
+
+test("Windows uninstall removes the registered context menu and login-item values", () => {
+  const installer = fs.readFileSync(path.join(__dirname, "..", "build", "installer.nsh"), "utf8");
+  const runKeyPath = WINDOWS_RUN_KEY.replace(/^HKCU\\/, "");
+  const contextMenuKeyPath = CONTEXT_MENU_KEY.replace(/^HKCU\\/, "");
+
+  assert.ok(installer.includes(`DeleteRegKey HKCU "${contextMenuKeyPath}"`));
+  assert.ok(installer.includes(`DeleteRegValue HKCU "${runKeyPath}" "${APP_USER_MODEL_ID}"`));
+  assert.ok(installer.includes(`DeleteRegValue HKCU "${runKeyPath}" "electron.app.StudioCore Drive"`));
 });
