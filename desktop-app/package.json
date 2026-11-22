@@ -11,7 +11,7 @@
     "start": "electron .",
     "test": "node --test",
     "dist:win": "electron-builder --win nsis --x64 --publish never",
-    "dist:mac": "electron-builder --mac dmg --x64 --arm64 --publish never"
+    "dist:mac": "electron-builder --config electron-builder.config.js --mac dmg --x64 --arm64 --publish never"
   },
   "dependencies": {
     "sharp": "0.35.5"
@@ -45,7 +45,8 @@
     "nsis": {
       "oneClick": false,
       "perMachine": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "include": "build/installer.nsh"
     },
     "mac": {
       "icon": "assets/icon.png",
@@ -57,8 +58,12 @@
             "CFBundleTypeName": "Folder",
             "CFBundleTypeRole": "Viewer",
             "LSHandlerRank": "Alternate",
+            "CFBundleTypeOSTypes": [
+              "fold"
+            ],
             "LSItemContentTypes": [
-              "public.folder"
+              "public.folder",
+              "public.directory"
             ]
           }
         ]

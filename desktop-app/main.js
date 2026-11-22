@@ -22,7 +22,10 @@ const { normalizeServerUrl } = require("./src/core/api");
 const { ImageCache } = require("./src/core/images");
 const { safeFolderName } = require("./src/core/picks");
 const { Store } = require("./src/core/store");
+const { applyLoginItem, setWindowsAppUserModelId } = require("./src/platform/app-identity");
 const { setWindowsContextMenu, sharePathFromArgv } = require("./src/platform/context-menu");
+
+setWindowsAppUserModelId(app);
 
 const RENDERER_FILE = path.join(__dirname, "renderer", "index.html");
 const RENDERER_URL = pathToFileURL(RENDERER_FILE).href;
@@ -256,7 +259,7 @@ function registerIpc() {
     if (typeof p.autoCopyPicks === "boolean") patch.autoCopyPicks = p.autoCopyPicks;
     if (typeof p.picksFolderName === "string") patch.picksFolderName = safeFolderName(p.picksFolderName);
     if (typeof p.launchAtLogin === "boolean") {
-      app.setLoginItemSettings({ openAtLogin: p.launchAtLogin, args: ["--hidden"] });
+      applyLoginItem(app, p.launchAtLogin);
       patch.launchAtLogin = p.launchAtLogin;
     }
     if (typeof p.contextMenu === "boolean" && process.platform === "win32") {
@@ -280,6 +283,18 @@ function init() {
       }
     : null;
   store = new Store(app.getPath("userData"), cipher);
+  if (process.platform === "win32" && store.get("contextMenu")) {
+    setWindowsContextMenu(true, process.execPath).catch((error) => {
+      console.warn("Không thể cập nhật mục chia sẻ trong Explorer:", error);
+    });
+  }
+  if (store.get("launchAtLogin")) {
+    try {
+      applyLoginItem(app, true);
+    } catch (error) {
+      console.warn("Không thể khôi phục cài đặt khởi động cùng hệ thống:", error);
+    }
+  }
   agent = new DriveAgent({
     store,
     images: new ImageCache(path.join(app.getPath("userData"), "cache"), { fallback: osThumbnail }),

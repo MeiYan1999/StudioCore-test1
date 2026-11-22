@@ -10,8 +10,20 @@ const { DriveAgent } = require("../src/core/agent");
 const { ApiError, normalizeServerUrl } = require("../src/core/api");
 const { copyPicks, safeFolderName } = require("../src/core/picks");
 const { scanFolder, resolveInside } = require("../src/core/scanner");
+const {
+  APP_USER_MODEL_ID,
+  LEGACY_WINDOWS_LOGIN_ITEM_NAME,
+  applyLoginItem,
+  setWindowsAppUserModelId,
+} = require("../src/platform/app-identity");
 const { Store } = require("../src/core/store");
-const { sharePathFromArgv } = require("../src/platform/context-menu");
+const {
+  CONTEXT_MENU_KEY,
+  WINDOWS_RUN_KEY,
+  buildContextMenuCommand,
+  sharePathFromArgv,
+} = require("../src/platform/context-menu");
+const { getMacSigningOptions } = require("../src/platform/mac-signing");
 
 function tmp() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "scdrive-"));
@@ -303,8 +315,39 @@ test("địa chỉ máy chủ, Range và tham số dòng lệnh", () => {
   assert.equal(parseRange("bytes=2000-", 1000), "invalid");
   assert.equal(parseRange(null, 1000), null);
   assert.equal(sharePathFromArgv(["app.exe", "--share", "C:\\Ảnh cưới & <b>"]), "C:\\Ảnh cưới & <b>");
+  assert.equal(sharePathFromArgv(["app.exe", "--share=C:\\Ảnh cưới"]), "C:\\Ảnh cưới");
+  assert.equal(
+    sharePathFromArgv([
+      "C:\\Program Files\\StudioCore Drive\\StudioCore Drive.exe",
+      "--share",
+      "--allow-file-access-from-files",
+      "--original-process-start-time=1",
+      "C:\\Users\\A\\Pictures\\Drive Test",
+    ]),
+    "C:\\Users\\A\\Pictures\\Drive Test",
+  );
+  assert.equal(
+    sharePathFromArgv([
+      "C:\\Program Files\\StudioCore Drive\\StudioCore Drive.exe",
+      "--allow-file-access-from-files",
+      "--share=C:\\Users\\A\\Pictures\\Drive Test",
+    ]),
+    "C:\\Users\\A\\Pictures\\Drive Test",
+  );
+  assert.equal(sharePathFromArgv(["app.exe", "--share", "C:\\Ảnh cưới", "--hidden"]), "C:\\Ảnh cưới");
   assert.equal(sharePathFromArgv(["app.exe", "--share"]), null);
-  assert.equal(sharePathFromArgv(["app.exe", "--share", "--hidden"]), null);
+  assert.equal(
+    sharePathFromArgv(["StudioCore Drive.exe", ".", "--share", "--hidden"]),
+    null,
+  );
+  assert.equal(
+    sharePathFromArgv(["StudioCore Drive.exe", path.resolve(__dirname, ".."), "--share", "--hidden"]),
+    null,
+  );
+  assert.equal(
+    buildContextMenuCommand("C:\\Program Files\\StudioCore Drive\\StudioCore Drive.exe"),
+    '"C:\\Program Files\\StudioCore Drive\\StudioCore Drive.exe" --share="%1"',
+  );
 });
 
 test("giao diện không dùng innerHTML và có CSP chặt", () => {
@@ -317,4 +360,71 @@ test("giao diện không dùng innerHTML và có CSP chặt", () => {
   assert.match(main, /sandbox: true/);
   assert.match(main, /nodeIntegration: false/);
   assert.ok(!/createServer|\.listen\(/.test(main));
+});
+
+test("macOS build explicitly ad-hoc signs without credentials and supports CSC_LINK signing", () => {
+  assert.deepEqual(getMacSigningOptions({ CSC_IDENTITY_AUTO_DISCOVERY: "false" }), {
+    identity: "-",
+    hardenedRuntime: false,
+    enableIdentityAutoDiscovery: false,
+  });
+  assert.deepEqual(getMacSigningOptions({ CSC_LINK: "certificate.p12", CSC_IDENTITY_AUTO_DISCOVERY: "false" }), {
+    hardenedRuntime: true,
+    enableIdentityAutoDiscovery: true,
+  });
+  assert.deepEqual(getMacSigningOptions({ CSC_NAME: "Developer ID Application: StudioCore" }), {
+    hardenedRuntime: true,
+    enableIdentityAutoDiscovery: false,
+  });
+});
+
+test("macOS registers Finder folder and directory document types", () => {
+  const documentTypes = require("../package.json").build.mac.extendInfo.CFBundleDocumentTypes;
+  assert.equal(documentTypes[0].LSHandlerRank, "Alternate");
+  assert.deepEqual(documentTypes[0].CFBundleTypeOSTypes, ["fold"]);
+  assert.deepEqual(documentTypes[0].LSItemContentTypes, ["public.folder", "public.directory"]);
+});
+
+test("Windows notification identity matches the packaged app id and is set before launch", () => {
+  const packageJson = require("../package.json");
+  let actualId = null;
+  setWindowsAppUserModelId({ setAppUserModelId: (id) => { actualId = id; } }, "win32");
+  assert.equal(APP_USER_MODEL_ID, packageJson.build.appId);
+  assert.equal(actualId, packageJson.build.appId);
+});
+
+test("login-item settings clean the Windows legacy value and preserve platform options", () => {
+  for (const enabled of [false, true]) {
+    const calls = [];
+    applyLoginItem({ setLoginItemSettings: (settings) => calls.push(settings) }, enabled, "win32");
+    assert.deepEqual(calls, [
+      { openAtLogin: false, name: LEGACY_WINDOWS_LOGIN_ITEM_NAME },
+      { openAtLogin: enabled, args: ["--hidden"], name: APP_USER_MODEL_ID },
+    ]);
+  }
+
+  const calls = [];
+  applyLoginItem({ setLoginItemSettings: (settings) => calls.push(settings) }, true, "darwin");
+  assert.deepEqual(calls, [{ openAtLogin: true, args: ["--hidden"] }]);
+});
+
+test("Windows uninstall removes the registered context menu and login-item values", () => {
+  const installer = fs.readFileSync(path.join(__dirname, "..", "build", "installer.nsh"), "utf8");
+  const runKeyPath = WINDOWS_RUN_KEY.replace(/^HKCU\\/, "");
+  const contextMenuKeyPath = CONTEXT_MENU_KEY.replace(/^HKCU\\/, "");
+
+  assert.ok(
+    installer.includes([
+      "!macro customUnInstall",
+      "  ${ifNot} ${isUpdated}",
+      `    DeleteRegKey HKCU "${contextMenuKeyPath}"`,
+      `    DeleteRegValue HKCU "${runKeyPath}" "${APP_USER_MODEL_ID}"`,
+      `    DeleteRegValue HKCU "${runKeyPath}" "electron.app.StudioCore Drive"`,
+      "  ${endIf}",
+      "!macroend",
+    ].join("\n")),
+  );
+  assert.ok(installer.includes(`DeleteRegKey HKCU "${contextMenuKeyPath}"`));
+  assert.ok(installer.includes(`DeleteRegValue HKCU "${runKeyPath}" "${APP_USER_MODEL_ID}"`));
+  assert.ok(installer.includes(`DeleteRegValue HKCU "${runKeyPath}" "electron.app.StudioCore Drive"`));
 });
