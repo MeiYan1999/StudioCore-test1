@@ -13,7 +13,6 @@ const { scanFolder, resolveInside } = require("../src/core/scanner");
 const { APP_USER_MODEL_ID, setWindowsAppUserModelId } = require("../src/platform/app-identity");
 const { Store } = require("../src/core/store");
 const { CONTEXT_MENU_KEY, WINDOWS_RUN_KEY, sharePathFromArgv } = require("../src/platform/context-menu");
-const { APP_USER_MODEL_ID, setWindowsAppUserModelId } = require("../src/platform/app-identity");
 const { getMacSigningOptions } = require("../src/platform/mac-signing");
 
 function tmp() {
