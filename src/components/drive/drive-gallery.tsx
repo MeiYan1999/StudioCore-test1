@@ -78,6 +78,8 @@ export function DriveGallery(props: Props) {
   const [downloadsBusy, setDownloadsBusy] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const filmstripCurrentRef = useRef<HTMLButtonElement>(null);
+  const lightboxRef = useRef<HTMLDivElement>(null);
+  const lightboxOpenerRef = useRef<HTMLElement | null>(null);
 
   const selecting = kind === "select";
   const downloadAllowed = selecting ? allowOriginal : true;
@@ -135,6 +137,16 @@ export function DriveGallery(props: Props) {
   }, [openFileId, showFilmstrip]);
 
   useEffect(() => {
+    if (openFile) {
+      lightboxRef.current?.focus();
+      return;
+    }
+    const opener = lightboxOpenerRef.current;
+    if (opener?.isConnected) opener.focus();
+    lightboxOpenerRef.current = null;
+  }, [openFile?.id]);
+
+  useEffect(() => {
     const updateFullscreen = () => setFullscreen(Boolean(document.fullscreenElement));
     document.addEventListener("fullscreenchange", updateFullscreen);
     return () => document.removeEventListener("fullscreenchange", updateFullscreen);
@@ -142,6 +154,8 @@ export function DriveGallery(props: Props) {
 
   function openLightbox(fileId: string, action: LightboxAction = "view") {
     const target = files.find((file) => file.id === fileId);
+    lightboxOpenerRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setOpenId(fileId);
     setPhotoNote(target?.note ?? "");
     setNotePanelOpen(action === "note");
@@ -812,7 +826,14 @@ export function DriveGallery(props: Props) {
       ) : null}
 
       {openFile ? (
-        <div className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-black text-white" role="dialog" aria-modal="true" aria-label={openFile.name}>
+        <div
+          ref={lightboxRef}
+          tabIndex={-1}
+          className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-black text-white"
+          role="dialog"
+          aria-modal="true"
+          aria-label={openFile.name}
+        >
           <header className="relative z-10 flex shrink-0 items-center justify-between gap-2 px-3 py-3 sm:px-5">
             <div className="flex min-w-0 items-center gap-2">
               <span className="shrink-0 rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium">
