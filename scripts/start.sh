@@ -7,6 +7,8 @@ if [ "$(id -u)" = "0" ]; then
   exec gosu nextjs:nodejs /bin/sh /app/scripts/start.sh
 fi
 
+export DB_BACKUP_GENERATION="${DB_BACKUP_GENERATION:-$(date +%s)}"
+
 # 1. Phục hồi database từ Cloudflare R2 nếu có
 node --import tsx scripts/restore-db.ts
 

@@ -2,7 +2,11 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
+import {
+  GetObjectCommand,
+  HeadObjectCommand,
+  PutObjectCommand,
+} from "@aws-sdk/client-s3";
 import Database from "better-sqlite3";
 import {
   backupDbToR2,
@@ -28,6 +32,7 @@ vi.mock("@aws-sdk/client-s3", () => {
   return {
     S3Client,
     GetObjectCommand: class GetObjectCommand extends MockCommand {},
+    HeadObjectCommand: class HeadObjectCommand extends MockCommand {},
     PutObjectCommand: class PutObjectCommand extends MockCommand {},
   };
 });
@@ -65,6 +70,7 @@ describe("R2 database backups", () => {
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     for (const dir of tempDirs.splice(0)) {
       fs.rmSync(dir, { recursive: true, force: true });
     }
@@ -185,5 +191,98 @@ describe("R2 database backups", () => {
     });
     snapshotDb.close();
     expect(liveBackup).not.toHaveBeenCalled();
+  });
+
+  it("skips upload when a newer remote generation owns the backup", async () => {
+    const dbPath = makeDbPath();
+    fs.writeFileSync(dbPath, "current database");
+    mocks.resolveDbFilename.mockReturnValue(path.resolve(dbPath));
+    const backup = vi.fn(async (targetPath: string) => {
+      fs.writeFileSync(targetPath, "consistent snapshot");
+    });
+    mocks.getDb.mockReturnValue({ $client: { backup } });
+    vi.stubEnv("DB_BACKUP_GENERATION", "9");
+    mocks.send.mockResolvedValueOnce({ Metadata: { generation: "10" } });
+
+    await expect(backupDbToR2(dbPath)).resolves.toBe(false);
+    expect(mocks.send).toHaveBeenCalledTimes(1);
+    expect(mocks.send.mock.calls[0][0]).toBeInstanceOf(HeadObjectCommand);
+    expect(backup).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { label: "older", remoteGeneration: "9", generation: "10" },
+    { label: "equal", remoteGeneration: "10", generation: "10" },
+  ])(
+    "uploads when the remote generation is $label",
+    async ({ remoteGeneration, generation }) => {
+      const dbPath = makeDbPath();
+      fs.writeFileSync(dbPath, "current database");
+      mocks.resolveDbFilename.mockReturnValue(path.resolve(dbPath));
+      const backup = vi.fn(async (targetPath: string) => {
+        fs.writeFileSync(targetPath, "consistent snapshot");
+      });
+      mocks.getDb.mockReturnValue({ $client: { backup } });
+      vi.stubEnv("DB_BACKUP_GENERATION", generation);
+      mocks.send
+        .mockResolvedValueOnce({
+          Metadata: { generation: remoteGeneration },
+        })
+        .mockResolvedValueOnce({});
+
+      await expect(backupDbToR2(dbPath)).resolves.toBe(true);
+      expect(mocks.send).toHaveBeenCalledTimes(2);
+      expect(mocks.send.mock.calls[0][0]).toBeInstanceOf(HeadObjectCommand);
+      const putCommand = mocks.send.mock.calls[1][0] as PutObjectCommand;
+      expect(putCommand).toBeInstanceOf(PutObjectCommand);
+      expect(putCommand.input.Metadata).toEqual({ generation });
+      expect(backup).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it("uploads with generation metadata when the remote object is missing", async () => {
+    const dbPath = makeDbPath();
+    fs.writeFileSync(dbPath, "current database");
+    mocks.resolveDbFilename.mockReturnValue(path.resolve(dbPath));
+    const backup = vi.fn(async (targetPath: string) => {
+      fs.writeFileSync(targetPath, "consistent snapshot");
+    });
+    mocks.getDb.mockReturnValue({ $client: { backup } });
+    vi.stubEnv("DB_BACKUP_GENERATION", "10");
+    mocks.send.mockRejectedValueOnce(
+      Object.assign(new Error("Missing object"), {
+        name: "NotFound",
+        $metadata: { httpStatusCode: 404 },
+      }),
+    );
+
+    await expect(backupDbToR2(dbPath)).resolves.toBe(true);
+    expect(mocks.send).toHaveBeenCalledTimes(2);
+    expect(mocks.send.mock.calls[0][0]).toBeInstanceOf(HeadObjectCommand);
+    const putCommand = mocks.send.mock.calls[1][0] as PutObjectCommand;
+    expect(putCommand.input.Metadata).toEqual({ generation: "10" });
+    expect(backup).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips upload when the remote generation lookup fails", async () => {
+    const dbPath = makeDbPath();
+    fs.writeFileSync(dbPath, "current database");
+    mocks.resolveDbFilename.mockReturnValue(path.resolve(dbPath));
+    const backup = vi.fn(async (targetPath: string) => {
+      fs.writeFileSync(targetPath, "consistent snapshot");
+    });
+    mocks.getDb.mockReturnValue({ $client: { backup } });
+    vi.stubEnv("DB_BACKUP_GENERATION", "10");
+    mocks.send.mockRejectedValueOnce(
+      Object.assign(new Error("Service unavailable"), {
+        name: "ServiceUnavailable",
+        $metadata: { httpStatusCode: 503 },
+      }),
+    );
+
+    await expect(backupDbToR2(dbPath)).resolves.toBe(false);
+    expect(mocks.send).toHaveBeenCalledTimes(1);
+    expect(mocks.send.mock.calls[0][0]).toBeInstanceOf(HeadObjectCommand);
+    expect(backup).not.toHaveBeenCalled();
   });
 });

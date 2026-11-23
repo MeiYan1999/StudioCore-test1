@@ -2,7 +2,12 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { Buffer } from "node:buffer";
-import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import {
+  GetObjectCommand,
+  HeadObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from "@aws-sdk/client-s3";
 import { getR2Config } from "../storage/r2-storage";
 
 const DB_OBJECT_KEY = "db/studiocore.db";
@@ -128,6 +133,51 @@ async function performDbBackup(dbPath: string): Promise<boolean> {
   }
   if (lastSuccessfulBackups.get(dbPath) === fingerprint) return true;
 
+  const generation = process.env.DB_BACKUP_GENERATION;
+  if (generation !== undefined) {
+    const generationNumber = Number(generation);
+    if (generation.trim() === "" || !Number.isFinite(generationNumber)) {
+      console.warn("[R2 Backup] DB_BACKUP_GENERATION không hợp lệ, bỏ qua sao lưu.");
+      return false;
+    }
+
+    try {
+      const current = await s3.client.send(
+        new HeadObjectCommand({
+          Bucket: s3.bucket,
+          Key: DB_OBJECT_KEY,
+        }),
+      );
+      const remoteGeneration = current.Metadata?.generation;
+      if (
+        remoteGeneration !== undefined &&
+        Number.isFinite(Number(remoteGeneration)) &&
+        Number(remoteGeneration) > generationNumber
+      ) {
+        console.log("[R2 Backup] Instance mới hơn đang sở hữu bản sao lưu, bỏ qua sao lưu từ instance này.");
+        return false;
+      }
+    } catch (err: unknown) {
+      const error =
+        typeof err === "object" && err !== null
+          ? (err as {
+              name?: string;
+              $metadata?: { httpStatusCode?: number };
+            })
+          : undefined;
+      if (
+        error?.name !== "NoSuchKey" &&
+        error?.$metadata?.httpStatusCode !== 404
+      ) {
+        console.warn(
+          "[R2 Backup] Không thể kiểm tra bản sao lưu hiện có, bỏ qua sao lưu:",
+          err,
+        );
+        return false;
+      }
+    }
+  }
+
   const snapshotPath = `${dbPath}.${process.pid}.${crypto.randomUUID()}.backup-tmp`;
   try {
     const { resolveDbFilename } = await import("./client");
@@ -172,6 +222,9 @@ async function performDbBackup(dbPath: string): Promise<boolean> {
         Key: DB_OBJECT_KEY,
         Body: buffer,
         ContentType: "application/x-sqlite3",
+        ...(generation !== undefined
+          ? { Metadata: { generation } }
+          : {}),
       }),
     );
     lastSuccessfulBackups.set(dbPath, fingerprint);
