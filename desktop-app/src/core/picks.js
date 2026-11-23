@@ -1,5 +1,6 @@
 "use strict";
 
+const crypto = require("node:crypto");
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const { RAW_EXT, extOf, stem, resolveInside } = require("./scanner");
@@ -102,34 +103,29 @@ async function writeMarkupComposite(source, target, markup, images) {
     .composite([{ input: Buffer.from(markupSvg(markup, width, height)) }])
     .jpeg({ quality: 90 })
     .toBuffer();
-  const temp = `${target}.tmp`;
-  await fs.rm(temp, { force: true });
+  const temp = `${target}.${process.pid}.${crypto.randomUUID()}.tmp`;
+  let ownsTemp = false;
   try {
     const handle = await fs.open(temp, "wx");
+    ownsTemp = true;
     try {
       await handle.writeFile(output);
     } finally {
       await handle.close();
     }
     await fs.rename(temp, target);
+    ownsTemp = false;
   } catch (error) {
-    await fs.rm(temp, { force: true }).catch(() => {});
+    if (ownsTemp) await fs.rm(temp, { force: true }).catch(() => {});
     throw error;
   }
 }
 
-function markupCompositeName(source, usedNames) {
+function markupCompositeName(source) {
   const parsed = path.parse(path.basename(source));
-  const extension = parsed.ext.slice(1) || "file";
-  let name = `${parsed.name}.jpg`;
-  if (usedNames.has(name.toLowerCase())) name = `${parsed.name} (${extension}).jpg`;
-  let suffix = 2;
-  while (usedNames.has(name.toLowerCase())) {
-    name = `${parsed.name} (${extension} ${suffix}).jpg`;
-    suffix += 1;
-  }
-  usedNames.add(name.toLowerCase());
-  return name;
+  const extension = parsed.ext.slice(1).toLowerCase() || "file";
+  const suffix = extension === "jpg" || extension === "jpeg" ? "" : `_${extension}`;
+  return `${parsed.name}${suffix}_note.jpg`;
 }
 
 function safeFolderName(name) {
@@ -153,7 +149,6 @@ async function copyPicks(share, picks, folderName, images = null) {
   let missing = 0;
   let markupFailed = 0;
   const codes = [];
-  const usedMarkupNames = new Set();
   for (const pick of picks) {
     const rel = share.files[pick.key];
     const source = rel ? await resolveInside(share.folder, rel) : null;
@@ -217,7 +212,7 @@ async function copyPicks(share, picks, folderName, images = null) {
     if (pick.markup) {
       try {
         const markup = validatedMarkup(pick.markup);
-        const markupDir = path.join(dest, "Khách note màu");
+        const markupDir = path.join(dest, "Khách note màu", targetDirRelative);
         await fs.mkdir(markupDir, { recursive: true });
         const realMarkupDir = await fs.realpath(markupDir);
         const markupRelative = path.relative(realDest, realMarkupDir);
@@ -225,7 +220,7 @@ async function copyPicks(share, picks, folderName, images = null) {
           markupFailed += 1;
           continue;
         }
-        const annotated = path.join(realMarkupDir, markupCompositeName(source, usedMarkupNames));
+        const annotated = path.join(realMarkupDir, markupCompositeName(source));
         await writeMarkupComposite(source, annotated, markup, images);
         copied += 1;
       } catch (error) {
