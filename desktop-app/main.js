@@ -520,7 +520,10 @@ function init() {
     appVersion: app.getVersion(),
   });
   applyKeepAwake();
-  agent.on("status", (payload) => win && win.webContents.send("drive:status", payload));
+  agent.on("status", (payload) => {
+    applyKeepAwake();
+    if (win) win.webContents.send("drive:status", payload);
+  });
   agent.on("submission", ({ share, copied }) => {
     if (win) win.webContents.send("drive:submission", { id: share.id });
     if (Notification.isSupported()) {
