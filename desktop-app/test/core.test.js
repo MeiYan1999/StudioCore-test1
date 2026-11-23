@@ -1065,7 +1065,7 @@ test("exports customer markup as a correctly sized composite JPEG", async () => 
     { sharp },
   );
 
-  const output = path.join(dir, "Khach-chon", "Khách note màu", "photo_note.jpg");
+  const output = path.join(dir, "Khach-chon", "Khách note màu", "photo.jpg_note.jpg");
   assert.ok(fs.existsSync(output));
   const { data, info } = await sharp(output).raw().toBuffer({ resolveWithObject: true });
   assert.equal(info.width, 100);
@@ -1098,8 +1098,8 @@ test("customer markup composites mirror the source subfolder", async () => {
     { sharp },
   );
 
-  assert.ok(fs.existsSync(path.join(result.dest, "Khách note màu", "gallery", "photo_note.jpg")));
-  assert.ok(!fs.existsSync(path.join(result.dest, "Khách note màu", "photo_note.jpg")));
+  assert.ok(fs.existsSync(path.join(result.dest, "Khách note màu", "gallery", "photo.jpeg_note.jpg")));
+  assert.ok(!fs.existsSync(path.join(result.dest, "Khách note màu", "photo.jpeg_note.jpg")));
 });
 
 test("resubmitting customer markup replaces the existing composite", async () => {
@@ -1116,7 +1116,7 @@ test("resubmitting customer markup replaces the existing composite", async () =>
     note: null,
     markup: { v: 1, strokes: [{ c: color, w: 0.08, p: [[0.1, 0.5], [0.9, 0.5]] }], notes: {} },
   });
-  const output = path.join(dir, "Khach-chon", "Khách note màu", "photo_note.jpg");
+  const output = path.join(dir, "Khach-chon", "Khách note màu", "photo.jpg_note.jpg");
 
   await copyPicks(share, [pick("#ef4444")], "Khach-chon", { sharp });
   await copyPicks(share, [pick("#3b82f6")], "Khach-chon", { sharp });
@@ -1127,7 +1127,7 @@ test("resubmitting customer markup replaces the existing composite", async () =>
   assert.ok(data[pixel + 2] > 150);
 });
 
-test("same-stem customer markup exports use stable extension-aware names", async () => {
+test("same-stem customer markup exports use injective source names", async () => {
   const sharp = require("sharp");
   const dir = tmp();
   fs.mkdirSync(path.join(dir, "gallery"));
@@ -1137,27 +1137,29 @@ test("same-stem customer markup exports use stable extension-aware names", async
     .jpeg()
     .toBuffer();
   fs.writeFileSync(path.join(dir, "gallery", "a.jpg"), image);
+  fs.writeFileSync(path.join(dir, "gallery", "a.jpeg"), image);
   fs.writeFileSync(path.join(dir, "gallery", "a.png"), image);
 
-  const share = { folder: dir, files: { jpg: "gallery/a.jpg", png: "gallery/a.png" } };
-  const picks = ["jpg", "png"].map((key, index) => ({
-      key,
-      name: `a.${index ? "png" : "jpg"}`,
+  const extensions = ["jpg", "jpeg", "png"];
+  const share = { folder: dir, files: Object.fromEntries(extensions.map((ext) => [ext, `gallery/a.${ext}`])) };
+  const picks = extensions.map((extension) => ({
+      key: extension,
+      name: `a.${extension}`,
       note: null,
       markup: {
         v: 1,
-        strokes: [{ c: index ? "#3b82f6" : "#ef4444", w: 0.04, p: [[0.1, 0.5], [0.9, 0.5]] }],
+        strokes: [{ c: extension === "jpg" ? "#ef4444" : extension === "jpeg" ? "#22c55e" : "#3b82f6", w: 0.04, p: [[0.1, 0.5], [0.9, 0.5]] }],
         notes: {},
       },
     }));
   const result = await copyPicks(share, picks, "Khach-chon", { sharp });
   const markupDir = path.join(result.dest, "Khách note màu", "gallery");
-  assert.deepEqual(fs.readdirSync(markupDir).sort(), ["a_note.jpg", "a_png_note.jpg"]);
-  assert.ok(fs.statSync(path.join(markupDir, "a_note.jpg")).size > 0);
-  assert.ok(fs.statSync(path.join(markupDir, "a_png_note.jpg")).size > 0);
+  const composites = ["a.jpeg_note.jpg", "a.jpg_note.jpg", "a.png_note.jpg"];
+  assert.deepEqual(fs.readdirSync(markupDir).sort(), composites);
+  for (const composite of composites) assert.ok(fs.statSync(path.join(markupDir, composite)).size > 0);
 
-  await copyPicks(share, [picks[1]], "Khach-chon", { sharp });
-  assert.deepEqual(fs.readdirSync(markupDir).sort(), ["a_note.jpg", "a_png_note.jpg"]);
+  await copyPicks(share, [picks[2]], "Khach-chon", { sharp });
+  assert.deepEqual(fs.readdirSync(markupDir).sort(), composites);
 });
 
 test("concurrent markup exports use independent temp files", async () => {
@@ -1181,8 +1183,39 @@ test("concurrent markup exports use independent temp files", async () => {
 
   const markupDir = path.join(first.dest, "Khách note màu");
   assert.equal(first.dest, second.dest);
-  assert.ok(fs.existsSync(path.join(markupDir, "photo_note.jpg")));
+  assert.ok(fs.existsSync(path.join(markupDir, "photo.jpg_note.jpg")));
   assert.deepEqual(fs.readdirSync(markupDir).filter((name) => name.endsWith(".tmp")), []);
+});
+
+test("markup composites use a short temp filename for long source names", async (t) => {
+  const sharp = require("sharp");
+  const dir = tmp();
+  const sourceName = `${"x".repeat(230)}.jpg`;
+  const compositeName = `${sourceName}_note.jpg`;
+  if (Buffer.byteLength(compositeName) > 255) {
+    t.skip("composite filename exceeds the platform component limit");
+    return;
+  }
+  const image = await sharp({
+    create: { width: 40, height: 20, channels: 3, background: { r: 0, g: 0, b: 0 } },
+  })
+    .jpeg()
+    .toBuffer();
+  fs.writeFileSync(path.join(dir, sourceName), image);
+
+  const result = await copyPicks(
+    { folder: dir, files: { long: sourceName } },
+    [{
+      key: "long",
+      name: sourceName,
+      note: null,
+      markup: { v: 1, strokes: [{ c: "#ef4444", w: 0.04, p: [[0.1, 0.5], [0.9, 0.5]] }], notes: {} },
+    }],
+    "Khach-chon",
+    { sharp },
+  );
+
+  assert.ok(fs.existsSync(path.join(result.dest, "Khách note màu", compositeName)));
 });
 
 test("markup export failure does not prevent picked files or the pick list from being written", async () => {

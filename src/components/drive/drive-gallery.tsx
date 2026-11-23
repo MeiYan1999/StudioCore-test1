@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDownAZ,
   ArrowUpAZ,
@@ -52,6 +52,17 @@ const PAGE_SIZE = 120;
 type GalleryTab = "all" | "picked" | "notes";
 type LightboxAction = "view" | "note" | "drawing";
 
+function restoreSiteTheme() {
+  let stored = "system";
+  try {
+    stored = window.localStorage.getItem("studiocore-theme") || "system";
+  } catch {
+    stored = "system";
+  }
+  const dark = stored === "dark" || (stored !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  document.documentElement.classList.toggle("dark", dark);
+}
+
 export function DriveGallery(props: Props) {
   const { slug, kind, maxSelect, allowOriginal } = props;
   const base = `/api/drive/s/${encodeURIComponent(slug)}`;
@@ -78,6 +89,8 @@ export function DriveGallery(props: Props) {
   const [downloadsBusy, setDownloadsBusy] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const filmstripCurrentRef = useRef<HTMLButtonElement>(null);
+  const lightboxRef = useRef<HTMLDivElement>(null);
+  const lightboxOpenerRef = useRef<HTMLElement | null>(null);
 
   const selecting = kind === "select";
   const downloadAllowed = selecting ? allowOriginal : true;
@@ -95,6 +108,7 @@ export function DriveGallery(props: Props) {
   const openIndex = openId ? list.findIndex((f) => f.id === openId) : -1;
   const openFile = openIndex >= 0 ? list[openIndex] : null;
   const openFileId = openFile?.id ?? "";
+  const isLightboxOpen = openFile !== null;
   const photoCodes = useMemo(
     () => files.filter((file) => file.picked).map((file) => file.name.replace(/\.[^.]+$/, "")),
     [files],
@@ -117,22 +131,37 @@ export function DriveGallery(props: Props) {
     anchor.remove();
   }
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    const root = document.documentElement;
     let savedTheme: string | null = null;
     try {
       savedTheme = window.localStorage.getItem("studiocore-drive-gallery-theme");
-    } catch {
-      return;
-    }
-    if (savedTheme === "dark") {
+    } catch {}
+    const dark = savedTheme === "dark";
+    root.classList.toggle("dark", dark);
+    if (dark) {
       const timeout = window.setTimeout(() => setTheme("dark"), 0);
-      return () => window.clearTimeout(timeout);
+      return () => {
+        window.clearTimeout(timeout);
+        restoreSiteTheme();
+      };
     }
+    return restoreSiteTheme;
   }, []);
 
   useEffect(() => {
     filmstripCurrentRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
   }, [openFileId, showFilmstrip]);
+
+  useEffect(() => {
+    if (isLightboxOpen) {
+      lightboxRef.current?.focus();
+      return;
+    }
+    const opener = lightboxOpenerRef.current;
+    if (opener?.isConnected) opener.focus();
+    lightboxOpenerRef.current = null;
+  }, [isLightboxOpen]);
 
   useEffect(() => {
     const updateFullscreen = () => setFullscreen(Boolean(document.fullscreenElement));
@@ -142,6 +171,8 @@ export function DriveGallery(props: Props) {
 
   function openLightbox(fileId: string, action: LightboxAction = "view") {
     const target = files.find((file) => file.id === fileId);
+    lightboxOpenerRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setOpenId(fileId);
     setPhotoNote(target?.note ?? "");
     setNotePanelOpen(action === "note");
@@ -190,9 +221,11 @@ export function DriveGallery(props: Props) {
     try {
       for (const [index, file] of downloadFiles.entries()) {
         downloadFile(file);
-        if (index < downloadFiles.length - 1) await new Promise((resolve) => window.setTimeout(resolve, 250));
+        if (index < downloadFiles.length - 1) await new Promise((resolve) => window.setTimeout(resolve, 500));
       }
-      toast.success(`Đang tải ${downloadFiles.length} ảnh.`);
+      toast.success(
+        `Đã bắt đầu tải ${downloadFiles.length} tệp. Nếu trình duyệt hỏi, hãy bấm Cho phép tải nhiều tệp.`,
+      );
     } finally {
       setDownloadsBusy(false);
     }
@@ -215,6 +248,7 @@ export function DriveGallery(props: Props) {
   function toggleTheme() {
     const next = theme === "dark" ? "light" : "dark";
     setTheme(next);
+    document.documentElement.classList.toggle("dark", next === "dark");
     try {
       window.localStorage.setItem("studiocore-drive-gallery-theme", next);
     } catch {
@@ -279,21 +313,56 @@ export function DriveGallery(props: Props) {
     [base, maxSelect, pickedCount, selecting, submitted],
   );
 
-  const move = useCallback(
-    (delta: number) => {
-      if (openIndex < 0) return;
-      const target = list[openIndex + delta];
-      if (target) {
-        setOpenId(target.id);
-        setPhotoNote(target.note ?? "");
-        setNotePanelOpen(false);
-        setInfoOpen(false);
-        setDrawingActive(false);
-        setInitialDrawingId(null);
+  const savePhotoNote = useCallback(
+    async (fileId: string, text: string): Promise<boolean> => {
+      try {
+        const response = await fetch(`${base}/pick`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ fileId, note: text }),
+        });
+        const data = (await response.json().catch(() => null)) as
+          | { error?: string; note?: string | null; picked?: boolean }
+          | null;
+        if (!response.ok || !data) throw new Error(data?.error ?? "Không lưu được ghi chú.");
+        setFiles((current) =>
+          current.map((file) =>
+            file.id === fileId ? { ...file, picked: data.picked ?? file.picked, note: data.note ?? null } : file,
+          ),
+        );
+        setPhotoNote(data.note ?? "");
+        toast.success("Đã lưu ghi chú cho ảnh.");
+        return true;
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Không lưu được ghi chú.");
+        return false;
       }
     },
-    [list, openIndex],
+    [base],
   );
+
+  const move = useCallback(
+    async (delta: number) => {
+      if (openIndex < 0) return;
+      const target = list[openIndex + delta];
+      if (!target || !openFile || target.id === openFile.id) return;
+      if (photoNote !== (openFile.note ?? "") && !(await savePhotoNote(openFile.id, photoNote))) return;
+      setOpenId(target.id);
+      setPhotoNote(target.note ?? "");
+      setNotePanelOpen(false);
+      setInfoOpen(false);
+      setDrawingActive(false);
+      setInitialDrawingId(null);
+    },
+    [list, openFile, openIndex, photoNote, savePhotoNote],
+  );
+
+  const closeLightbox = useCallback(async () => {
+    if (openFile && photoNote !== (openFile.note ?? "") && !(await savePhotoNote(openFile.id, photoNote))) return;
+    setOpenId(null);
+    setNotePanelOpen(false);
+    setDrawingActive(false);
+  }, [openFile, photoNote, savePhotoNote]);
 
   useEffect(() => {
     if (!openFile) return;
@@ -305,7 +374,7 @@ export function DriveGallery(props: Props) {
       ) {
         return;
       }
-      if (event.key === "Escape") setOpenId(null);
+      if (event.key === "Escape") void closeLightbox();
       else if (event.key === "ArrowRight") move(1);
       else if (event.key === "ArrowLeft") move(-1);
       else if (event.key === " " && selecting) {
@@ -315,32 +384,7 @@ export function DriveGallery(props: Props) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [openFile, move, selecting, togglePick]);
-
-  async function savePhotoNote(fileId: string, text: string): Promise<boolean> {
-    try {
-      const response = await fetch(`${base}/pick`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fileId, note: text }),
-      });
-      const data = (await response.json().catch(() => null)) as
-        | { error?: string; note?: string | null; picked?: boolean }
-        | null;
-      if (!response.ok || !data) throw new Error(data?.error ?? "Không lưu được ghi chú.");
-      setFiles((current) =>
-        current.map((file) =>
-          file.id === fileId ? { ...file, picked: data.picked ?? file.picked, note: data.note ?? null } : file,
-        ),
-      );
-      setPhotoNote(data.note ?? "");
-      toast.success("Đã lưu ghi chú cho ảnh.");
-      return true;
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Không lưu được ghi chú.");
-      return false;
-    }
-  }
+  }, [openFile, closeLightbox, move, selecting, togglePick]);
 
   async function saveMarkup(fileId: string, markup: DriveMarkup): Promise<boolean> {
     try {
@@ -388,14 +432,7 @@ export function DriveGallery(props: Props) {
 
   return (
     <main
-      className={cn(
-        "min-h-screen pb-28 transition-colors",
-        theme === "dark" ? "dark bg-neutral-950 text-neutral-100" : "bg-[#f3f4f6] text-slate-900",
-      )}
-      style={{
-        backgroundColor: theme === "dark" ? "#0a0a0a" : "#f3f4f6",
-        color: theme === "dark" ? "#f5f5f5" : "#0f172a",
-      }}
+      className="min-h-screen bg-[#f3f4f6] pb-28 text-slate-900 transition-colors dark:bg-neutral-950 dark:text-neutral-100"
     >
       <header className="border-b border-slate-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
         <div className="mx-auto flex max-w-[1040px] flex-wrap items-center gap-3 px-4 py-3">
@@ -803,7 +840,14 @@ export function DriveGallery(props: Props) {
       ) : null}
 
       {openFile ? (
-        <div className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-black text-white" role="dialog" aria-modal="true" aria-label={openFile.name}>
+        <div
+          ref={lightboxRef}
+          tabIndex={-1}
+          className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-black text-white"
+          role="dialog"
+          aria-modal="true"
+          aria-label={openFile.name}
+        >
           <header className="relative z-10 flex shrink-0 items-center justify-between gap-2 px-3 py-3 sm:px-5">
             <div className="flex min-w-0 items-center gap-2">
               <span className="shrink-0 rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium">
@@ -855,7 +899,7 @@ export function DriveGallery(props: Props) {
               </button>
               <button
                 type="button"
-                onClick={() => setOpenId(null)}
+                onClick={() => void closeLightbox()}
                 aria-label="Đóng"
                 className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white/10 hover:bg-white/20"
               >
@@ -879,9 +923,14 @@ export function DriveGallery(props: Props) {
             ) : null}
           </header>
 
-          <div className="relative min-h-0 flex-1">
-            {openFile.kind === "video" ? (
-              <div className="absolute inset-0 flex items-center justify-center px-10 pb-2">
+            <div className="relative min-h-0 flex-1">
+              {openFile.kind === "video" ? (
+              <div
+                className={cn(
+                  "absolute inset-x-0 top-0 flex items-center justify-center px-10",
+                  "bottom-24 sm:bottom-0",
+                )}
+              >
                 <video
                   key={openFile.id}
                   src={fileUrl(openFile.id, "preview")}
