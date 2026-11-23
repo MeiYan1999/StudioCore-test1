@@ -20,6 +20,7 @@ const {
   shell,
 } = require("electron");
 const { DriveAgent } = require("./src/core/agent");
+const { FaceEngine, FaceIndexer } = require("./src/core/faces");
 const { normalizeServerUrl } = require("./src/core/api");
 const { ImageCache } = require("./src/core/images");
 const { safeFolderName } = require("./src/core/picks");
@@ -358,6 +359,7 @@ function registerIpc() {
       pin: str(p.pin, 12),
       maxSelect: Number(p.maxSelect) || 0,
       allowOriginal: p.allowOriginal === true,
+      faceSearch: p.faceSearch === true,
       expiresInDays: Number(p.expiresInDays) || 0,
     });
     clipboard.writeText(result.url);
@@ -371,6 +373,7 @@ function registerIpc() {
     if (typeof p.pin === "string" || p.pin === null) patch.pin = p.pin;
     if (p.expiresInDays !== undefined) patch.expiresInDays = Number(p.expiresInDays) || null;
     if (p.maxSelect !== undefined) patch.maxSelect = Number(p.maxSelect) || 0;
+    if (typeof p.faceSearch === "boolean") patch.faceSearch = p.faceSearch;
     return agent.updateShare(str(p.id, 64), patch);
   });
   handle("delete-share", (id) => agent.deleteShare(str(id, 64)));
@@ -508,13 +511,20 @@ function init() {
     }
   }
   cleanupMacLoginItemsAtStartup();
+  const images = new ImageCache(path.join(app.getPath("userData"), "cache"), { fallback: osThumbnail });
   agent = new DriveAgent({
     store,
-    images: new ImageCache(path.join(app.getPath("userData"), "cache"), { fallback: osThumbnail }),
+    images,
+    faceIndexer: new FaceIndexer({
+      engine: new FaceEngine(),
+      images,
+      cacheDir: path.join(app.getPath("userData"), "face-descriptors"),
+    }),
     appVersion: app.getVersion(),
   });
   applyKeepAwake();
   agent.on("status", (payload) => win && win.webContents.send("drive:status", payload));
+  agent.on("faceIndex", (payload) => win && win.webContents.send("drive:face-index", payload));
   agent.on("submission", ({ share, copied }) => {
     if (win) win.webContents.send("drive:submission", { id: share.id });
     if (Notification.isSupported()) {

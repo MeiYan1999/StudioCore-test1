@@ -46,10 +46,11 @@ function parseRange(header, size) {
  * qua máy chủ StudioCore và xử lý lựa chọn của khách. Không phụ thuộc Electron.
  */
 class DriveAgent extends EventEmitter {
-  constructor({ store, images, appVersion }) {
+  constructor({ store, images, appVersion, faceIndexer }) {
     super();
     this.store = store;
     this.images = images;
+    this.faceIndexer = faceIndexer || null;
     this.appVersion = appVersion || "";
     this.status = "idle";
     this.abort = null;
@@ -60,6 +61,10 @@ class DriveAgent extends EventEmitter {
     this.lastPendingExportRetryAt = 0;
     this.exportingShares = new Set();
     this.remoteShares = [];
+    this.faceIndexTasks = new Map();
+    if (this.faceIndexer) {
+      this.faceIndexer.on("progress", (progress) => this.emit("faceIndex", progress));
+    }
   }
 
   get paired() {
@@ -132,11 +137,73 @@ class DriveAgent extends EventEmitter {
     if (this.abort || !this.paired) return;
     this.abort = new AbortController();
     void this.loop(this.abort.signal);
+    void this.indexExistingFaceShares(this.abort.signal);
   }
 
   stop() {
     this.abort?.abort();
     this.abort = null;
+    const stopping = this.faceIndexer?.stop();
+    if (stopping?.catch) void stopping.catch(() => undefined);
+  }
+
+  async indexExistingFaceShares(signal) {
+    try {
+      const { shares } = await this.client().listShares();
+      this.remoteShares = shares || [];
+      for (const remote of this.remoteShares) {
+        if (signal.aborted) return;
+        try {
+          const local = this.store.getShare(remote.id);
+          if (!local) continue;
+          const faceSearch = remote.faceSearch === true;
+          if (local.faceSearch !== faceSearch) this.store.setShare(remote.id, { ...local, faceSearch });
+          if (faceSearch) await this.indexLocalFaceShare(remote.id, signal);
+        } catch {
+          continue;
+        }
+      }
+    } catch {
+      // Indexing is retried the next time the agent starts or the share is refreshed.
+    }
+  }
+
+  async indexFaceFiles(shareId, files, signal) {
+    if (!this.faceIndexer) return;
+    const previous = this.faceIndexTasks.get(shareId);
+    if (previous) {
+      this.faceIndexer.cancelShare(shareId);
+      await previous.catch(() => undefined);
+    }
+    const share = this.store.getShare(shareId);
+    if (!share?.folder) return;
+    const indexedFiles = files.map((file) => ({
+      ...file,
+      path: path.join(share.folder, file.rel),
+    }));
+    const task = this.faceIndexer.indexShare(
+      shareId,
+      indexedFiles,
+      (id, batch) => this.client().setFaces(id, batch),
+      signal,
+    );
+    this.faceIndexTasks.set(shareId, task);
+    try {
+      await task;
+    } finally {
+      if (this.faceIndexTasks.get(shareId) === task) this.faceIndexTasks.delete(shareId);
+    }
+  }
+
+  async indexLocalFaceShare(shareId, signal) {
+    const share = this.store.getShare(shareId);
+    if (!share || !share.faceSearch) return;
+    const files = await scanFolder(share.folder, share.salt, {
+      skipDirs: [this.store.get("picksFolderName")],
+      includeAllFiles: share.includeAllFiles === true,
+    });
+    if (signal?.aborted) return;
+    await this.indexFaceFiles(shareId, files, signal);
   }
 
   async loop(signal) {
@@ -344,6 +411,7 @@ class DriveAgent extends EventEmitter {
       pin: options.pin || null,
       maxSelect: Number(options.maxSelect) || 0,
       allowOriginal: !!options.allowOriginal,
+      faceSearch: options.faceSearch === true,
       expiresInDays: Number(options.expiresInDays) || null,
       files: files.map(({ key, name, kind, size }) => ({ key, name, kind, size })),
     });
@@ -352,7 +420,11 @@ class DriveAgent extends EventEmitter {
       salt,
       files: Object.fromEntries(files.map((f) => [f.key, f.rel])),
       includeAllFiles,
+      faceSearch: options.faceSearch === true,
     });
+    if (options.faceSearch === true) {
+      void this.indexFaceFiles(result.id, files).catch(() => undefined);
+    }
     return { id: result.id, url: result.url, count: files.length };
   }
 
@@ -369,20 +441,38 @@ class DriveAgent extends EventEmitter {
     }
     await this.client().replaceFiles(shareId, files.map(({ key, name, kind, size }) => ({ key, name, kind, size })));
     this.store.setShare(shareId, { ...share, files: Object.fromEntries(files.map((f) => [f.key, f.rel])) });
+    if (share.faceSearch) void this.indexFaceFiles(shareId, files).catch(() => undefined);
     return { count: files.length };
   }
 
   async listShares() {
     const { shares } = await this.client().listShares();
     this.remoteShares = shares || [];
+    for (const remote of this.remoteShares) {
+      const local = this.store.getShare(remote.id);
+      if (!local) continue;
+      const faceSearch = remote.faceSearch === true;
+      if (local.faceSearch === faceSearch) continue;
+      this.store.setShare(remote.id, { ...local, faceSearch });
+      if (faceSearch) void this.indexLocalFaceShare(remote.id).catch(() => undefined);
+      else this.faceIndexer?.cancelShare(remote.id);
+    }
     return this.remoteShares.map((s) => {
       const local = this.store.getShare(s.id);
       return { ...s, folder: local ? local.folder : null, folderName: local ? path.basename(local.folder) : null };
     });
   }
 
-  updateShare(shareId, patch) {
-    return this.client().updateShare(shareId, patch);
+  async updateShare(shareId, patch) {
+    const result = await this.client().updateShare(shareId, patch);
+    const local = this.store.getShare(shareId);
+    if (local && typeof patch.faceSearch === "boolean" && local.faceSearch !== patch.faceSearch) {
+      const updated = { ...local, faceSearch: patch.faceSearch };
+      this.store.setShare(shareId, updated);
+      if (patch.faceSearch) void this.indexLocalFaceShare(shareId).catch(() => undefined);
+      else this.faceIndexer?.cancelShare(shareId);
+    }
+    return result;
   }
 
   async deleteShare(shareId) {

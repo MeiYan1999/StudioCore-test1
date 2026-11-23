@@ -11,6 +11,8 @@ let currentIncludeAllFiles = false;
 let toastTimer = null;
 let queuedShareRequest = null;
 let shareMessageEdited = false;
+let renderedShares = [];
+const faceProgress = new Map();
 
 const STATUS_TEXT = {
   idle: "Chưa kết nối",
@@ -91,6 +93,7 @@ function button(label, onClick, className) {
 }
 
 function renderShares(shares) {
+  renderedShares = shares;
   const list = $("shares");
   list.replaceChildren();
   $("empty").hidden = shares.length > 0;
@@ -115,6 +118,10 @@ function renderShares(shares) {
       share.folderName ? `thư mục: ${share.folderName}` : "tạo từ máy khác",
     ].filter(Boolean);
     item.append(el("div", "muted", meta.join(" · ")));
+    const progress = faceProgress.get(share.id);
+    if (share.faceSearch && progress) {
+      item.append(el("div", "muted", `Đang quét khuôn mặt ${progress.done}/${progress.total}`));
+    }
     item.append(el("div", "share-url", share.url));
     if (share.submissionNote) item.append(el("div", "muted", `Lời nhắn: ${share.submissionNote}`));
 
@@ -129,6 +136,10 @@ function renderShares(shares) {
     if (share.folder) {
       actions.append(
         button("Mở thư mục", () => call("openFolder", share.id)),
+        button(share.faceSearch ? "Tắt tìm khuôn mặt" : "Bật tìm khuôn mặt", async () => {
+          await call("updateShare", { id: share.id, faceSearch: !share.faceSearch });
+          await refresh();
+        }),
         button("Quét lại", async () => {
           const result = await call("rescanShare", share.id);
           toast(`Đã cập nhật ${result.count} tệp.`);
@@ -219,6 +230,7 @@ async function openShareDialog(request) {
     $("share-title").value = info.name;
     $("share-client").value = "";
     $("share-pin").value = "";
+    $("share-faces").checked = false;
     shareMessageEdited = false;
     $("share-message").value = "";
     showError("share-error", "");
@@ -282,6 +294,7 @@ $("share-form").addEventListener("submit", async (event) => {
       pin: $("share-pin").value,
       maxSelect: Number($("share-max").value),
       allowOriginal: $("share-original").checked,
+      faceSearch: $("share-faces").checked,
       expiresInDays: Number($("share-days").value),
     });
     $("dlg-share").close();
@@ -366,6 +379,11 @@ bridge.on("status", ({ status }) => {
 });
 bridge.on("submission", () => void refresh());
 bridge.on("share-request", handleShareRequest);
+bridge.on("face-index", ({ shareId, done, total }) => {
+  if (done >= total) faceProgress.delete(shareId);
+  else faceProgress.set(shareId, { done, total });
+  if (done === 0 || done >= total || done % 10 === 0) renderShares(renderedShares);
+});
 
 setInterval(() => {
   if (state && state.paired && !document.hidden) void refresh();

@@ -14,6 +14,9 @@
     "dist:mac": "electron-builder --config electron-builder.config.js --mac dmg --x64 --arm64 --publish never"
   },
   "dependencies": {
+    "@tensorflow/tfjs": "4.22.0",
+    "@tensorflow/tfjs-backend-wasm": "4.22.0",
+    "@vladmandic/face-api": "1.7.15",
     "sharp": "0.35.5"
   },
   "devDependencies": {
@@ -34,11 +37,23 @@
       "renderer/**/*",
       "assets/icon.png",
       "assets/tray.png",
-      "assets/mac-quick-action/**/*"
+      "assets/mac-quick-action/**/*",
+      "node_modules/@vladmandic/face-api/**/*",
+      "node_modules/@tensorflow/tfjs/**/*",
+      "node_modules/@tensorflow/tfjs-backend-wasm/**/*"
     ],
     "asarUnpack": [
       "node_modules/sharp/**/*",
-      "node_modules/@img/**/*"
+      "node_modules/@img/**/*",
+      "node_modules/@vladmandic/face-api/dist/face-api.node-wasm.js",
+      "node_modules/@tensorflow/tfjs-backend-wasm/dist/*.wasm"
+    ],
+    "extraResources": [
+      {
+        "from": "../public/drive-face-models",
+        "to": "drive-face-models",
+        "filter": ["*.json", "*.bin"]
+      }
     ],
     "win": {
       "icon": "assets/icon.png"

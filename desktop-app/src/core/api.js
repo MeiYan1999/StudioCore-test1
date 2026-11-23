@@ -129,6 +129,9 @@ class ApiClient {
   replaceFiles(id, files) {
     return this.json("PUT", `/api/drive/agent/shares/${encodeURIComponent(id)}`, { files }, { timeoutMs: 120000 });
   }
+  setFaces(id, files) {
+    return this.json("PUT", `/api/drive/agent/shares/${encodeURIComponent(id)}/faces`, { files }, { timeoutMs: 120000 });
+  }
   deleteShare(id) {
     return this.json("DELETE", `/api/drive/agent/shares/${encodeURIComponent(id)}`);
   }

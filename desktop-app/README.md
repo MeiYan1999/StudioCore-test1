@@ -18,6 +18,10 @@ chọn ảnh và tải file. Ảnh gốc nằm trên máy studio; máy chủ Stu
 Trên macOS, Quick Action được cài tại `~/Library/Services` và không bị gỡ khi kéo ứng dụng vào Thùng rác. Hãy tắt
 mục này trong Cài đặt trước khi xóa ứng dụng hoặc tự xóa các workflow `~/Library/Services/StudioCore Drive – *.workflow`.
 
+## Thành phần bên thứ ba
+
+`@vladmandic/face-api` 1.7.15 dùng giấy phép MIT; các mô hình SSD MobileNet v1, Face Landmark 68 và Face Recognition đi kèm nằm trong phạm vi giấy phép `LICENSE` của gói (không có tệp giấy phép mô hình riêng trong npm package). TensorFlow.js và WASM backend 4.22.0 dùng giấy phép Apache-2.0.
+
 ## Bảo mật
 
 - Không mở cổng mạng nào trên máy: giao diện là cửa sổ Electron tải tệp đóng gói sẵn, giao tiếp qua IPC.
