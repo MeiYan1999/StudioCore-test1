@@ -892,6 +892,64 @@ test("exports customer markup as a correctly sized composite JPEG", async () => 
   ));
 });
 
+test("resubmitting customer markup replaces the existing composite", async () => {
+  const sharp = require("sharp");
+  const dir = tmp();
+  const source = path.join(dir, "photo.jpg");
+  await sharp({ create: { width: 100, height: 50, channels: 3, background: { r: 0, g: 0, b: 0 } } })
+    .jpeg()
+    .toFile(source);
+  const share = { folder: dir, files: { photo: "photo.jpg" } };
+  const pick = (color) => ({
+    key: "photo",
+    name: "photo.jpg",
+    note: null,
+    markup: { v: 1, strokes: [{ c: color, w: 0.08, p: [[0.1, 0.5], [0.9, 0.5]] }], notes: {} },
+  });
+  const output = path.join(dir, "Khach-chon", "Khách note màu", "photo.jpg");
+
+  await copyPicks(share, [pick("#ef4444")], "Khach-chon", { sharp });
+  await copyPicks(share, [pick("#3b82f6")], "Khach-chon", { sharp });
+
+  const { data, info } = await sharp(output).raw().toBuffer({ resolveWithObject: true });
+  const pixel = (25 * info.width + 50) * info.channels;
+  assert.ok(data[pixel] < 140);
+  assert.ok(data[pixel + 2] > 150);
+});
+
+test("same-stem customer markup exports get distinct composite names", async () => {
+  const sharp = require("sharp");
+  const dir = tmp();
+  const image = await sharp({
+    create: { width: 100, height: 50, channels: 3, background: { r: 0, g: 0, b: 0 } },
+  })
+    .jpeg()
+    .toBuffer();
+  fs.writeFileSync(path.join(dir, "a.jpg"), image);
+  fs.writeFileSync(path.join(dir, "a.png"), image);
+
+  const result = await copyPicks(
+    { folder: dir, files: { jpg: "a.jpg", png: "a.png" } },
+    ["jpg", "png"].map((key, index) => ({
+      key,
+      name: `a.${index ? "png" : "jpg"}`,
+      note: null,
+      markup: {
+        v: 1,
+        strokes: [{ c: index ? "#3b82f6" : "#ef4444", w: 0.04, p: [[0.1, 0.5], [0.9, 0.5]] }],
+        notes: {},
+      },
+    })),
+    "Khach-chon",
+    { sharp },
+  );
+
+  const markupDir = path.join(result.dest, "Khách note màu");
+  assert.deepEqual(fs.readdirSync(markupDir).sort(), ["a (png).jpg", "a.jpg"]);
+  assert.ok(fs.statSync(path.join(markupDir, "a.jpg")).size > 0);
+  assert.ok(fs.statSync(path.join(markupDir, "a (png).jpg")).size > 0);
+});
+
 test("markup export failure does not prevent picked files or the pick list from being written", async () => {
   const dir = tmp();
   fs.writeFileSync(path.join(dir, "unreadable.jpg"), "not a decodable image");

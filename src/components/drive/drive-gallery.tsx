@@ -78,10 +78,25 @@ export function DriveGallery(props: Props) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ fileId: file.id, picked: next }),
         });
-        if (!response.ok) {
-          const data = (await response.json().catch(() => null)) as { error?: string } | null;
+        const data = (await response.json().catch(() => null)) as
+          | { error?: string; picked?: boolean; note?: string | null; markup?: DriveMarkup | null }
+          | null;
+        if (!response.ok || !data || typeof data.picked !== "boolean") {
           throw new Error(data?.error ?? "Không lưu được lựa chọn.");
         }
+        const picked = data.picked;
+        setFiles((current) =>
+          current.map((currentFile) =>
+            currentFile.id === file.id
+              ? {
+                  ...currentFile,
+                  picked,
+                  note: data.note ?? null,
+                  markup: data.markup ?? null,
+                }
+              : currentFile,
+          ),
+        );
       } catch (error) {
         setFiles((current) => current.map((f) => (f.id === file.id ? { ...f, picked: !next } : f)));
         toast.error(error instanceof Error ? error.message : "Không lưu được lựa chọn.");
@@ -104,8 +119,8 @@ export function DriveGallery(props: Props) {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target;
       if (
-        target instanceof HTMLElement &&
-        (target.isContentEditable || target.tagName === "INPUT" || target.tagName === "TEXTAREA")
+        target instanceof Element &&
+        target.closest("button, input, textarea, select, [contenteditable], [data-drive-markup-editor]")
       ) {
         return;
       }

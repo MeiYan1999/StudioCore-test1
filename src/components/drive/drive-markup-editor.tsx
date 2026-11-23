@@ -5,6 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
   DRIVE_MARKUP_PALETTE,
+  MAX_POINTS,
+  MAX_SERIALIZED_BYTES,
+  MAX_STROKES,
   type DriveMarkup,
   type DriveMarkupColor,
   type DriveMarkupStroke,
@@ -17,6 +20,9 @@ type Props = {
   editable: boolean;
   onSave: (markup: DriveMarkup) => Promise<boolean>;
 };
+
+const DRAW_LIMIT_MESSAGE = "Đã đạt giới hạn nét vẽ, hãy lưu hoặc tẩy bớt.";
+const SIZE_LIMIT_MESSAGE = "Bản vẽ vượt quá giới hạn 64 KB. Hãy tẩy bớt nét vẽ hoặc rút ngắn ghi chú.";
 
 function pointSegmentDistance(point: [number, number], start: [number, number], end: [number, number]): number {
   const dx = end[0] - start[0];
@@ -52,11 +58,13 @@ export function DriveMarkupEditor({ fileName, imageUrl, markup, editable, onSave
   const [brushWidth, setBrushWidth] = useState(0.012);
   const [erasing, setErasing] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [limitMessage, setLimitMessage] = useState("");
   const [imageSize, setImageSize] = useState<{ width: number; height: number } | null>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
 
   const usedColors = [...new Set(draft.strokes.map((stroke) => stroke.c))];
+  const pointCount = draft.strokes.reduce((total, stroke) => total + stroke.p.length, 0);
 
   useEffect(() => {
     const stage = stageRef.current;
@@ -90,6 +98,7 @@ export function DriveMarkupEditor({ fileName, imageUrl, markup, editable, onSave
     setUndoStack([...undoStack, draft.strokes]);
     setRedoStack([]);
     setDraft({ ...draft, strokes });
+    setLimitMessage("");
   }
 
   function normalizedPoint(event: PointerEvent<SVGSVGElement>): [number, number] {
@@ -108,7 +117,11 @@ export function DriveMarkupEditor({ fileName, imageUrl, markup, editable, onSave
       if (strokes.length !== draft.strokes.length) commitStrokes(strokes);
       return;
     }
-    if (draft.strokes.length >= 200) return;
+    if (draft.strokes.length >= MAX_STROKES || pointCount >= MAX_POINTS) {
+      setLimitMessage(DRAW_LIMIT_MESSAGE);
+      return;
+    }
+    setLimitMessage("");
     pointerId.current = event.pointerId;
     event.currentTarget.setPointerCapture(event.pointerId);
     const stroke = { c: color, w: brushWidth, p: [nextPoint] };
@@ -120,9 +133,14 @@ export function DriveMarkupEditor({ fileName, imageUrl, markup, editable, onSave
     if (!drawing || pointerId.current !== event.pointerId) return;
     const nextPoint = normalizedPoint(event);
     const current = activeStrokeRef.current;
-    if (!current || current.p.length >= 6000) return;
+    if (!current) return;
     const previous = current.p[current.p.length - 1];
-    if (Math.hypot(nextPoint[0] - previous[0], nextPoint[1] - previous[1]) < 0.001) return;
+    if (Math.hypot(nextPoint[0] - previous[0], nextPoint[1] - previous[1]) < 0.002) return;
+    if (pointCount + current.p.length >= MAX_POINTS) {
+      setLimitMessage(DRAW_LIMIT_MESSAGE);
+      return;
+    }
+    setLimitMessage("");
     const stroke = { ...current, p: [...current.p, nextPoint] };
     activeStrokeRef.current = stroke;
     setActiveStroke(stroke);
@@ -143,6 +161,7 @@ export function DriveMarkupEditor({ fileName, imageUrl, markup, editable, onSave
   function undo() {
     const previous = undoStack[undoStack.length - 1];
     if (!previous) return;
+    setLimitMessage("");
     setUndoStack(undoStack.slice(0, -1));
     setRedoStack([draft.strokes, ...redoStack]);
     setDraft({ ...draft, strokes: previous });
@@ -151,21 +170,28 @@ export function DriveMarkupEditor({ fileName, imageUrl, markup, editable, onSave
   function redo() {
     const next = redoStack[0];
     if (!next) return;
+    setLimitMessage("");
     setRedoStack(redoStack.slice(1));
     setUndoStack([...undoStack, draft.strokes]);
     setDraft({ ...draft, strokes: next });
   }
 
   async function save() {
-    setBusy(true);
     const notes = Object.fromEntries(
       usedColors.flatMap((usedColor) => {
         const text = draft.notes[usedColor]?.slice(0, 200) ?? "";
         return text ? [[usedColor, text]] : [];
       }),
     ) as DriveMarkup["notes"];
+    const nextMarkup: DriveMarkup = { v: 1, strokes: draft.strokes, notes };
+    if (new TextEncoder().encode(JSON.stringify(nextMarkup)).byteLength > MAX_SERIALIZED_BYTES) {
+      setLimitMessage(SIZE_LIMIT_MESSAGE);
+      return;
+    }
+    setLimitMessage("");
+    setBusy(true);
     try {
-      if (await onSave({ v: 1, strokes: draft.strokes, notes })) setDrawing(false);
+      if (await onSave(nextMarkup)) setDrawing(false);
     } finally {
       setBusy(false);
     }
@@ -182,7 +208,7 @@ export function DriveMarkupEditor({ fileName, imageUrl, markup, editable, onSave
   const visibleStrokes = drawing ? [...draft.strokes, ...(activeStroke ? [activeStroke] : [])] : markup?.strokes ?? [];
 
   return (
-    <div className="flex min-h-0 w-full flex-1 flex-col">
+    <div data-drive-markup-editor className="flex min-h-0 w-full flex-1 flex-col">
       {editable || markup ? (
         <div className="flex flex-wrap items-center justify-center gap-2 py-2">
           {editable && !drawing ? (
@@ -247,7 +273,7 @@ export function DriveMarkupEditor({ fileName, imageUrl, markup, editable, onSave
         </div>
       ) : null}
       {drawing && usedColors.length > 0 ? (
-        <div className="mx-auto grid w-full max-w-3xl gap-2 px-3 pb-2 sm:grid-cols-2">
+        <div className="mx-auto grid max-h-[22vh] w-full max-w-3xl gap-2 overflow-y-auto px-3 pb-2 sm:grid-cols-2">
           {usedColors.map((usedColor) => {
             const name = DRIVE_MARKUP_PALETTE.find((entry) => entry.color === usedColor)?.name ?? "";
             const noteId = `drive-markup-note-${usedColor.slice(1)}`;
@@ -281,7 +307,12 @@ export function DriveMarkupEditor({ fileName, imageUrl, markup, editable, onSave
           })}
         </div>
       ) : null}
-      <div ref={stageRef} className="relative flex min-h-0 flex-1 items-center justify-center">
+      {drawing && limitMessage ? (
+        <p role="status" className="px-3 pb-1 text-center text-xs text-amber-200">
+          {limitMessage}
+        </p>
+      ) : null}
+      <div ref={stageRef} className="relative flex min-h-[180px] flex-1 items-center justify-center">
         <div
           className="relative shrink-0"
           style={imageSize ?? { width: 0, height: 0 }}
