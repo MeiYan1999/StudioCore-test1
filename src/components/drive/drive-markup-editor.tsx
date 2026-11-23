@@ -250,22 +250,33 @@ export function DriveMarkupEditor({ fileName, imageUrl, markup, editable, onSave
         <div className="mx-auto grid w-full max-w-3xl gap-2 px-3 pb-2 sm:grid-cols-2">
           {usedColors.map((usedColor) => {
             const name = DRIVE_MARKUP_PALETTE.find((entry) => entry.color === usedColor)?.name ?? "";
+            const noteId = `drive-markup-note-${usedColor.slice(1)}`;
             return (
-              <Textarea
-                key={usedColor}
-                value={draft.notes[usedColor] ?? ""}
-                onChange={(event) =>
-                  setDraft({
-                    ...draft,
-                    notes: { ...draft.notes, [usedColor]: event.target.value.slice(0, 200) },
-                  })
-                }
-                maxLength={200}
-                rows={2}
-                placeholder={`Ghi chú cho màu ${name}…`}
-                aria-label={`Ghi chú cho màu ${name}`}
-                className="min-h-12 border-white/20 bg-white/10 text-xs text-white placeholder:text-white/50"
-              />
+              <div key={usedColor} className="min-w-0">
+                <label htmlFor={noteId} className="mb-1 flex items-center gap-2 text-xs font-medium">
+                  <span
+                    aria-hidden
+                    className="h-2.5 w-2.5 rounded-full border border-white/50"
+                    style={{ backgroundColor: usedColor }}
+                  />
+                  Màu {name}
+                </label>
+                <Textarea
+                  id={noteId}
+                  value={draft.notes[usedColor] ?? ""}
+                  onChange={(event) =>
+                    setDraft({
+                      ...draft,
+                      notes: { ...draft.notes, [usedColor]: event.target.value.slice(0, 200) },
+                    })
+                  }
+                  maxLength={200}
+                  rows={2}
+                  placeholder={`Ghi chú cho màu ${name}…`}
+                  aria-label={`Ghi chú cho màu ${name}`}
+                  className="min-h-12 border-white/20 bg-white/10 text-xs text-white placeholder:text-white/50"
+                />
+              </div>
             );
           })}
         </div>

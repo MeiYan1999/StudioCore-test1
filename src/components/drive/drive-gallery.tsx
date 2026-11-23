@@ -375,7 +375,7 @@ export function DriveGallery(props: Props) {
       ) : null}
 
       {openFile ? (
-        <div className="fixed inset-0 z-50 flex flex-col bg-black/95 text-white" role="dialog" aria-modal="true" aria-label={openFile.name}>
+        <div className="fixed inset-0 z-50 flex flex-col bg-black text-white" role="dialog" aria-modal="true" aria-label={openFile.name}>
           <div className="flex items-center gap-3 px-4 py-3">
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium">{openFile.name}</p>
