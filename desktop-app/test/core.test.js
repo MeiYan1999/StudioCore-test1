@@ -891,3 +891,23 @@ test("exports customer markup as a correctly sized composite JPEG", async () => 
     "Ghi chú vẽ của khách:\r\nphoto.jpg: đỏ: Làm sáng vùng này",
   ));
 });
+
+test("markup export failure does not prevent picked files or the pick list from being written", async () => {
+  const dir = tmp();
+  fs.writeFileSync(path.join(dir, "unreadable.jpg"), "not a decodable image");
+  const result = await copyPicks(
+    { folder: dir, files: { bad: "unreadable.jpg" } },
+    [{
+      key: "bad",
+      name: "unreadable.jpg",
+      note: null,
+      markup: { v: 1, strokes: [{ c: "#ef4444", w: 0.01, p: [[0.1, 0.2]] }], notes: {} },
+    }],
+    "Khach-chon",
+  );
+
+  assert.equal(result.copied, 1);
+  assert.equal(result.markupFailed, 1);
+  assert.ok(fs.existsSync(path.join(result.dest, "unreadable.jpg")));
+  assert.ok(fs.existsSync(path.join(result.dest, "danh-sach-chon.txt")));
+});

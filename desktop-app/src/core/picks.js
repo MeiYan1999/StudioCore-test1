@@ -124,6 +124,7 @@ async function copyPicks(share, picks, folderName, images = null) {
   const realDest = await fs.realpath(dest);
   let copied = 0;
   let missing = 0;
+  let markupFailed = 0;
   const codes = [];
   for (const pick of picks) {
     const rel = share.files[pick.key];
@@ -186,29 +187,33 @@ async function copyPicks(share, picks, folderName, images = null) {
       }
     }
     if (pick.markup) {
-      const markup = validatedMarkup(pick.markup);
-      const markupDir = path.join(dest, "Khách note màu");
-      await fs.mkdir(markupDir, { recursive: true });
-      const realMarkupDir = await fs.realpath(markupDir);
-      const markupRelative = path.relative(realDest, realMarkupDir);
-      if (markupRelative === ".." || markupRelative.startsWith(`..${path.sep}`) || path.isAbsolute(markupRelative)) {
-        missing += 1;
-        continue;
-      }
-      const annotated = path.join(realMarkupDir, `${path.basename(source).replace(/\.[^.]+$/, "")}.jpg`);
       try {
+        const markup = validatedMarkup(pick.markup);
+        const markupDir = path.join(dest, "Khách note màu");
+        await fs.mkdir(markupDir, { recursive: true });
+        const realMarkupDir = await fs.realpath(markupDir);
+        const markupRelative = path.relative(realDest, realMarkupDir);
+        if (markupRelative === ".." || markupRelative.startsWith(`..${path.sep}`) || path.isAbsolute(markupRelative)) {
+          markupFailed += 1;
+          continue;
+        }
+        const annotated = path.join(realMarkupDir, `${path.basename(source).replace(/\.[^.]+$/, "")}.jpg`);
         await writeMarkupComposite(source, annotated, markup, images);
         copied += 1;
       } catch (error) {
-        if (error.code !== "EEXIST") throw error;
+        if (error.code !== "EEXIST") markupFailed += 1;
       }
     }
   }
   const notes = picks.filter((p) => p.note).map((p) => `${p.name}: ${p.note}`);
   const markupNotes = picks.flatMap((pick) => {
     if (!pick.markup) return [];
-    const markup = validatedMarkup(pick.markup);
-    return Object.entries(markup.notes).map(([color, note]) => `${pick.name}: ${MARKUP_COLORS.get(color)}: ${note}`);
+    try {
+      const markup = validatedMarkup(pick.markup);
+      return Object.entries(markup.notes).map(([color, note]) => `${pick.name}: ${MARKUP_COLORS.get(color)}: ${note}`);
+    } catch {
+      return [];
+    }
   });
   await fs.writeFile(
     path.join(dest, "danh-sach-chon.txt"),
@@ -221,7 +226,7 @@ async function copyPicks(share, picks, folderName, images = null) {
     ].join("\r\n"),
     "utf8",
   );
-  return { dest, copied, missing, codes };
+  return { dest, copied, missing, codes, markupFailed };
 }
 
 module.exports = { copyPicks, safeFolderName, validatedMarkup, markupSvg };

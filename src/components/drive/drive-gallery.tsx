@@ -288,7 +288,7 @@ export function DriveGallery(props: Props) {
                     </span>
                   ) : null}
                   {file.markup ? (
-                    <span className="absolute right-2 top-2 rounded-full bg-black/65 p-1.5 text-white" title="Ảnh có nét vẽ">
+                    <span className="absolute right-2 top-12 rounded-full bg-black/65 p-1.5 text-white" title="Ảnh có nét vẽ">
                       <Brush className="h-3.5 w-3.5" aria-hidden />
                     </span>
                   ) : null}
@@ -407,7 +407,7 @@ export function DriveGallery(props: Props) {
               <X className="h-5 w-5" aria-hidden />
             </button>
           </div>
-          <div className="relative flex min-h-0 flex-1 items-center justify-center px-2 pb-4">
+          <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center px-2 pb-4">
             {openFile.kind === "video" ? (
               <video key={openFile.id} src={fileUrl(openFile.id, "preview")} controls playsInline className="max-h-full max-w-full" />
             ) : openFile.kind === "other" ? (

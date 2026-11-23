@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type PointerEvent } from "react";
+import { useEffect, useRef, useState, type PointerEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -52,8 +52,39 @@ export function DriveMarkupEditor({ fileName, imageUrl, markup, editable, onSave
   const [brushWidth, setBrushWidth] = useState(0.012);
   const [erasing, setErasing] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [imageSize, setImageSize] = useState<{ width: number; height: number } | null>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const imageRef = useRef<HTMLImageElement>(null);
 
   const usedColors = [...new Set(draft.strokes.map((stroke) => stroke.c))];
+
+  useEffect(() => {
+    const stage = stageRef.current;
+    const image = imageRef.current;
+    if (!stage || !image) return;
+
+    const updateImageSize = () => {
+      if (!image.naturalWidth || !image.naturalHeight) return;
+      const { width, height } = stage.getBoundingClientRect();
+      const scale = Math.min(width / image.naturalWidth, height / image.naturalHeight);
+      if (!Number.isFinite(scale) || scale <= 0) return;
+      const next = { width: image.naturalWidth * scale, height: image.naturalHeight * scale };
+      setImageSize((current) =>
+        current && Math.abs(current.width - next.width) < 0.5 && Math.abs(current.height - next.height) < 0.5
+          ? current
+          : next,
+      );
+    };
+
+    const observer = new ResizeObserver(updateImageSize);
+    observer.observe(stage);
+    image.addEventListener("load", updateImageSize);
+    updateImageSize();
+    return () => {
+      observer.disconnect();
+      image.removeEventListener("load", updateImageSize);
+    };
+  }, [imageUrl]);
 
   function commitStrokes(strokes: DriveMarkupStroke[]) {
     setUndoStack([...undoStack, draft.strokes]);
@@ -239,11 +270,20 @@ export function DriveMarkupEditor({ fileName, imageUrl, markup, editable, onSave
           })}
         </div>
       ) : null}
-      <div className="relative flex min-h-0 flex-1 items-center justify-center">
-        <div className="relative inline-flex max-h-full max-w-full items-center justify-center">
+      <div ref={stageRef} className="relative flex min-h-0 flex-1 items-center justify-center">
+        <div
+          className="relative shrink-0"
+          style={imageSize ?? { width: 0, height: 0 }}
+        >
           {/* eslint-disable-next-line @next/next/no-img-element -- ảnh được chuyển tiếp trực tiếp từ máy studio */}
-          <img src={imageUrl} alt={fileName} className="block max-h-full max-w-full object-contain" />
-          {visibleStrokes.length > 0 && (drawing || showMarkup) ? (
+          <img
+            ref={imageRef}
+            src={imageUrl}
+            alt={fileName}
+            className="block h-full w-full object-contain"
+            style={{ visibility: imageSize ? "visible" : "hidden" }}
+          />
+          {imageSize && (drawing || (visibleStrokes.length > 0 && showMarkup)) ? (
             <svg
               viewBox="0 0 1 1"
               preserveAspectRatio="none"
