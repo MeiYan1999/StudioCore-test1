@@ -122,10 +122,7 @@ async function writeMarkupComposite(source, target, markup, images) {
 }
 
 function markupCompositeName(source) {
-  const parsed = path.parse(path.basename(source));
-  const extension = parsed.ext.slice(1).toLowerCase() || "file";
-  const suffix = extension === "jpg" || extension === "jpeg" ? "" : `_${extension}`;
-  return `${parsed.name}${suffix}_note.jpg`;
+  return `${path.basename(source)}_note.jpg`;
 }
 
 function safeFolderName(name) {
