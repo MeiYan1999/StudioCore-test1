@@ -282,20 +282,27 @@ export function DriveGallery(props: Props) {
   );
 
   const move = useCallback(
-    (delta: number) => {
+    async (delta: number) => {
       if (openIndex < 0) return;
       const target = list[openIndex + delta];
-      if (target) {
-        setOpenId(target.id);
-        setPhotoNote(target.note ?? "");
-        setNotePanelOpen(false);
-        setInfoOpen(false);
-        setDrawingActive(false);
-        setInitialDrawingId(null);
-      }
+      if (!target || !openFile || target.id === openFile.id) return;
+      if (photoNote !== (openFile.note ?? "") && !(await savePhotoNote(openFile.id, photoNote))) return;
+      setOpenId(target.id);
+      setPhotoNote(target.note ?? "");
+      setNotePanelOpen(false);
+      setInfoOpen(false);
+      setDrawingActive(false);
+      setInitialDrawingId(null);
     },
-    [list, openIndex],
+    [list, openFile, openIndex, photoNote],
   );
+
+  const closeLightbox = useCallback(async () => {
+    if (openFile && photoNote !== (openFile.note ?? "") && !(await savePhotoNote(openFile.id, photoNote))) return;
+    setOpenId(null);
+    setNotePanelOpen(false);
+    setDrawingActive(false);
+  }, [openFile, photoNote]);
 
   useEffect(() => {
     if (!openFile) return;
@@ -307,7 +314,7 @@ export function DriveGallery(props: Props) {
       ) {
         return;
       }
-      if (event.key === "Escape") setOpenId(null);
+      if (event.key === "Escape") void closeLightbox();
       else if (event.key === "ArrowRight") move(1);
       else if (event.key === "ArrowLeft") move(-1);
       else if (event.key === " " && selecting) {
@@ -317,7 +324,7 @@ export function DriveGallery(props: Props) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [openFile, move, selecting, togglePick]);
+  }, [openFile, closeLightbox, move, selecting, togglePick]);
 
   async function savePhotoNote(fileId: string, text: string): Promise<boolean> {
     try {
@@ -857,7 +864,7 @@ export function DriveGallery(props: Props) {
               </button>
               <button
                 type="button"
-                onClick={() => setOpenId(null)}
+                onClick={() => void closeLightbox()}
                 aria-label="Đóng"
                 className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white/10 hover:bg-white/20"
               >
