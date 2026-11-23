@@ -118,8 +118,8 @@ export function DriveGallery(props: Props) {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target;
       if (
-        target instanceof HTMLElement &&
-        (target.isContentEditable || target.tagName === "INPUT" || target.tagName === "TEXTAREA")
+        target instanceof Element &&
+        target.closest("button, input, textarea, select, [contenteditable], [data-drive-markup-editor]")
       ) {
         return;
       }

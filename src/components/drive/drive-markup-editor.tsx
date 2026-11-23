@@ -182,7 +182,7 @@ export function DriveMarkupEditor({ fileName, imageUrl, markup, editable, onSave
   const visibleStrokes = drawing ? [...draft.strokes, ...(activeStroke ? [activeStroke] : [])] : markup?.strokes ?? [];
 
   return (
-    <div className="flex min-h-0 w-full flex-1 flex-col">
+    <div data-drive-markup-editor className="flex min-h-0 w-full flex-1 flex-col">
       {editable || markup ? (
         <div className="flex flex-wrap items-center justify-center gap-2 py-2">
           {editable && !drawing ? (
