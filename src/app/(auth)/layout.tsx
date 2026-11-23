@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { Aperture, CalendarCheck2, Phone, TrendingUp } from "lucide-react";
+import { CalendarCheck2, Phone, TrendingUp } from "lucide-react";
+import { BrandIcon } from "@/components/brand/brand-logo";
 
 const SHOOT_SLOTS = [
   { time: "08:00", name: "Cưới Minh & Lan", initials: "ML", tone: "from-violet-400 to-indigo-500" },
@@ -18,9 +19,7 @@ const TRUSTED_AVATARS = [
 function BrandMark({ inverted = false }: { inverted?: boolean }) {
   return (
     <span className="flex items-center gap-3">
-      <span className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-lg shadow-indigo-500/30 ring-1 ring-white/20">
-        <Aperture className="h-5 w-5" strokeWidth={2.25} aria-hidden="true" />
-      </span>
+      <BrandIcon className="size-10 shrink-0" />
       <span>
         <span className="flex items-center gap-2">
           <span

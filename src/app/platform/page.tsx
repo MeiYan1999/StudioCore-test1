@@ -12,6 +12,7 @@ import {
   Sparkles,
   Users,
 } from "lucide-react";
+import { BrandIcon } from "@/components/brand/brand-logo";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -179,9 +180,7 @@ export default async function PlatformPage({
       <header className="border-b border-border bg-surface">
         <div className="mx-auto flex max-w-[1360px] flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
           <div className="flex items-center gap-2.5">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-sm font-bold text-primary-foreground">
-              S
-            </span>
+            <BrandIcon />
             <div>
               <p className="text-sm font-semibold">StudioCore SuperAdmin</p>
               <p className="text-[11px] text-muted-foreground">
