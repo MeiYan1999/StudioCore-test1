@@ -217,7 +217,7 @@ async function copyPicks(share, picks, folderName, images = null) {
     if (pick.markup) {
       try {
         const markup = validatedMarkup(pick.markup);
-        const markupDir = path.join(dest, "Khách note màu");
+        const markupDir = path.join(dest, "Khách note màu", targetDirRelative);
         await fs.mkdir(markupDir, { recursive: true });
         const realMarkupDir = await fs.realpath(markupDir);
         const markupRelative = path.relative(realDest, realMarkupDir);

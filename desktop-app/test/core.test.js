@@ -892,6 +892,30 @@ test("exports customer markup as a correctly sized composite JPEG", async () => 
   ));
 });
 
+test("customer markup composites mirror the source subfolder", async () => {
+  const sharp = require("sharp");
+  const dir = tmp();
+  fs.mkdirSync(path.join(dir, "gallery"));
+  await sharp({ create: { width: 40, height: 20, channels: 3, background: { r: 0, g: 0, b: 0 } } })
+    .jpeg()
+    .toFile(path.join(dir, "gallery", "photo.jpg"));
+
+  const result = await copyPicks(
+    { folder: dir, files: { photo: "gallery/photo.jpg" } },
+    [{
+      key: "photo",
+      name: "photo.jpg",
+      note: null,
+      markup: { v: 1, strokes: [{ c: "#ef4444", w: 0.04, p: [[0.1, 0.5]] }], notes: {} },
+    }],
+    "Khach-chon",
+    { sharp },
+  );
+
+  assert.ok(fs.existsSync(path.join(result.dest, "Khách note màu", "gallery", "photo.jpg")));
+  assert.ok(!fs.existsSync(path.join(result.dest, "Khách note màu", "photo.jpg")));
+});
+
 test("resubmitting customer markup replaces the existing composite", async () => {
   const sharp = require("sharp");
   const dir = tmp();
