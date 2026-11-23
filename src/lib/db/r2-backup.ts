@@ -76,20 +76,85 @@ function getS3Client() {
   };
 }
 
+type R2Connection = NonNullable<ReturnType<typeof getS3Client>>;
+
+function isMissingObject(error: unknown) {
+  const failure = error as { name?: string; $metadata?: { httpStatusCode?: number } } | null;
+  return failure?.name === "NoSuchKey" || failure?.name === "NotFound" ||
+    (failure?.name !== "NoSuchBucket" && failure?.$metadata?.httpStatusCode === 404);
+}
+
+async function headBackup(s3: R2Connection) {
+  try {
+    const remote = await s3.client.send(new HeadObjectCommand({
+      Bucket: s3.bucket, Key: DB_OBJECT_KEY,
+    }));
+    if (!remote.ETag) throw new Error("R2 không trả về ETag của bản sao lưu.");
+    return { etag: remote.ETag, metadata: remote.Metadata };
+  } catch (error) {
+    if (isMissingObject(error)) return null;
+    throw error;
+  }
+}
+
+async function stageRemoteDb(s3: R2Connection, tempPath: string, etag?: string) {
+  const result = await s3.client.send(new GetObjectCommand({
+    Bucket: s3.bucket,
+    Key: DB_OBJECT_KEY,
+    IfMatch: etag,
+  }));
+  if (!result.Body || !result.ETag) throw new Error("R2 không trả về database hoặc ETag.");
+  const bytes = await result.Body.transformToByteArray();
+  if (bytes.length === 0) throw new Error("Database được tải từ R2 đang trống.");
+  fs.writeFileSync(/*turbopackIgnore: true*/ tempPath, Buffer.from(bytes));
+  return { etag: result.ETag, size: bytes.length, digest: snapshotDigest(await snapshotDatabase(tempPath)) };
+}
+
+function removeStagedDb(tempPath: string) {
+  fs.rmSync(/*turbopackIgnore: true*/ tempPath, { force: true });
+  fs.rmSync(/*turbopackIgnore: true*/ `${tempPath}-wal`, { force: true });
+  fs.rmSync(/*turbopackIgnore: true*/ `${tempPath}-shm`, { force: true });
+}
+
+async function establishRetainedBaseline(dbPath: string) {
+  if (readBackupState(dbPath)) return;
+  const s3 = getS3Client();
+  if (!s3) return;
+  const remote = await headBackup(s3);
+  if (!remote) return;
+  const tempPath = `${dbPath}.r2-compare-tmp`;
+  try {
+    const snapshot = await stageRemoteDb(s3, tempPath, remote.etag);
+    const digest = snapshotDigest(await snapshotDatabase(dbPath));
+    if (digest !== snapshot.digest) {
+      console.error("[R2 Backup] XUNG ĐỘT: database giữ lại khác bản R2 và chưa có ETag gốc. Giữ cả hai bản để đối chiếu, không ghi đè.");
+      return;
+    }
+    writeBackupState(dbPath, { etag: snapshot.etag, digest });
+  } finally {
+    removeStagedDb(tempPath);
+  }
+}
+
 export async function restoreDbFromR2IfMissing(
   targetPath?: string,
 ): Promise<"kept" | "restored" | "none"> {
   const dbPath =
     targetPath ?? (await import("./client")).resolveDbFilename();
+  let kept = false;
   try {
     const stat = fs.statSync(/*turbopackIgnore: true*/ dbPath);
-    if (stat.isFile() && stat.size > 0) return "kept";
+    kept = stat.isFile() && stat.size > 0;
   } catch (err: unknown) {
     if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
       const message = err instanceof Error ? err.message : String(err);
       console.warn(`[R2 Backup] Không thể kiểm tra database hiện có: ${message}`);
       throw err;
     }
+  }
+  if (kept) {
+    await establishRetainedBaseline(dbPath);
+    return "kept";
   }
 
   const s3 = getS3Client();
@@ -103,29 +168,14 @@ export async function restoreDbFromR2IfMissing(
 
   const restorePath = `${dbPath}.restore-tmp`;
   try {
-    const res = await s3.client.send(
-      new GetObjectCommand({
-        Bucket: s3.bucket,
-        Key: DB_OBJECT_KEY,
-      }),
-    );
-
-    if (!res.Body || !res.ETag) throw new Error("R2 không trả về database hoặc ETag.");
-
-    const bytes = await res.Body.transformToByteArray();
-    if (!bytes || bytes.length === 0) {
-      throw new Error("Database được tải từ R2 đang trống.");
-    }
-
     fs.mkdirSync(/*turbopackIgnore: true*/ path.dirname(dbPath), { recursive: true });
-    fs.writeFileSync(/*turbopackIgnore: true*/ restorePath, Buffer.from(bytes));
-    const digest = snapshotDigest(await snapshotDatabase(restorePath));
+    const { etag, digest, size } = await stageRemoteDb(s3, restorePath);
     fs.rmSync(/*turbopackIgnore: true*/ `${dbPath}-wal`, { force: true });
     fs.rmSync(/*turbopackIgnore: true*/ `${dbPath}-shm`, { force: true });
-    writeBackupState(dbPath, { etag: res.ETag, digest });
+    writeBackupState(dbPath, { etag, digest });
     fs.renameSync(/*turbopackIgnore: true*/ restorePath, dbPath);
 
-    console.log(`[R2 Backup] ✅ Đã phục hồi database từ Cloudflare R2 (${(bytes.length / 1024 / 1024).toFixed(2)} MB)!`);
+    console.log(`[R2 Backup] ✅ Đã phục hồi database từ Cloudflare R2 (${(size / 1024 / 1024).toFixed(2)} MB)!`);
     return "restored";
   } catch (err: unknown) {
     const error =
@@ -143,9 +193,7 @@ export async function restoreDbFromR2IfMissing(
       throw err;
     }
   } finally {
-    fs.rmSync(/*turbopackIgnore: true*/ restorePath, { force: true });
-    fs.rmSync(/*turbopackIgnore: true*/ `${restorePath}-wal`, { force: true });
-    fs.rmSync(/*turbopackIgnore: true*/ `${restorePath}-shm`, { force: true });
+    removeStagedDb(restorePath);
   }
 }
 

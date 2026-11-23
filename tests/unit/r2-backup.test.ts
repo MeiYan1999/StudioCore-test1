@@ -93,10 +93,53 @@ describe("R2 database backups", () => {
     const dbPath = makeDbPath();
     const contents = Buffer.from("current database");
     fs.writeFileSync(dbPath, contents);
+    mocks.getR2Config.mockReturnValueOnce(null);
 
     await expect(restoreDbFromR2IfMissing(dbPath)).resolves.toBe("kept");
     expect(mocks.send).not.toHaveBeenCalled();
     expect(fs.readFileSync(dbPath)).toEqual(contents);
+  });
+
+  it("establishes an ETag for a retained database only when the snapshots agree", async () => {
+    const dbPath = makeDbPath();
+    const bytes = makeSnapshot();
+    fs.writeFileSync(dbPath, bytes);
+    mocks.send
+      .mockResolvedValueOnce({ ETag: '"retained"' })
+      .mockResolvedValueOnce(restoreObject(bytes, '"retained"'));
+    await expect(restoreDbFromR2IfMissing(dbPath)).resolves.toBe("kept");
+    expect(mocks.send.mock.calls[0][0]).toBeInstanceOf(HeadObjectCommand);
+    expect(mocks.send.mock.calls[1][0].input.IfMatch).toBe('"retained"');
+    const db = new Database(dbPath);
+    try {
+      db.exec("INSERT INTO records VALUES ('subsequent commit')");
+      await expect(backupDbToR2(dbPath)).resolves.toBe(true);
+      expect(mocks.send.mock.calls[2][0].input.IfMatch).toBe('"retained"');
+    } finally {
+      db.close();
+    }
+  });
+
+  it("keeps a divergent local database and does not adopt the remote ETag", async () => {
+    const dbPath = makeDbPath();
+    const bytes = makeSnapshot();
+    fs.writeFileSync(dbPath, bytes);
+    const db = new Database(dbPath);
+    db.exec("INSERT INTO records VALUES ('local only')");
+    db.close();
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      mocks.send
+        .mockResolvedValueOnce({ ETag: '"remote"' })
+        .mockResolvedValueOnce(restoreObject(bytes, '"remote"'));
+      const local = fs.readFileSync(dbPath);
+      await expect(restoreDbFromR2IfMissing(dbPath)).resolves.toBe("kept");
+      expect(fs.readFileSync(dbPath)).toEqual(local);
+      expect(fs.existsSync(`${dbPath}.r2-state.json`)).toBe(false);
+      expect(log).toHaveBeenCalledWith(expect.stringContaining("XUNG ĐỘT"));
+    } finally {
+      log.mockRestore();
+    }
   });
 
   it("returns none when R2 is unconfigured and no local database exists", async () => {
