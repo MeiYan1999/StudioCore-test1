@@ -885,12 +885,19 @@ test("macOS installs a distinct Finder Quick Action per action and removes the l
 
   assert.deepEqual(await installMacQuickActions({ templateDir, servicesDir, execFileImpl }), { changed: true });
   assert.equal(fs.existsSync(legacyPath), false);
+  const toggleAction = CONTEXT_ACTIONS.find(({ id }) => id === "toggle");
+  assert.equal(quickActionName(toggleAction), "StudioCore Drive – Bật – tắt chia sẻ");
+  const unsafeName = quickActionName({ label: 'A/B\\C:<>"|?*\u0000' });
+  assert.equal(unsafeName, "StudioCore Drive – A–B–C");
+  assert.doesNotMatch(unsafeName, /[\\/:*?"<>|\u0000-\u001f]/);
   const bundleIds = new Set();
   for (const action of CONTEXT_ACTIONS) {
-    const contentsDir = path.join(servicesDir, `${quickActionName(action)}.workflow`, "Contents");
+    const workflowPath = path.join(servicesDir, `${quickActionName(action)}.workflow`);
+    assert.equal(path.dirname(workflowPath), servicesDir);
+    const contentsDir = path.join(workflowPath, "Contents");
     const info = await fs.promises.readFile(path.join(contentsDir, "Info.plist"), "utf8");
     const workflow = await fs.promises.readFile(path.join(contentsDir, "document.wflow"), "utf8");
-    assert.ok(info.includes(`<string>StudioCore Drive – ${action.label.replaceAll("&", "&amp;")}</string>`));
+    assert.ok(info.includes(`<string>${quickActionName(action).replaceAll("&", "&amp;")}</string>`));
     assert.ok(info.includes(`<string>vn.io.studiocore.drive.context.${action.id}</string>`));
     const command = workflow.match(/<key>COMMAND_STRING<\/key>\s*<string>([^<]+)<\/string>/)?.[1];
     assert.equal(command, `open -n -a "StudioCore Drive" --args --action=${action.id} --share="$@"`);

@@ -10,10 +10,13 @@ const { CONTEXT_ACTIONS } = require("./context-actions");
 const LEGACY_QUICK_ACTION_NAME = "Chia sẻ bằng StudioCore Drive";
 const QUICK_ACTION_PREFIX = "StudioCore Drive – ";
 const APP_NAME = "StudioCore Drive";
-const APP_BUNDLE_ID = "vn.io.studiocore.drive";
 
 function quickActionName(action) {
-  return `${QUICK_ACTION_PREFIX}${action.label}`;
+  const label = action.label
+    .replace(/[\\/]/g, "–")
+    .replace(/[\u0000-\u001f\u007f<>:"|?*]/g, "")
+    .replace(/[. ]+$/g, "");
+  return `${QUICK_ACTION_PREFIX}${label}`;
 }
 
 function xmlEscape(value) {
