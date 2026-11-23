@@ -1,5 +1,6 @@
 "use strict";
 
+const crypto = require("node:crypto");
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const { RAW_EXT, extOf, stem, resolveInside } = require("./scanner");
@@ -102,18 +103,20 @@ async function writeMarkupComposite(source, target, markup, images) {
     .composite([{ input: Buffer.from(markupSvg(markup, width, height)) }])
     .jpeg({ quality: 90 })
     .toBuffer();
-  const temp = `${target}.tmp`;
-  await fs.rm(temp, { force: true });
+  const temp = `${target}.${process.pid}.${crypto.randomUUID()}.tmp`;
+  let ownsTemp = false;
   try {
     const handle = await fs.open(temp, "wx");
+    ownsTemp = true;
     try {
       await handle.writeFile(output);
     } finally {
       await handle.close();
     }
     await fs.rename(temp, target);
+    ownsTemp = false;
   } catch (error) {
-    await fs.rm(temp, { force: true }).catch(() => {});
+    if (ownsTemp) await fs.rm(temp, { force: true }).catch(() => {});
     throw error;
   }
 }

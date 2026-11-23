@@ -974,6 +974,31 @@ test("same-stem customer markup exports use stable extension-aware names", async
   assert.deepEqual(fs.readdirSync(markupDir).sort(), ["a_note.jpg", "a_png_note.jpg"]);
 });
 
+test("concurrent markup exports use independent temp files", async () => {
+  const sharp = require("sharp");
+  const dir = tmp();
+  await sharp({ create: { width: 100, height: 50, channels: 3, background: { r: 0, g: 0, b: 0 } } })
+    .jpeg()
+    .toFile(path.join(dir, "photo.jpg"));
+  const share = { folder: dir, files: { photo: "photo.jpg" } };
+  const pick = {
+    key: "photo",
+    name: "photo.jpg",
+    note: null,
+    markup: { v: 1, strokes: [{ c: "#ef4444", w: 0.08, p: [[0.1, 0.5], [0.9, 0.5]] }], notes: {} },
+  };
+
+  const [first, second] = await Promise.all([
+    copyPicks(share, [pick], "Khach-chon", { sharp }),
+    copyPicks(share, [pick], "Khach-chon", { sharp }),
+  ]);
+
+  const markupDir = path.join(first.dest, "Khách note màu");
+  assert.equal(first.dest, second.dest);
+  assert.ok(fs.existsSync(path.join(markupDir, "photo_note.jpg")));
+  assert.deepEqual(fs.readdirSync(markupDir).filter((name) => name.endsWith(".tmp")), []);
+});
+
 test("markup export failure does not prevent picked files or the pick list from being written", async () => {
   const dir = tmp();
   fs.writeFileSync(path.join(dir, "unreadable.jpg"), "not a decodable image");
