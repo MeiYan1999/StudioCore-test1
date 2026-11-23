@@ -15,14 +15,28 @@ const DB_OBJECT_KEY = "db/studiocore.db";
 const lastSuccessfulBackups = new Map<string, string>();
 const backupJobs = new Map<string, Promise<boolean>>();
 
-type BackupState = { etag: string; digest: string };
+type BackupState = {
+  etag: string | null;
+  digest: string | null;
+  pending?: string[];
+};
+
+const SNAPSHOT_DIGEST_METADATA = "snapshot-sha256";
+const SHA256 = /^[a-f0-9]{64}$/;
+const EMPTY_STATE: BackupState = { etag: null, digest: null };
+
+class BackupConflictError extends Error {}
 
 function readBackupState(dbPath: string): BackupState | undefined {
   const statePath = `${dbPath}.r2-state.json`;
   try {
     const state = JSON.parse(fs.readFileSync(/*turbopackIgnore: true*/ statePath, "utf8"));
-    if (!state || typeof state.etag !== "string" || !state.etag ||
-      typeof state.digest !== "string" || !/^[a-f0-9]{64}$/.test(state.digest)) {
+    if (!state ||
+      !((state.etag === null && state.digest === null) ||
+        (typeof state.etag === "string" && !!state.etag &&
+          typeof state.digest === "string" && SHA256.test(state.digest))) ||
+      (state.pending !== undefined && (!Array.isArray(state.pending) ||
+        state.pending.some((digest: unknown) => typeof digest !== "string" || !SHA256.test(digest))))) {
       throw new Error("Trạng thái sao lưu R2 không hợp lệ.");
     }
     return state;
@@ -95,6 +109,20 @@ async function headBackup(s3: R2Connection) {
     if (isMissingObject(error)) return null;
     throw error;
   }
+}
+
+async function recoverPendingUpload(dbPath: string, s3: R2Connection, state: BackupState): Promise<BackupState> {
+  if (!state.pending?.length) return state;
+
+  const remote = await headBackup(s3);
+  const digest = remote?.metadata?.[SNAPSHOT_DIGEST_METADATA];
+  if (remote && digest && state.pending.includes(digest)) {
+    const confirmed = { etag: remote.etag, digest };
+    writeBackupState(dbPath, confirmed);
+    return confirmed;
+  }
+  if ((remote?.etag ?? null) !== state.etag) throw new BackupConflictError();
+  return state;
 }
 
 async function stageRemoteDb(s3: R2Connection, tempPath: string, etag?: string) {
@@ -245,7 +273,7 @@ async function performDbBackup(dbPath: string): Promise<boolean> {
         Number.isFinite(Number(remoteGeneration)) &&
         Number(remoteGeneration) > generationNumber
       ) {
-        console.log("[R2 Backup] Instance mới hơn đang sở hữu bản sao lưu, bỏ qua sao lưu từ instance này.");
+        console.error("[R2 Backup] XUNG ĐỘT: instance mới hơn sở hữu bản sao lưu. Không ghi đè.");
         return false;
       }
     } catch (err: unknown) {
@@ -277,34 +305,40 @@ async function performDbBackup(dbPath: string): Promise<boolean> {
       sqlite = (getDb() as { $client?: Database.Database }).$client;
       if (!sqlite) throw new Error("SQLite client không hỗ trợ sao lưu.");
     }
-    const state = readBackupState(dbPath);
+    const state = await recoverPendingUpload(dbPath, s3, readBackupState(dbPath) ?? EMPTY_STATE);
     const buffer = await snapshotDatabase(dbPath, sqlite);
     const digest = snapshotDigest(buffer);
-    if (state?.digest === digest) {
+    if (state.digest === digest) {
       lastSuccessfulBackups.set(dbPath, fingerprint);
       return true;
     }
 
-    const result = await s3.client.send(
-      new PutObjectCommand({
+    const attempt = { ...state, pending: [...new Set([...(state.pending ?? []), digest])] };
+    writeBackupState(dbPath, attempt);
+    try {
+      const result = await s3.client.send(new PutObjectCommand({
         Bucket: s3.bucket,
         Key: DB_OBJECT_KEY,
         Body: buffer,
         ContentType: "application/x-sqlite3",
-        ...(state ? { IfMatch: state.etag } : { IfNoneMatch: "*" }),
-        ...(generation !== undefined
-          ? { Metadata: { generation } }
-          : {}),
-      }),
-    );
-    if (!result.ETag) throw new Error("R2 không trả về ETag sau khi sao lưu.");
-    writeBackupState(dbPath, { etag: result.ETag, digest });
+        ...(state.etag ? { IfMatch: state.etag } : { IfNoneMatch: "*" }),
+        Metadata: {
+          [SNAPSHOT_DIGEST_METADATA]: digest,
+          ...(generation !== undefined ? { generation } : {}),
+        },
+      }));
+      if (!result.ETag) throw new Error("R2 không trả về ETag sau khi sao lưu.");
+      writeBackupState(dbPath, { etag: result.ETag, digest });
+    } catch (error) {
+      const recovered = await recoverPendingUpload(dbPath, s3, attempt);
+      if (recovered.digest !== digest) throw error;
+    }
     lastSuccessfulBackups.set(dbPath, fingerprint);
     console.log(`[R2 Backup] ☁️ Đã sao lưu database lên Cloudflare R2 (${(buffer.length / 1024 / 1024).toFixed(2)} MB).`);
     return true;
   } catch (err: unknown) {
     const error = err as { name?: string; $metadata?: { httpStatusCode?: number } } | null;
-    if (error?.name === "PreconditionFailed" || error?.$metadata?.httpStatusCode === 412) {
+    if (err instanceof BackupConflictError || error?.name === "PreconditionFailed" || error?.$metadata?.httpStatusCode === 412) {
       console.error("[R2 Backup] XUNG ĐỘT: bản SQLite trên R2 đã thay đổi. Không ghi đè. Kiểm tra và giữ lại database cục bộ trước khi khởi động lại.");
       return false;
     }

@@ -291,9 +291,59 @@ describe("R2 database backups", () => {
       await expect(backupDbToR2(dbPath)).resolves.toBe(false);
       await expect(backupDbToR2(dbPath)).resolves.toBe(false);
       expect(log).toHaveBeenCalledWith(expect.stringContaining("XUNG ĐỘT"));
-      expect(mocks.send.mock.calls.filter(([command]) => command instanceof PutObjectCommand)).toHaveLength(2);
+      expect(mocks.send.mock.calls.filter(([command]) => command instanceof PutObjectCommand)).toHaveLength(1);
     } finally {
       log.mockRestore();
+      db.close();
+    }
+  });
+
+  it.each(["connection reset", "precondition failed"])(
+    "confirms a stored snapshot by metadata after %s",
+    async (failure) => {
+      const dbPath = makeDbPath();
+      fs.writeFileSync(dbPath, makeSnapshot());
+      let digest: string | undefined;
+      mocks.send.mockImplementation(async (command) => {
+        if (command instanceof HeadObjectCommand) {
+          return { ETag: '"confirmed"', Metadata: { "snapshot-sha256": digest } };
+        }
+        expect(command).toBeInstanceOf(PutObjectCommand);
+        expect(command.input.IfNoneMatch).toBe("*");
+        digest = command.input.Metadata["snapshot-sha256"];
+        expect(digest).toMatch(/^[a-f0-9]{64}$/);
+        throw Object.assign(new Error(failure), {
+          $metadata: { httpStatusCode: failure === "precondition failed" ? 412 : undefined },
+        });
+      });
+
+      await expect(backupDbToR2(dbPath)).resolves.toBe(true);
+      expect(mocks.send.mock.calls[1][0]).toBeInstanceOf(HeadObjectCommand);
+      expect(JSON.parse(fs.readFileSync(`${dbPath}.r2-state.json`, "utf8"))).toEqual({
+        etag: '"confirmed"', digest,
+      });
+    },
+  );
+
+  it("recovers a pending upload on a later attempt even after more local commits", async () => {
+    const dbPath = makeDbPath();
+    fs.writeFileSync(dbPath, makeSnapshot());
+    mocks.send
+      .mockRejectedValueOnce(new Error("PUT response lost"))
+      .mockRejectedValueOnce(new Error("HEAD temporarily unavailable"));
+    await expect(backupDbToR2(dbPath)).resolves.toBe(false);
+    const firstPut = mocks.send.mock.calls[0][0] as PutObjectCommand;
+    const db = new Database(dbPath);
+    try {
+      db.exec("INSERT INTO records VALUES ('additional commit')");
+      mocks.send.mockResolvedValueOnce({ ETag: '"confirmed"', Metadata: firstPut.input.Metadata });
+      await expect(backupDbToR2(dbPath)).resolves.toBe(true);
+      expect(mocks.send.mock.calls[2][0]).toBeInstanceOf(HeadObjectCommand);
+      const nextPut = mocks.send.mock.calls[3][0] as PutObjectCommand;
+      expect(nextPut).toBeInstanceOf(PutObjectCommand);
+      expect(nextPut.input.IfMatch).toBe('"confirmed"');
+      expect(nextPut.input.Metadata?.["snapshot-sha256"]).not.toBe(firstPut.input.Metadata?.["snapshot-sha256"]);
+    } finally {
       db.close();
     }
   });
@@ -371,7 +421,7 @@ describe("R2 database backups", () => {
       expect(mocks.send.mock.calls[0][0]).toBeInstanceOf(HeadObjectCommand);
       const putCommand = mocks.send.mock.calls[1][0] as PutObjectCommand;
       expect(putCommand).toBeInstanceOf(PutObjectCommand);
-      expect(putCommand.input.Metadata).toEqual({ generation });
+      expect(putCommand.input.Metadata).toMatchObject({ generation });
       expect(backup).toHaveBeenCalledTimes(1);
     },
   );
@@ -396,7 +446,7 @@ describe("R2 database backups", () => {
     expect(mocks.send).toHaveBeenCalledTimes(2);
     expect(mocks.send.mock.calls[0][0]).toBeInstanceOf(HeadObjectCommand);
     const putCommand = mocks.send.mock.calls[1][0] as PutObjectCommand;
-    expect(putCommand.input.Metadata).toEqual({ generation: "10" });
+    expect(putCommand.input.Metadata).toMatchObject({ generation: "10" });
     expect(backup).toHaveBeenCalledTimes(1);
   });
 
