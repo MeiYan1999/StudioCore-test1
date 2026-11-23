@@ -326,7 +326,7 @@ describe("link chia sẻ", () => {
 
   it("trả kết quả khớp theo khoảng cách tăng dần, dưới ngưỡng", () => {
     const { device } = pair("Ghép khuôn mặt");
-    const shareFiles = files(4);
+    const shareFiles = files(5);
     const share = createDriveShare(db, device, { title: "Tìm khuôn mặt", kind: "select", files: shareFiles });
     const vector = (first: number) => [first, ...Array.from({ length: 127 }, () => 0)];
     setDriveShareFaces(db, device, share.id, {
@@ -334,7 +334,8 @@ describe("link chia sẻ", () => {
         { key: shareFiles[0].key, faces: [vector(0.4), vector(0.1)] },
         { key: shareFiles[1].key, faces: [vector(0.3)] },
         { key: shareFiles[2].key, faces: [vector(0.5)] },
-        { key: shareFiles[3].key, faces: [] },
+        { key: shareFiles[3].key, faces: [vector(0.6)] },
+        { key: shareFiles[4].key, faces: [] },
       ],
     });
     const rows = db
@@ -345,7 +346,7 @@ describe("link chia sẻ", () => {
       .sort((a, b) => a.sortIndex - b.sortIndex);
 
     expect(matchDriveFaces(db, share.id, vector(0))).toEqual({
-      matches: [rows[0].id, rows[1].id],
+      matches: [rows[0].id, rows[1].id, rows[2].id],
     });
     expect(hasDriveShareFaces(db, share.id)).toBe(true);
     expect(hasDriveShareFaces(db, "missing-share")).toBe(false);
