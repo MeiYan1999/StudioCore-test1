@@ -1823,6 +1823,7 @@ export const driveShares = sqliteTable(
     allowOriginal: integer("allow_original", { mode: "boolean" })
       .notNull()
       .default(false),
+    faceSearch: integer("face_search", { mode: "boolean" }).notNull().default(false),
     expiresAt: integer("expires_at", { mode: "timestamp_ms" }),
     fileCount: integer("file_count").notNull().default(0),
     totalBytes: integer("total_bytes").notNull().default(0),
@@ -1854,6 +1855,7 @@ export const driveShareFiles = sqliteTable(
     picked: integer("picked", { mode: "boolean" }).notNull().default(false),
     note: text("note"),
     markup: text("markup"),
+    faces: text("faces"),
   },
   (table) => [
     uniqueIndex("drive_share_files_key_unique").on(table.shareId, table.fileKey),

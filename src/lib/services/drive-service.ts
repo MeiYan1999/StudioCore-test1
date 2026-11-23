@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { and, asc, count, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import type { AppDb } from "../db/client";
 import {
   driveDevices,
@@ -17,6 +17,11 @@ import { assertPermission } from "../auth/permissions";
 import type { ActorContext } from "../auth/types";
 import { writeAudit } from "../audit";
 import { parseDriveMarkup, type DriveMarkup } from "../drive/markup";
+import {
+  DRIVE_FACE_MATCH_THRESHOLD,
+  DRIVE_FACE_MAX_PER_FILE,
+} from "../drive/constants";
+import { driveFaceDistance, parseDriveFaceDescriptor, roundDriveFaceDescriptor } from "../drive/faces";
 import { AuthorizationError, NotFoundError, ValidationError } from "../errors";
 
 export class DriveSuspendedError extends AuthorizationError {
@@ -52,6 +57,7 @@ export type DriveShareInput = {
   pin?: string | null;
   maxSelect?: number;
   allowOriginal?: boolean;
+  faceSearch?: boolean;
   expiresInDays?: number | null;
   files: DriveFileInput[];
 };
@@ -67,6 +73,7 @@ export type DriveShareSummary = {
   hasPin: boolean;
   maxSelect: number;
   allowOriginal: boolean;
+  faceSearch: boolean;
   expiresAt: number | null;
   expired: boolean;
   fileCount: number;
@@ -375,6 +382,7 @@ export function createDriveShare(db: AppDb, device: DriveDevice, input: DriveSha
         pinHash: pin ? hashSecret(pin) : null,
         maxSelect: input.kind === "select" ? maxSelect : 0,
         allowOriginal: input.kind === "deliver" ? true : !!input.allowOriginal,
+        faceSearch: input.faceSearch === true,
         expiresAt: expiresFromDays(input.expiresInDays),
         fileCount: files.length,
         totalBytes: files.reduce((sum, f) => sum + f.size, 0),
@@ -408,7 +416,13 @@ export function replaceDriveShareFiles(db: AppDb, device: DriveDevice, shareId: 
       if (current) {
         if (current.sortIndex !== index || current.size !== f.size || current.name !== f.name) {
           tx.update(driveShareFiles)
-            .set({ sortIndex: index, size: f.size, name: f.name, kind: f.kind })
+            .set({
+              sortIndex: index,
+              size: f.size,
+              name: f.name,
+              kind: f.kind,
+              ...(current.size !== f.size ? { faces: null } : {}),
+            })
             .where(eq(driveShareFiles.id, current.id))
             .run();
         }
@@ -445,6 +459,7 @@ export type DriveSharePatch = {
   pin?: string | null;
   maxSelect?: number;
   allowOriginal?: boolean;
+  faceSearch?: boolean;
   expiresInDays?: number | null;
   reopen?: boolean;
 };
@@ -470,6 +485,10 @@ function applySharePatch(db: AppDb, share: DriveShareRow, patch: DriveSharePatch
     set.maxSelect = Math.max(0, Math.min(100_000, Math.floor(Number(patch.maxSelect) || 0)));
   }
   if (patch.allowOriginal !== undefined && share.kind === "select") set.allowOriginal = !!patch.allowOriginal;
+  if (patch.faceSearch !== undefined) {
+    if (typeof patch.faceSearch !== "boolean") throw new ValidationError("Cài đặt tìm ảnh bằng khuôn mặt không hợp lệ.");
+    set.faceSearch = patch.faceSearch;
+  }
   if (patch.expiresInDays !== undefined) set.expiresAt = expiresFromDays(patch.expiresInDays);
   if (patch.reopen) {
     set.submittedAt = null;
@@ -508,6 +527,96 @@ export function updateDriveShareByActor(db: AppDb, actor: ActorContext, shareId:
     entityId: shareId,
     metadata: { fields: Object.keys(patch) },
   });
+}
+
+export function setDriveShareFaces(db: AppDb, device: DriveDevice, shareId: string, raw: unknown): void {
+  const share = getDeviceShare(db, device, shareId);
+  if (!raw || typeof raw !== "object" || Array.isArray(raw) || !Array.isArray((raw as { files?: unknown }).files)) {
+    throw new ValidationError("Danh sách mã khuôn mặt không hợp lệ.");
+  }
+  const files = (raw as { files: unknown[] }).files;
+  if (files.length > 100) throw new ValidationError("Mỗi lần chỉ được gửi tối đa 100 tệp.");
+
+  const current = new Map(
+    db
+      .select({ id: driveShareFiles.id, fileKey: driveShareFiles.fileKey })
+      .from(driveShareFiles)
+      .where(eq(driveShareFiles.shareId, share.id))
+      .all()
+      .map((file) => [file.fileKey, file]),
+  );
+  const seen = new Set<string>();
+  const updates = files.map((rawFile) => {
+    if (!rawFile || typeof rawFile !== "object" || Array.isArray(rawFile)) {
+      throw new ValidationError("Tệp có mã khuôn mặt không hợp lệ.");
+    }
+    const file = rawFile as { key?: unknown; faces?: unknown };
+    if (typeof file.key !== "string" || seen.has(file.key)) {
+      throw new ValidationError("Mã tệp không hợp lệ.");
+    }
+    const row = current.get(file.key);
+    if (!row) throw new ValidationError("Tệp không thuộc link chia sẻ này.");
+    if (!Array.isArray(file.faces) || file.faces.length > DRIVE_FACE_MAX_PER_FILE) {
+      throw new ValidationError(`Mỗi tệp chỉ được có tối đa ${DRIVE_FACE_MAX_PER_FILE} khuôn mặt.`);
+    }
+    seen.add(file.key);
+    const faces = file.faces.map((descriptor) =>
+      roundDriveFaceDescriptor(parseDriveFaceDescriptor(descriptor)),
+    );
+    return { id: row.id, faces: JSON.stringify(faces) };
+  });
+
+  db.transaction((tx) => {
+    for (const update of updates) {
+      tx.update(driveShareFiles).set({ faces: update.faces }).where(eq(driveShareFiles.id, update.id)).run();
+    }
+  });
+}
+
+export function matchDriveFaces(db: AppDb, shareId: string, rawDescriptor: unknown): { matches: string[] } {
+  const descriptor = parseDriveFaceDescriptor(rawDescriptor);
+  const ranked: { id: string; distance: number }[] = [];
+  const files = db
+    .select({ id: driveShareFiles.id, faces: driveShareFiles.faces })
+    .from(driveShareFiles)
+    .where(and(eq(driveShareFiles.shareId, shareId), isNotNull(driveShareFiles.faces)))
+    .all();
+
+  for (const file of files) {
+    try {
+      const faces: unknown = JSON.parse(file.faces ?? "null");
+      if (!Array.isArray(faces)) continue;
+      let minimum = Number.POSITIVE_INFINITY;
+      for (const face of faces) {
+        try {
+          minimum = Math.min(minimum, driveFaceDistance(descriptor, parseDriveFaceDescriptor(face)));
+        } catch {
+          continue;
+        }
+      }
+      if (minimum < DRIVE_FACE_MATCH_THRESHOLD) ranked.push({ id: file.id, distance: minimum });
+    } catch {
+      continue;
+    }
+  }
+
+  ranked.sort((a, b) => a.distance - b.distance || a.id.localeCompare(b.id));
+  return { matches: ranked.map((match) => match.id) };
+}
+
+export function hasDriveShareFaces(db: AppDb, shareId: string): boolean {
+  return !!db
+    .select({ id: driveShareFiles.id })
+    .from(driveShareFiles)
+    .where(
+      and(
+        eq(driveShareFiles.shareId, shareId),
+        isNotNull(driveShareFiles.faces),
+        sql`${driveShareFiles.faces} <> '[]'`,
+      ),
+    )
+    .limit(1)
+    .get();
 }
 
 export function deleteDriveShareByActor(db: AppDb, actor: ActorContext, shareId: string): void {
@@ -555,6 +664,7 @@ function summarize(db: AppDb, rows: DriveShareRow[]): DriveShareSummary[] {
     hasPin: !!r.pinHash,
     maxSelect: r.maxSelect,
     allowOriginal: r.allowOriginal,
+    faceSearch: r.faceSearch,
     expiresAt: r.expiresAt?.getTime() ?? null,
     expired: !!r.expiresAt && r.expiresAt.getTime() < Date.now(),
     fileCount: r.fileCount,

@@ -34,6 +34,7 @@ export async function POST(request: Request): Promise<Response> {
       pin: (body.pin as string | null | undefined) ?? null,
       maxSelect: Number(body.maxSelect ?? 0),
       allowOriginal: body.allowOriginal === true,
+      faceSearch: body.faceSearch === true,
       expiresInDays: (body.expiresInDays as number | null | undefined) ?? null,
       files: body.files as DriveFileInput[],
     });

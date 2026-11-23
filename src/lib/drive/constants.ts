@@ -1,5 +1,9 @@
 export const DRIVE_RELEASES_URL = "https://github.com/MeiYan1999/StudioCore-test1/releases/latest";
 
+export const DRIVE_FACE_DIM = 128;
+export const DRIVE_FACE_MAX_PER_FILE = 20;
+export const DRIVE_FACE_MATCH_THRESHOLD = 0.5;
+
 export const DRIVE_DOWNLOADS = {
   windows: "https://github.com/MeiYan1999/StudioCore-test1/releases/latest/download/StudioCore-Drive-win-x64.exe",
   macArm64:

@@ -4,7 +4,7 @@ import { getActorFromToken } from "@/lib/auth/session-core";
 import type { ActorContext } from "@/lib/auth/types";
 import type { AppDb } from "@/lib/db/client";
 import { eq } from "drizzle-orm";
-import { tenants, type DriveDevice } from "@/lib/db/schema";
+import { driveShareFiles, tenants, type DriveDevice } from "@/lib/db/schema";
 import { driveErrorResponse } from "@/lib/drive/http";
 import { parseDriveMarkup } from "@/lib/drive/markup";
 import {
@@ -24,15 +24,18 @@ import {
   getDrivePicksForActor,
   getDrivePicksForDevice,
   getDriveShareBySlug,
+  hasDriveShareFaces,
   listDriveDevices,
   listDrivePublicFiles,
   listDriveSharesForDevice,
   listDriveSharesForTenant,
+  matchDriveFaces,
   listDriveSubmissionsSince,
   pairDriveDevice,
   replaceDriveShareFiles,
   revokeDriveDevice,
   setDrivePick,
+  setDriveShareFaces,
   submitDriveSelection,
   updateDriveShareByActor,
   updateDriveShareFromDevice,
@@ -227,6 +230,125 @@ describe("link chia sẻ", () => {
     expect(() =>
       createDriveShare(db, device, { title: "A", kind: "select", pin: "12", files: files(1) }),
     ).toThrow(ValidationError);
+  });
+
+  it("bật tìm khuôn mặt theo lựa chọn và mặc định tắt", () => {
+    const { device } = pair();
+    const disabled = createDriveShare(db, device, { title: "Mặc định", kind: "select", files: files(1) });
+    const enabled = createDriveShare(db, device, {
+      title: "Tìm khuôn mặt",
+      kind: "select",
+      faceSearch: true,
+      files: files(1),
+    });
+    const descriptor = Array.from({ length: 128 }, () => 0.25);
+    setDriveShareFaces(db, device, enabled.id, {
+      files: [{ key: files(1)[0].key, faces: [descriptor] }],
+    });
+
+    expect(disabled.faceSearch).toBe(false);
+    expect(listDriveSharesForDevice(db, device).find((share) => share.id === enabled.id)?.faceSearch).toBe(true);
+    updateDriveShareFromDevice(db, device, enabled.id, { faceSearch: false });
+    expect(listDriveSharesForDevice(db, device).find((share) => share.id === enabled.id)?.faceSearch).toBe(false);
+    expect(
+      db.select().from(driveShareFiles).all().find((file) => file.shareId === enabled.id)?.faces,
+    ).toBe(JSON.stringify([descriptor]));
+  });
+
+  it("kiểm tra quyền sở hữu và giới hạn mã khuôn mặt", () => {
+    const { device } = pair("Khuôn mặt");
+    const otherDevice = pair("Máy khác").device;
+    const share = createDriveShare(db, device, { title: "Tìm khuôn mặt", kind: "select", files: files(1) });
+    const key = files(1)[0].key;
+    const descriptor = Array.from({ length: 128 }, () => 0);
+
+    expect(() => setDriveShareFaces(db, otherDevice, share.id, { files: [] })).toThrow(NotFoundError);
+    expect(() =>
+      setDriveShareFaces(db, device, share.id, { files: [{ key: "key-foreign", faces: [] }] }),
+    ).toThrow(ValidationError);
+    expect(() =>
+      setDriveShareFaces(db, device, share.id, { files: [{ key, faces: [descriptor.slice(1)] }] }),
+    ).toThrow(ValidationError);
+    expect(() =>
+      setDriveShareFaces(db, device, share.id, {
+        files: [{ key, faces: [descriptor.map((value, index) => (index === 0 ? Number.NaN : value))] }],
+      }),
+    ).toThrow(ValidationError);
+    expect(() =>
+      setDriveShareFaces(db, device, share.id, {
+        files: [{ key, faces: Array.from({ length: 21 }, () => descriptor) }],
+      }),
+    ).toThrow(ValidationError);
+    expect(() =>
+      setDriveShareFaces(db, device, share.id, {
+        files: Array.from({ length: 101 }, () => ({ key, faces: [] })),
+      }),
+    ).toThrow(ValidationError);
+  });
+
+  it("giữ mã khuôn mặt khi kích thước không đổi và xóa khi kích thước thay đổi", () => {
+    const { device } = pair("Quét khuôn mặt");
+    const originalFiles = files(2);
+    const share = createDriveShare(db, device, { title: "Tìm khuôn mặt", kind: "select", files: originalFiles });
+    const descriptor = Array.from({ length: 128 }, () => 0.123456);
+    setDriveShareFaces(db, device, share.id, {
+      files: originalFiles.map((file) => ({ key: file.key, faces: [descriptor] })),
+    });
+
+    replaceDriveShareFiles(db, device, share.id, [
+      { ...originalFiles[0], name: "IMG_1000-renamed.JPG" },
+      originalFiles[1],
+    ]);
+    const afterSameSize = db
+      .select()
+      .from(driveShareFiles)
+      .all()
+      .filter((file) => file.shareId === share.id)
+      .sort((a, b) => a.sortIndex - b.sortIndex);
+    expect(afterSameSize.map((file) => JSON.parse(file.faces ?? "null"))).toEqual([
+      [descriptor.map((value) => Math.round(value * 10_000) / 10_000)],
+      [descriptor.map((value) => Math.round(value * 10_000) / 10_000)],
+    ]);
+    replaceDriveShareFiles(db, device, share.id, [
+      { ...originalFiles[0], size: originalFiles[0].size + 1 },
+      originalFiles[1],
+    ]);
+    const afterChangedSize = db
+      .select()
+      .from(driveShareFiles)
+      .all()
+      .filter((file) => file.shareId === share.id)
+      .sort((a, b) => a.sortIndex - b.sortIndex);
+    expect(afterChangedSize.map((file) => file.faces)).toEqual([null, JSON.stringify([
+      descriptor.map((value) => Math.round(value * 10_000) / 10_000),
+    ])]);
+  });
+
+  it("trả kết quả khớp theo khoảng cách tăng dần, dưới ngưỡng", () => {
+    const { device } = pair("Ghép khuôn mặt");
+    const shareFiles = files(4);
+    const share = createDriveShare(db, device, { title: "Tìm khuôn mặt", kind: "select", files: shareFiles });
+    const vector = (first: number) => [first, ...Array.from({ length: 127 }, () => 0)];
+    setDriveShareFaces(db, device, share.id, {
+      files: [
+        { key: shareFiles[0].key, faces: [vector(0.4), vector(0.1)] },
+        { key: shareFiles[1].key, faces: [vector(0.3)] },
+        { key: shareFiles[2].key, faces: [vector(0.5)] },
+        { key: shareFiles[3].key, faces: [] },
+      ],
+    });
+    const rows = db
+      .select()
+      .from(driveShareFiles)
+      .all()
+      .filter((file) => file.shareId === share.id)
+      .sort((a, b) => a.sortIndex - b.sortIndex);
+
+    expect(matchDriveFaces(db, share.id, vector(0))).toEqual({
+      matches: [rows[0].id, rows[1].id],
+    });
+    expect(hasDriveShareFaces(db, share.id)).toBe(true);
+    expect(hasDriveShareFaces(db, "missing-share")).toBe(false);
   });
 
   it("cô lập theo studio và theo thiết bị", () => {
