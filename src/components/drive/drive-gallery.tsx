@@ -4,6 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import {
   ArrowDownAZ,
   ArrowUpAZ,
+  Camera,
   ChevronLeft,
   ChevronRight,
   Brush,
@@ -43,6 +44,7 @@ type Props = {
   kind: "select" | "deliver";
   maxSelect: number;
   allowOriginal: boolean;
+  faceSearch: boolean;
   submittedAt: number | null;
   online: boolean;
   files: DrivePublicFile[];
@@ -88,6 +90,12 @@ export function DriveGallery(props: Props) {
   const [currentUrl, setCurrentUrl] = useState("");
   const [downloadsBusy, setDownloadsBusy] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
+  const [selfieOpen, setSelfieOpen] = useState(false);
+  const [faceApiLoading, setFaceApiLoading] = useState(false);
+  const [faceProcessing, setFaceProcessing] = useState(false);
+  const [faceError, setFaceError] = useState("");
+  const [faceMatches, setFaceMatches] = useState<string[] | null>(null);
+  const faceApiRef = useRef<typeof import("@vladmandic/face-api/dist/face-api.esm.js") | null>(null);
   const filmstripCurrentRef = useRef<HTMLButtonElement>(null);
   const lightboxRef = useRef<HTMLDivElement>(null);
   const lightboxOpenerRef = useRef<HTMLElement | null>(null);
@@ -97,14 +105,16 @@ export function DriveGallery(props: Props) {
   const pickedCount = useMemo(() => files.filter((f) => f.picked).length, [files]);
   const notesCount = useMemo(() => files.filter((file) => file.note || file.markup).length, [files]);
   const list = useMemo(() => {
-    const filtered =
+    const filteredByTab =
       tab === "picked"
         ? files.filter((file) => file.picked)
         : tab === "notes"
           ? files.filter((file) => file.note || file.markup)
           : files;
+    const filtered =
+      faceMatches === null ? filteredByTab : filteredByTab.filter((file) => faceMatches.includes(file.id));
     return [...filtered].sort((a, b) => a.name.localeCompare(b.name, "vi", { sensitivity: "base" }) * (ascending ? 1 : -1));
-  }, [ascending, files, tab]);
+  }, [ascending, faceMatches, files, tab]);
   const openIndex = openId ? list.findIndex((f) => f.id === openId) : -1;
   const openFile = openIndex >= 0 ? list[openIndex] : null;
   const openFileId = openFile?.id ?? "";
@@ -267,6 +277,72 @@ export function DriveGallery(props: Props) {
     setInfoOpen(false);
     setDrawingActive(true);
     setDrawingRequest((current) => current + 1);
+  }
+
+  async function openFaceSearch() {
+    setSelfieOpen(true);
+    setFaceError("");
+    if (faceApiRef.current) return;
+    setFaceApiLoading(true);
+    try {
+      const faceapi = await import("@vladmandic/face-api/dist/face-api.esm.js");
+      await Promise.all([
+        faceapi.nets.ssdMobilenetv1.loadFromUri("/drive-face-models"),
+        faceapi.nets.faceLandmark68Net.loadFromUri("/drive-face-models"),
+        faceapi.nets.faceRecognitionNet.loadFromUri("/drive-face-models"),
+      ]);
+      faceApiRef.current = faceapi;
+    } catch {
+      setFaceError("Không tải được bộ nhận diện khuôn mặt. Hãy thử lại.");
+    } finally {
+      setFaceApiLoading(false);
+    }
+  }
+
+  async function searchWithSelfie(file: File) {
+    const faceapi = faceApiRef.current;
+    if (!faceapi) return;
+    setFaceProcessing(true);
+    setFaceError("");
+    let imageUrl: string | null = null;
+    try {
+      imageUrl = URL.createObjectURL(file);
+      const image = new Image();
+      image.src = imageUrl;
+      await image.decode();
+      const detections = await faceapi
+        .detectAllFaces(image, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 }))
+        .withFaceLandmarks()
+        .withFaceDescriptors();
+      if (detections.length === 0) {
+        setFaceError("Không thấy khuôn mặt, thử ảnh rõ mặt hơn.");
+        return;
+      }
+      const largest = detections.reduce((best, current) =>
+        current.detection.box.width * current.detection.box.height >
+        best.detection.box.width * best.detection.box.height
+          ? current
+          : best,
+      );
+      const response = await fetch(`${base}/faces`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ descriptor: Array.from(largest.descriptor) }),
+      });
+      const data = (await response.json().catch(() => null)) as { error?: string; matches?: string[] } | null;
+      if (!response.ok || !data || !Array.isArray(data.matches)) {
+        throw new Error(data?.error ?? "Không thể tìm ảnh bằng khuôn mặt.");
+      }
+      setFaceMatches(data.matches);
+      setSelfieOpen(false);
+      setTab("all");
+      setShown(PAGE_SIZE);
+    } catch (error) {
+      setFaceError(error instanceof Error ? error.message : "Không thể nhận diện ảnh selfie.");
+    } finally {
+      if (imageUrl) URL.revokeObjectURL(imageUrl);
+      setFaceProcessing(false);
+    }
   }
 
   const togglePick = useCallback(
@@ -573,6 +649,16 @@ export function DriveGallery(props: Props) {
               <MessageSquare className="h-3.5 w-3.5" aria-hidden />
               {notesCount}
             </button>
+            {props.faceSearch ? (
+              <button
+                type="button"
+                onClick={() => void openFaceSearch()}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-50 dark:text-blue-300 dark:hover:bg-blue-950/40 sm:text-sm"
+              >
+                <Camera className="h-3.5 w-3.5" aria-hidden />
+                Tìm ảnh của tôi
+              </button>
+            ) : null}
           </div>
 
           <div className="ml-auto flex items-center gap-2">
@@ -621,9 +707,24 @@ export function DriveGallery(props: Props) {
       </div>
 
       <section className="mx-auto max-w-[1040px] px-4 pb-32 pt-5">
+        {faceMatches !== null ? (
+          <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-800 dark:bg-blue-950/50 dark:text-blue-200">
+            Ảnh có bạn ({faceMatches.length})
+            <button
+              type="button"
+              onClick={() => setFaceMatches(null)}
+              aria-label="Xóa bộ lọc ảnh có bạn"
+              className="rounded-full p-0.5 hover:bg-blue-100 dark:hover:bg-blue-900"
+            >
+              <X className="h-4 w-4" aria-hidden />
+            </button>
+          </div>
+        ) : null}
         {list.length === 0 ? (
           <p className="py-20 text-center text-sm text-slate-500 dark:text-neutral-400">
-            {tab === "picked"
+            {faceMatches !== null
+              ? "Không tìm thấy ảnh có bạn trong danh sách này."
+              : tab === "picked"
               ? "Bạn chưa chọn ảnh nào. Bấm vào biểu tượng trái tim để chọn."
               : tab === "notes"
                 ? "Chưa có ảnh nào được ghi chú."
@@ -809,6 +910,71 @@ export function DriveGallery(props: Props) {
                 {busy ? "Đang gửi…" : "Gửi cho studio"}
               </Button>
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {selfieOpen ? (
+        <div
+          className="fixed inset-0 z-40 flex items-end justify-center bg-black/50 p-4 sm:items-center"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Tìm ảnh bằng khuôn mặt"
+          onClick={() => setSelfieOpen(false)}
+        >
+          <div
+            className="w-full max-w-md space-y-4 rounded-2xl bg-white p-6 text-slate-900 shadow-xl dark:bg-neutral-900 dark:text-white"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-lg font-semibold">Tìm ảnh của tôi</h2>
+              <button
+                type="button"
+                onClick={() => setSelfieOpen(false)}
+                aria-label="Đóng"
+                className="rounded-full p-2 hover:bg-slate-100 dark:hover:bg-neutral-800"
+              >
+                <X className="h-4 w-4" aria-hidden />
+              </button>
+            </div>
+            <p className="text-sm leading-6 text-slate-600 dark:text-neutral-300">
+              Ảnh selfie chỉ được xử lý trên máy của bạn, không gửi lên máy chủ.
+            </p>
+            {faceApiLoading || faceProcessing ? (
+              <p className="text-sm text-slate-500 dark:text-neutral-400">Đang nhận diện…</p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                <label className="inline-flex cursor-pointer items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
+                  <Camera className="h-4 w-4" aria-hidden />
+                  Chụp selfie
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="user"
+                    className="sr-only"
+                    onChange={(event) => {
+                      const file = event.currentTarget.files?.[0];
+                      if (file) void searchWithSelfie(file);
+                      event.currentTarget.value = "";
+                    }}
+                  />
+                </label>
+                <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold hover:bg-slate-50 dark:border-neutral-700 dark:hover:bg-neutral-800">
+                  Chọn ảnh
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="sr-only"
+                    onChange={(event) => {
+                      const file = event.currentTarget.files?.[0];
+                      if (file) void searchWithSelfie(file);
+                      event.currentTarget.value = "";
+                    }}
+                  />
+                </label>
+              </div>
+            )}
+            {faceError ? <p role="alert" className="text-sm text-red-600 dark:text-red-400">{faceError}</p> : null}
           </div>
         </div>
       ) : null}

@@ -65,6 +65,7 @@ export async function updateDriveShareAction(shareId: string, patch: DriveShareP
     if (patch.pin !== undefined) safe.pin = patch.pin === null ? null : String(patch.pin);
     if (patch.maxSelect !== undefined) safe.maxSelect = Number(patch.maxSelect);
     if (patch.allowOriginal !== undefined) safe.allowOriginal = patch.allowOriginal === true;
+    if (patch.faceSearch !== undefined) safe.faceSearch = patch.faceSearch === true;
     if (patch.expiresInDays !== undefined) {
       safe.expiresInDays = patch.expiresInDays === null ? null : Number(patch.expiresInDays);
     }

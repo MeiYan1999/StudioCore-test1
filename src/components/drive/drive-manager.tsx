@@ -19,6 +19,7 @@ import {
   Pause,
   Play,
   RotateCcw,
+  ScanFace,
   Trash2,
   Unplug,
 } from "lucide-react";
@@ -346,6 +347,23 @@ export function DriveManager({ devices, shares, canManage, siteUrl }: Props) {
                                 Cho chọn lại
                               </Button>
                             ) : null}
+                            <Button
+                              size="sm"
+                              variant={share.faceSearch ? "secondary" : "outline"}
+                              disabled={pending}
+                              aria-pressed={share.faceSearch}
+                              onClick={() =>
+                                run(
+                                  () => updateDriveShareAction(share.id, { faceSearch: !share.faceSearch }),
+                                  share.faceSearch
+                                    ? "Đã tắt tìm ảnh bằng khuôn mặt."
+                                    : "Đã bật tìm ảnh bằng khuôn mặt.",
+                                )
+                              }
+                            >
+                              <ScanFace className="h-4 w-4" aria-hidden />
+                              Tìm ảnh bằng khuôn mặt
+                            </Button>
                             <Button
                               size="sm"
                               variant="outline"

@@ -5,6 +5,7 @@ import { DrivePinForm } from "@/components/drive/drive-pin-form";
 import { resolveDrivePublicAccess } from "@/lib/drive/public-access";
 import {
   getTenantName,
+  hasDriveShareFaces,
   incrementDriveShareViews,
   isDriveDeviceOnline,
   listDrivePublicFiles,
@@ -60,6 +61,7 @@ export default async function DriveSharePage({ params }: { params: Promise<{ slu
       kind={share.kind === "deliver" ? "deliver" : "select"}
       maxSelect={share.maxSelect}
       allowOriginal={share.allowOriginal}
+      faceSearch={share.faceSearch && hasDriveShareFaces(db, share.id)}
       submittedAt={share.submittedAt?.getTime() ?? null}
       online={!!device && isDriveDeviceOnline(device)}
       files={listDrivePublicFiles(db, share.id)}
