@@ -892,10 +892,8 @@ test("macOS installs a distinct Finder Quick Action per action and removes the l
     const workflow = await fs.promises.readFile(path.join(contentsDir, "document.wflow"), "utf8");
     assert.ok(info.includes(`<string>StudioCore Drive – ${action.label.replaceAll("&", "&amp;")}</string>`));
     assert.ok(info.includes(`<string>vn.io.studiocore.drive.context.${action.id}</string>`));
-    assert.match(
-      workflow,
-      new RegExp(`open -b vn\\.io\\.studiocore\\.drive --args --action=${action.id} --share="\\$@"`),
-    );
+    const command = workflow.match(/<key>COMMAND_STRING<\/key>\s*<string>([^<]+)<\/string>/)?.[1];
+    assert.equal(command, `open -n -a "StudioCore Drive" --args --action=${action.id} --share="$@"`);
     const bundleId = info.match(/<key>CFBundleIdentifier<\/key>\s*<string>([^<]+)<\/string>/)?.[1];
     bundleIds.add(bundleId);
   }

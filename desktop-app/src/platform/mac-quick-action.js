@@ -9,6 +9,7 @@ const { CONTEXT_ACTIONS } = require("./context-actions");
 
 const LEGACY_QUICK_ACTION_NAME = "Chia sẻ bằng StudioCore Drive";
 const QUICK_ACTION_PREFIX = "StudioCore Drive – ";
+const APP_NAME = "StudioCore Drive";
 const APP_BUNDLE_ID = "vn.io.studiocore.drive";
 
 function quickActionName(action) {
@@ -49,7 +50,7 @@ function quickActionTemplates(templates, action) {
   workflow = replacePlistString(
     workflow,
     "COMMAND_STRING",
-    `open -b ${APP_BUNDLE_ID} --args --action=${action.id} --share="$@"`,
+    `open -n -a "${APP_NAME}" --args --action=${action.id} --share="$@"`,
   );
   return { "Info.plist": Buffer.from(info), "document.wflow": Buffer.from(workflow) };
 }
