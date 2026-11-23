@@ -80,6 +80,7 @@ export function DriveGallery(props: Props) {
   const filmstripCurrentRef = useRef<HTMLButtonElement>(null);
   const lightboxRef = useRef<HTMLDivElement>(null);
   const lightboxOpenerRef = useRef<HTMLElement | null>(null);
+  const previousDarkClassRef = useRef<boolean | null>(null);
 
   const selecting = kind === "select";
   const downloadAllowed = selecting ? allowOriginal : true;
@@ -131,6 +132,18 @@ export function DriveGallery(props: Props) {
       return () => window.clearTimeout(timeout);
     }
   }, []);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    previousDarkClassRef.current = root.classList.contains("dark");
+    return () => {
+      root.classList.toggle("dark", previousDarkClassRef.current === true);
+    };
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", theme === "dark");
+  }, [theme]);
 
   useEffect(() => {
     filmstripCurrentRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
