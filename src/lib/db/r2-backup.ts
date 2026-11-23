@@ -18,10 +18,12 @@ const backupJobs = new Map<string, Promise<boolean>>();
 type BackupState = {
   etag: string | null;
   digest: string | null;
+  writerId?: string;
   pending?: string[];
 };
 
 const SNAPSHOT_DIGEST_METADATA = "snapshot-sha256";
+const WRITER_METADATA = "snapshot-writer";
 const SHA256 = /^[a-f0-9]{64}$/;
 const EMPTY_STATE: BackupState = { etag: null, digest: null };
 
@@ -35,6 +37,7 @@ function readBackupState(dbPath: string): BackupState | undefined {
       !((state.etag === null && state.digest === null) ||
         (typeof state.etag === "string" && !!state.etag &&
           typeof state.digest === "string" && SHA256.test(state.digest))) ||
+      (state.writerId !== undefined && (typeof state.writerId !== "string" || !state.writerId)) ||
       (state.pending !== undefined && (!Array.isArray(state.pending) ||
         state.pending.some((digest: unknown) => typeof digest !== "string" || !SHA256.test(digest))))) {
       throw new Error("Trạng thái sao lưu R2 không hợp lệ.");
@@ -111,13 +114,25 @@ async function headBackup(s3: R2Connection) {
   }
 }
 
-async function recoverPendingUpload(dbPath: string, s3: R2Connection, state: BackupState): Promise<BackupState> {
+function isNewerGeneration(remote: string | undefined, local: string | undefined) {
+  return local !== undefined && remote !== undefined &&
+    Number.isFinite(Number(remote)) && Number(remote) > Number(local);
+}
+
+async function recoverPendingUpload(
+  dbPath: string,
+  s3: R2Connection,
+  state: BackupState,
+  generation: string | undefined,
+): Promise<BackupState> {
   if (!state.pending?.length) return state;
 
   const remote = await headBackup(s3);
+  if (isNewerGeneration(remote?.metadata?.generation, generation)) throw new BackupConflictError();
   const digest = remote?.metadata?.[SNAPSHOT_DIGEST_METADATA];
-  if (remote && digest && state.pending.includes(digest)) {
-    const confirmed = { etag: remote.etag, digest };
+  if (remote && digest && state.pending.includes(digest) &&
+    state.writerId && remote.metadata?.[WRITER_METADATA] === state.writerId) {
+    const confirmed = { etag: remote.etag, digest, writerId: state.writerId };
     writeBackupState(dbPath, confirmed);
     return confirmed;
   }
@@ -268,11 +283,7 @@ async function performDbBackup(dbPath: string): Promise<boolean> {
         }),
       );
       const remoteGeneration = current.Metadata?.generation;
-      if (
-        remoteGeneration !== undefined &&
-        Number.isFinite(Number(remoteGeneration)) &&
-        Number(remoteGeneration) > generationNumber
-      ) {
+      if (isNewerGeneration(remoteGeneration, generation)) {
         console.error("[R2 Backup] XUNG ĐỘT: instance mới hơn sở hữu bản sao lưu. Không ghi đè.");
         return false;
       }
@@ -305,7 +316,7 @@ async function performDbBackup(dbPath: string): Promise<boolean> {
       sqlite = (getDb() as { $client?: Database.Database }).$client;
       if (!sqlite) throw new Error("SQLite client không hỗ trợ sao lưu.");
     }
-    const state = await recoverPendingUpload(dbPath, s3, readBackupState(dbPath) ?? EMPTY_STATE);
+    const state = await recoverPendingUpload(dbPath, s3, readBackupState(dbPath) ?? EMPTY_STATE, generation);
     const buffer = await snapshotDatabase(dbPath, sqlite);
     const digest = snapshotDigest(buffer);
     if (state.digest === digest) {
@@ -313,7 +324,8 @@ async function performDbBackup(dbPath: string): Promise<boolean> {
       return true;
     }
 
-    const attempt = { ...state, pending: [...new Set([...(state.pending ?? []), digest])] };
+    const writerId = state.writerId ?? crypto.randomUUID();
+    const attempt = { ...state, writerId, pending: [...new Set([...(state.pending ?? []), digest])] };
     writeBackupState(dbPath, attempt);
     try {
       const result = await s3.client.send(new PutObjectCommand({
@@ -324,13 +336,14 @@ async function performDbBackup(dbPath: string): Promise<boolean> {
         ...(state.etag ? { IfMatch: state.etag } : { IfNoneMatch: "*" }),
         Metadata: {
           [SNAPSHOT_DIGEST_METADATA]: digest,
+          [WRITER_METADATA]: writerId,
           ...(generation !== undefined ? { generation } : {}),
         },
       }));
       if (!result.ETag) throw new Error("R2 không trả về ETag sau khi sao lưu.");
-      writeBackupState(dbPath, { etag: result.ETag, digest });
+      writeBackupState(dbPath, { etag: result.ETag, digest, writerId });
     } catch (error) {
-      const recovered = await recoverPendingUpload(dbPath, s3, attempt);
+      const recovered = await recoverPendingUpload(dbPath, s3, attempt, generation);
       if (recovered.digest !== digest) throw error;
     }
     lastSuccessfulBackups.set(dbPath, fingerprint);

@@ -304,14 +304,20 @@ describe("R2 database backups", () => {
       const dbPath = makeDbPath();
       fs.writeFileSync(dbPath, makeSnapshot());
       let digest: string | undefined;
+      let writerId: string | undefined;
       mocks.send.mockImplementation(async (command) => {
         if (command instanceof HeadObjectCommand) {
-          return { ETag: '"confirmed"', Metadata: { "snapshot-sha256": digest } };
+          return {
+            ETag: '"confirmed"',
+            Metadata: { "snapshot-sha256": digest, "snapshot-writer": writerId },
+          };
         }
         expect(command).toBeInstanceOf(PutObjectCommand);
         expect(command.input.IfNoneMatch).toBe("*");
         digest = command.input.Metadata["snapshot-sha256"];
+        writerId = command.input.Metadata["snapshot-writer"];
         expect(digest).toMatch(/^[a-f0-9]{64}$/);
+        expect(writerId).toMatch(/^[0-9a-f-]{36}$/);
         throw Object.assign(new Error(failure), {
           $metadata: { httpStatusCode: failure === "precondition failed" ? 412 : undefined },
         });
@@ -320,7 +326,7 @@ describe("R2 database backups", () => {
       await expect(backupDbToR2(dbPath)).resolves.toBe(true);
       expect(mocks.send.mock.calls[1][0]).toBeInstanceOf(HeadObjectCommand);
       expect(JSON.parse(fs.readFileSync(`${dbPath}.r2-state.json`, "utf8"))).toEqual({
-        etag: '"confirmed"', digest,
+        etag: '"confirmed"', digest, writerId,
       });
     },
   );
@@ -342,8 +348,44 @@ describe("R2 database backups", () => {
       const nextPut = mocks.send.mock.calls[3][0] as PutObjectCommand;
       expect(nextPut).toBeInstanceOf(PutObjectCommand);
       expect(nextPut.input.IfMatch).toBe('"confirmed"');
+      expect(nextPut.input.Metadata?.["snapshot-writer"]).toBe(firstPut.input.Metadata?.["snapshot-writer"]);
       expect(nextPut.input.Metadata?.["snapshot-sha256"]).not.toBe(firstPut.input.Metadata?.["snapshot-sha256"]);
     } finally {
+      db.close();
+    }
+  });
+
+  it.each([
+    { name: "different writer", sameWriter: false, remoteGeneration: "10" },
+    { name: "newer generation", sameWriter: true, remoteGeneration: "11" },
+  ])("rejects a matching digest from a $name after the generation preflight", async ({ sameWriter, remoteGeneration }) => {
+    const dbPath = makeDbPath();
+    mocks.send.mockResolvedValueOnce(restoreObject(makeSnapshot(), '"restored"'));
+    await expect(restoreDbFromR2IfMissing(dbPath)).resolves.toBe("restored");
+    vi.stubEnv("DB_BACKUP_GENERATION", "10");
+    const db = new Database(dbPath);
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      db.exec("INSERT INTO records VALUES ('overlapping commit')");
+      mocks.send.mockResolvedValueOnce({ ETag: '"restored"', Metadata: { generation: "9" } });
+      mocks.send.mockImplementationOnce(async (command) => {
+        expect(command).toBeInstanceOf(PutObjectCommand);
+        expect(command.input.IfMatch).toBe('"restored"');
+        mocks.send.mockResolvedValueOnce({
+          ETag: '"foreign"',
+          Metadata: {
+            ...command.input.Metadata,
+            generation: remoteGeneration,
+            "snapshot-writer": sameWriter ? command.input.Metadata["snapshot-writer"] : "another-instance",
+          },
+        });
+        throw Object.assign(new Error("precondition failed"), { $metadata: { httpStatusCode: 412 } });
+      });
+      await expect(backupDbToR2(dbPath)).resolves.toBe(false);
+      expect(JSON.parse(fs.readFileSync(`${dbPath}.r2-state.json`, "utf8")).etag).toBe('"restored"');
+      expect(log).toHaveBeenCalledWith(expect.stringContaining("XUNG ĐỘT"));
+    } finally {
+      log.mockRestore();
       db.close();
     }
   });
