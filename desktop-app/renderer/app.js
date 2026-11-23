@@ -7,6 +7,7 @@ const $ = (id) => document.getElementById(id);
 const bridge = window.drive;
 let state = null;
 let currentFolder = null;
+let currentIncludeAllFiles = false;
 let toastTimer = null;
 let queuedShareRequest = null;
 let shareMessageEdited = false;
@@ -68,8 +69,8 @@ function applyState(next) {
   $("pair-server").value = state.serverUrl;
   $("drop-hint").textContent =
     state.platform === "darwin"
-      ? "Kéo thả thư mục vào cửa sổ này; chuột phải thư mục → “Chia sẻ bằng StudioCore Drive” (có thể nằm trong mục Dịch vụ), hoặc kéo thư mục vào biểu tượng ứng dụng."
-      : "Kéo thả thư mục vào cửa sổ này, hoặc bật menu chuột phải trong Cài đặt.";
+      ? "Kéo thả thư mục vào cửa sổ này; chuột phải thư mục → chọn tác vụ trong “StudioCore Drive” ở mục Dịch vụ, hoặc kéo thư mục vào biểu tượng ứng dụng."
+      : "Kéo thả thư mục vào cửa sổ này, hoặc bật menu StudioCore Drive trong Cài đặt.";
   if (state.paired) void refresh();
 }
 
@@ -194,26 +195,39 @@ function syncKind() {
   }
 }
 
-async function openShareDialog(folder) {
+async function openShareDialog(request) {
+  const options = typeof request === "string" ? { folder: request } : request || {};
+  const folder = options.folder;
+  const includeAllFiles = options.includeAllFiles === true;
   if (!state || !state.paired) {
     toast("Hãy kết nối với studio trước.");
     return;
   }
   try {
-    const info = await call("previewFolder", folder);
+    const info = await call("previewFolder", { folder, includeAllFiles });
     if (info.count === 0) {
-      toast("Thư mục không có ảnh hoặc video nào.");
+      toast(includeAllFiles ? "Thư mục không có tệp nào." : "Thư mục không có ảnh hoặc video nào.");
       return;
     }
     currentFolder = info.folder;
+    currentIncludeAllFiles = includeAllFiles;
     $("share-folder").textContent = info.folder;
-    $("share-summary").textContent = `${info.images} ảnh · ${info.raws} RAW lẻ · ${info.videos} video · ${formatBytes(info.bytes)}`;
+    const otherSummary = includeAllFiles && info.others ? ` · ${info.others} tệp khác` : "";
+    const rawSummaryLabel = includeAllFiles ? "RAW" : "RAW lẻ";
+    $("share-summary").textContent =
+      `${info.images} ảnh · ${info.raws} ${rawSummaryLabel} · ${info.videos} video${otherSummary} · ${formatBytes(info.bytes)}`;
     $("share-title").value = info.name;
     $("share-client").value = "";
     $("share-pin").value = "";
     shareMessageEdited = false;
     $("share-message").value = "";
     showError("share-error", "");
+    if (options.kind === "select" || options.kind === "deliver") {
+      document.querySelector(`input[name="kind"][value="${options.kind}"]`).checked = true;
+    }
+    if (typeof options.allowOriginal === "boolean") {
+      $("share-original").checked = options.allowOriginal;
+    }
     syncKind();
     if (!$("dlg-share").open) $("dlg-share").showModal();
   } catch (error) {
@@ -221,12 +235,12 @@ async function openShareDialog(folder) {
   }
 }
 
-function handleShareRequest(folder) {
+function handleShareRequest(request) {
   if (!state) {
-    queuedShareRequest = folder;
+    queuedShareRequest = request;
     return;
   }
-  void openShareDialog(folder);
+  void openShareDialog(request);
 }
 
 $("pair-form").addEventListener("submit", async (event) => {
@@ -264,6 +278,7 @@ $("share-form").addEventListener("submit", async (event) => {
       clientName: $("share-client").value,
       message: $("share-message").value,
       kind: document.querySelector('input[name="kind"]:checked').value,
+      includeAllFiles: currentIncludeAllFiles,
       pin: $("share-pin").value,
       maxSelect: Number($("share-max").value),
       allowOriginal: $("share-original").checked,
@@ -358,7 +373,7 @@ setInterval(() => {
 
 call("state").then((initial) => {
   applyState(initial);
-  const folder = queuedShareRequest ?? initial.pendingShare;
+  const request = queuedShareRequest ?? initial.pendingShare;
   queuedShareRequest = null;
-  if (folder) void openShareDialog(folder);
+  if (request) void openShareDialog(request);
 });

@@ -303,10 +303,14 @@ class DriveAgent extends EventEmitter {
     return copyPicks(share, picks, this.store.get("picksFolderName"), this.images);
   }
 
-  async previewFolder(folder) {
+  async previewFolder(folder, options = {}) {
     const stat = await fsp.stat(folder).catch(() => null);
     if (!stat || !stat.isDirectory()) throw new Error("Không mở được thư mục này.");
-    const files = await scanFolder(folder, "preview", { skipDirs: [this.store.get("picksFolderName")] });
+    const includeAllFiles = options.includeAllFiles === true;
+    const files = await scanFolder(folder, "preview", {
+      skipDirs: [this.store.get("picksFolderName")],
+      includeAllFiles,
+    });
     return {
       folder,
       name: path.basename(folder),
@@ -315,6 +319,7 @@ class DriveAgent extends EventEmitter {
       images: files.filter((f) => f.kind === "image").length,
       raws: files.filter((f) => f.kind === "raw").length,
       videos: files.filter((f) => f.kind === "video").length,
+      others: files.filter((f) => f.kind === "other").length,
     };
   }
 
@@ -322,13 +327,20 @@ class DriveAgent extends EventEmitter {
     if (!this.paired) throw new Error("Chưa kết nối với studio.");
     const real = await fsp.realpath(folder);
     const salt = crypto.randomBytes(16).toString("hex");
-    const files = await scanFolder(real, salt, { skipDirs: [this.store.get("picksFolderName")] });
-    if (files.length === 0) throw new Error("Thư mục không có ảnh hoặc video nào.");
+    const kind = options.kind === "deliver" ? "deliver" : "select";
+    const includeAllFiles = kind === "deliver" && options.includeAllFiles === true;
+    const files = await scanFolder(real, salt, {
+      skipDirs: [this.store.get("picksFolderName")],
+      includeAllFiles,
+    });
+    if (files.length === 0) {
+      throw new Error(includeAllFiles ? "Thư mục không có tệp nào." : "Thư mục không có ảnh hoặc video nào.");
+    }
     const result = await this.client().createShare({
       title: options.title || path.basename(real),
       clientName: options.clientName || null,
       message: typeof options.message === "string" ? options.message.slice(0, 1000) : "",
-      kind: options.kind === "deliver" ? "deliver" : "select",
+      kind,
       pin: options.pin || null,
       maxSelect: Number(options.maxSelect) || 0,
       allowOriginal: !!options.allowOriginal,
@@ -339,6 +351,7 @@ class DriveAgent extends EventEmitter {
       folder: real,
       salt,
       files: Object.fromEntries(files.map((f) => [f.key, f.rel])),
+      includeAllFiles,
     });
     return { id: result.id, url: result.url, count: files.length };
   }
@@ -346,8 +359,14 @@ class DriveAgent extends EventEmitter {
   async rescanShare(shareId) {
     const share = this.store.getShare(shareId);
     if (!share) throw new Error("Link này không được tạo từ máy tính này.");
-    const files = await scanFolder(share.folder, share.salt, { skipDirs: [this.store.get("picksFolderName")] });
-    if (files.length === 0) throw new Error("Thư mục không còn ảnh hoặc video nào.");
+    const includeAllFiles = share.includeAllFiles === true;
+    const files = await scanFolder(share.folder, share.salt, {
+      skipDirs: [this.store.get("picksFolderName")],
+      includeAllFiles,
+    });
+    if (files.length === 0) {
+      throw new Error(includeAllFiles ? "Thư mục không còn tệp nào." : "Thư mục không còn ảnh hoặc video nào.");
+    }
     await this.client().replaceFiles(shareId, files.map(({ key, name, kind, size }) => ({ key, name, kind, size })));
     this.store.setShare(shareId, { ...share, files: Object.fromEntries(files.map((f) => [f.key, f.rel])) });
     return { count: files.length };

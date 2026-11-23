@@ -2,10 +2,10 @@
 
 const { execFile } = require("node:child_process");
 const path = require("node:path");
+const { CONTEXT_ACTIONS } = require("./context-actions");
 
 const CONTEXT_MENU_KEY = "HKCU\\Software\\Classes\\Directory\\shell\\StudioCoreDrive";
 const WINDOWS_RUN_KEY = "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run";
-const KEYS = [CONTEXT_MENU_KEY];
 const APP_DIRECTORY = path.resolve(__dirname, "../..");
 
 function reg(args) {
@@ -14,25 +14,45 @@ function reg(args) {
   });
 }
 
-function buildContextMenuCommand(exePath) {
-  return `"${exePath}" --share="%1"`;
+function buildContextMenuCommand(exePath, actionId) {
+  const action = CONTEXT_ACTIONS.some((item) => item.id === actionId) ? actionId : "open";
+  return `"${exePath}" --action=${action} --share="%1"`;
+}
+
+function buildContextMenuRegistryEntries(exePath) {
+  const entries = [
+    { key: CONTEXT_MENU_KEY, value: "MUIVerb", type: "REG_SZ", data: "StudioCore Drive" },
+    { key: CONTEXT_MENU_KEY, value: "Icon", type: "REG_SZ", data: `"${exePath}"` },
+    { key: CONTEXT_MENU_KEY, value: "SubCommands", type: "REG_SZ", data: "" },
+  ];
+  CONTEXT_ACTIONS.forEach(({ id, label }, index) => {
+    const itemKey = `${CONTEXT_MENU_KEY}\\shell\\${String(index + 1).padStart(2, "0")}${id}`;
+    entries.push({ key: itemKey, value: "MUIVerb", type: "REG_SZ", data: label });
+    if (id === "folder") {
+      entries.push({ key: itemKey, value: "CommandFlags", type: "REG_DWORD", data: "0x20" });
+    }
+    entries.push({
+      key: `${itemKey}\\command`,
+      value: "",
+      type: "REG_SZ",
+      data: buildContextMenuCommand(exePath, id),
+    });
+  });
+  return entries;
 }
 
 /**
- * Windows: thêm/gỡ mục "Chia sẻ bằng StudioCore Drive" khi chuột phải thư mục (chỉ cho người dùng hiện tại,
- * không cần quyền quản trị). macOS dùng "Mở bằng → StudioCore Drive" khai báo sẵn trong Info.plist.
- * Tham số được truyền qua execFile dạng mảng nên tên thư mục không bao giờ đi qua shell.
+ * Thêm/gỡ menu phân tầng StudioCore Drive cho thư mục trong Explorer.
+ * Các lệnh dùng execFile với mảng đối số, không qua shell.
  */
 async function setWindowsContextMenu(enabled, exePath) {
   if (process.platform !== "win32") return false;
-  for (const key of KEYS) {
-    if (enabled) {
-      await reg(["add", key, "/ve", "/d", "Chia sẻ bằng StudioCore Drive", "/f"]);
-      await reg(["add", key, "/v", "Icon", "/d", `"${exePath}"`, "/f"]);
-      await reg(["add", `${key}\\command`, "/ve", "/d", buildContextMenuCommand(exePath), "/f"]);
-    } else {
-      await reg(["delete", key, "/f"]).catch(() => undefined);
-    }
+  await reg(["delete", CONTEXT_MENU_KEY, "/f"]).catch(() => undefined);
+  if (!enabled) return true;
+
+  for (const entry of buildContextMenuRegistryEntries(exePath)) {
+    const valueArgs = entry.value ? ["/v", entry.value] : ["/ve"];
+    await reg(["add", entry.key, ...valueArgs, "/t", entry.type, "/d", entry.data, "/f"]);
   }
   return true;
 }
@@ -77,6 +97,7 @@ function sharePathFromArgv(argv) {
 module.exports = {
   CONTEXT_MENU_KEY,
   WINDOWS_RUN_KEY,
+  buildContextMenuRegistryEntries,
   buildContextMenuCommand,
   setWindowsContextMenu,
   sharePathFromArgv,
