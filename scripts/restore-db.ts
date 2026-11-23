@@ -5,7 +5,10 @@ import path from "node:path";
 
 try {
   const dbPath = resolveDbFilename();
-  const seededPath = path.join(path.dirname(dbPath), ".seeded");
+  const seededPath = path.join(
+    process.env.DATA_DIR || path.join(process.cwd(), "data"),
+    ".seeded",
+  );
   const existsBefore = fs.existsSync(dbPath);
 
   console.log(`[Restore DB] Đang kiểm tra sao lưu database từ Cloudflare R2 (${dbPath})...`);
