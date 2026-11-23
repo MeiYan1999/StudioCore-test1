@@ -247,7 +247,7 @@ export function DriveMarkupEditor({ fileName, imageUrl, markup, editable, onSave
         </div>
       ) : null}
       {drawing && usedColors.length > 0 ? (
-        <div className="mx-auto grid w-full max-w-3xl gap-2 px-3 pb-2 sm:grid-cols-2">
+        <div className="mx-auto grid max-h-[22vh] w-full max-w-3xl gap-2 overflow-y-auto px-3 pb-2 sm:grid-cols-2">
           {usedColors.map((usedColor) => {
             const name = DRIVE_MARKUP_PALETTE.find((entry) => entry.color === usedColor)?.name ?? "";
             const noteId = `drive-markup-note-${usedColor.slice(1)}`;
@@ -281,7 +281,7 @@ export function DriveMarkupEditor({ fileName, imageUrl, markup, editable, onSave
           })}
         </div>
       ) : null}
-      <div ref={stageRef} className="relative flex min-h-0 flex-1 items-center justify-center">
+      <div ref={stageRef} className="relative flex min-h-[180px] flex-1 items-center justify-center">
         <div
           className="relative shrink-0"
           style={imageSize ?? { width: 0, height: 0 }}
