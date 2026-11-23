@@ -23,7 +23,8 @@ type Props = {
 };
 
 export function DriveDownloadButtons({ compact = false }: Props) {
-  const [primaryPlatform, setPrimaryPlatform] = useState<DownloadPlatform>("windows");
+  const [primaryPlatforms, setPrimaryPlatforms] = useState<DownloadPlatform[]>(["windows"]);
+  const [showMacHint, setShowMacHint] = useState(false);
 
   useEffect(() => {
     const userAgent = navigator.userAgent.toLowerCase();
@@ -32,17 +33,34 @@ export function DriveDownloadButtons({ compact = false }: Props) {
 
     if (!userAgent.includes("macintosh") && !userAgent.includes("mac os x")) return;
 
-    void Promise.resolve().then(() => setPrimaryPlatform("macArm64"));
+    const showAllMacChoices = () => {
+      void Promise.resolve().then(() => {
+        setPrimaryPlatforms(["macArm64", "macX64"]);
+        setShowMacHint(true);
+      });
+    };
     const userAgentData = (navigator as NavigatorWithUserAgentData).userAgentData;
-    if (!userAgentData?.getHighEntropyValues) return;
+    if (!userAgentData?.getHighEntropyValues) {
+      showAllMacChoices();
+      return;
+    }
 
     void Promise.resolve()
       .then(() => userAgentData.getHighEntropyValues(["architecture"]))
       .then(
         ({ architecture }) => {
-          if (architecture === "x86") setPrimaryPlatform("macX64");
+          if (architecture === "arm") {
+            setPrimaryPlatforms(["macArm64"]);
+            setShowMacHint(false);
+          } else if (architecture === "x86") {
+            setPrimaryPlatforms(["macX64"]);
+            setShowMacHint(false);
+          } else {
+            setPrimaryPlatforms(["macArm64", "macX64"]);
+            setShowMacHint(true);
+          }
         },
-        () => undefined,
+        showAllMacChoices,
       );
   }, []);
 
@@ -54,13 +72,23 @@ export function DriveDownloadButtons({ compact = false }: Props) {
             key={platform}
             asChild
             size={compact ? "default" : "lg"}
-            variant={primaryPlatform === platform ? "primary" : "outline"}
+            variant={primaryPlatforms.includes(platform) ? "primary" : "outline"}
             className={compact ? "w-full" : undefined}
           >
             <a href={href}>{label}</a>
           </Button>
         ))}
       </div>
+      {showMacHint ? (
+        <p
+          className={
+            compact ? "text-center text-xs text-muted-foreground" : "mt-2 text-center text-xs text-muted-foreground"
+          }
+        >
+          Chưa rõ máy dùng chip gì? Bấm Apple menu › Giới thiệu về máy Mac: ghi “Apple M…” thì chọn chip Apple, ghi
+          “Intel” thì chọn chip Intel.
+        </p>
+      ) : null}
       <p
         className={
           compact ? "text-center text-xs text-muted-foreground" : "mt-2 text-center text-xs text-muted-foreground"
