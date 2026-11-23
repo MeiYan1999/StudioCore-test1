@@ -7,7 +7,7 @@ export function MarketingFooter() {
     <footer className="border-t border-border bg-surface">
       <div className="mx-auto grid w-full max-w-[1240px] gap-8 px-4 py-12 sm:grid-cols-2 sm:px-6 lg:grid-cols-4 lg:px-8">
         <div>
-          <BrandLogo showTagline={false} />
+          <BrandLogo stacked />
           <p className="mt-3 text-sm leading-6 text-muted-foreground">
             Nền tảng quản lý studio chụp ảnh &amp; áo cưới hàng đầu Việt Nam: CRM, đơn hàng, lịch chụp, hợp đồng số, PhotoShare và quản trị tài chính toàn diện.
           </p>
