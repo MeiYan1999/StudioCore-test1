@@ -909,9 +909,14 @@ export function DriveGallery(props: Props) {
             ) : null}
           </header>
 
-          <div className="relative min-h-0 flex-1">
-            {openFile.kind === "video" ? (
-              <div className="absolute inset-0 flex items-center justify-center px-10 pb-2">
+            <div className="relative min-h-0 flex-1">
+              {openFile.kind === "video" ? (
+              <div
+                className={cn(
+                  "absolute inset-x-0 top-0 flex items-center justify-center px-10",
+                  "bottom-24 sm:bottom-0",
+                )}
+              >
                 <video
                   key={openFile.id}
                   src={fileUrl(openFile.id, "preview")}
