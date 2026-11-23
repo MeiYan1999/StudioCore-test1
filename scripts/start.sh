@@ -7,8 +7,10 @@ if [ "$(id -u)" = "0" ]; then
   exec gosu nextjs:nodejs /bin/sh /app/scripts/start.sh
 fi
 
+export DB_BACKUP_GENERATION="${DB_BACKUP_GENERATION:-$(date +%s)}"
+
 # 1. Phục hồi database từ Cloudflare R2 nếu có
-node --import tsx scripts/restore-db.ts || true
+node --import tsx scripts/restore-db.ts
 
 # 2. Áp dụng migrations mới nhất
 npm run db:migrate
@@ -29,4 +31,13 @@ fi
 # 4. Ảnh demo nằm ngoài database (UPLOAD_ROOT, demo-data/, R2), tạo/upload lại nếu thiếu
 node --import tsx -e 'import { ensureDemoAlbumAssets } from "./src/lib/storage/local-storage"; await ensureDemoAlbumAssets();' || true
 
-exec npm start
+node_modules/.bin/next start &
+server_pid=$!
+shutdown() {
+  kill -TERM "$server_pid" 2>/dev/null || true
+  wait "$server_pid" 2>/dev/null || true
+  node --import tsx scripts/backup-db.ts || true
+  exit 0
+}
+trap shutdown TERM INT
+wait "$server_pid"

@@ -9,7 +9,7 @@ export type AppDb = BetterSQLite3Database<typeof schema>;
 
 const DATA_DIR = path.join(process.cwd(), "data");
 
-function resolveDatabasePath(url: string): string {
+export function resolveDbFilename(url: string = getEnv().DATABASE_URL): string {
   if (url === ":memory:" || url.startsWith("file:")) {
     return url;
   }
@@ -33,7 +33,7 @@ function resolveDatabasePath(url: string): string {
 }
 
 export function createDb(url: string = getEnv().DATABASE_URL): AppDb {
-  const filename = resolveDatabasePath(url);
+  const filename = resolveDbFilename(url);
   const sqlite = new Database(filename);
   sqlite.pragma("journal_mode = WAL");
   sqlite.pragma("foreign_keys = ON");

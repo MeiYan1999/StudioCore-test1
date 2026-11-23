@@ -12,7 +12,6 @@ export async function registerNodeDbBackups() {
     void backupDbToR2().catch(() => {});
   };
 
-  const timer = setInterval(backup, 10 * 60 * 1000);
+  const timer = setInterval(backup, 60 * 1000);
   timer.unref?.();
-  process.once("SIGTERM", backup);
 }
