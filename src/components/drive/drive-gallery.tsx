@@ -190,9 +190,11 @@ export function DriveGallery(props: Props) {
     try {
       for (const [index, file] of downloadFiles.entries()) {
         downloadFile(file);
-        if (index < downloadFiles.length - 1) await new Promise((resolve) => window.setTimeout(resolve, 250));
+        if (index < downloadFiles.length - 1) await new Promise((resolve) => window.setTimeout(resolve, 500));
       }
-      toast.success(`Đang tải ${downloadFiles.length} ảnh.`);
+      toast.success(
+        `Đã bắt đầu tải ${downloadFiles.length} tệp. Nếu trình duyệt hỏi, hãy bấm Cho phép tải nhiều tệp.`,
+      );
     } finally {
       setDownloadsBusy(false);
     }
