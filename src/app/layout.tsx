@@ -33,7 +33,11 @@ const themeScript = `
     var stored = localStorage.getItem("studiocore-theme") || "system";
     var prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
     var dark = stored === "dark" || (stored === "system" && prefersDark);
-    if (dark) document.documentElement.classList.add("dark");
+    if (window.location.pathname.startsWith("/drive/")) {
+      var driveTheme = localStorage.getItem("studiocore-drive-gallery-theme");
+      dark = driveTheme === "dark";
+    }
+    document.documentElement.classList.toggle("dark", dark);
     document.documentElement.dataset.theme = stored;
   } catch (error) {}
 })();

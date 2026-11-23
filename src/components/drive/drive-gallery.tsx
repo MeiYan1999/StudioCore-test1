@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDownAZ,
   ArrowUpAZ,
@@ -52,6 +52,17 @@ const PAGE_SIZE = 120;
 type GalleryTab = "all" | "picked" | "notes";
 type LightboxAction = "view" | "note" | "drawing";
 
+function restoreSiteTheme() {
+  let stored = "system";
+  try {
+    stored = window.localStorage.getItem("studiocore-theme") || "system";
+  } catch {
+    stored = "system";
+  }
+  const dark = stored === "dark" || (stored !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  document.documentElement.classList.toggle("dark", dark);
+}
+
 export function DriveGallery(props: Props) {
   const { slug, kind, maxSelect, allowOriginal } = props;
   const base = `/api/drive/s/${encodeURIComponent(slug)}`;
@@ -80,7 +91,6 @@ export function DriveGallery(props: Props) {
   const filmstripCurrentRef = useRef<HTMLButtonElement>(null);
   const lightboxRef = useRef<HTMLDivElement>(null);
   const lightboxOpenerRef = useRef<HTMLElement | null>(null);
-  const previousDarkClassRef = useRef<boolean | null>(null);
 
   const selecting = kind === "select";
   const downloadAllowed = selecting ? allowOriginal : true;
@@ -120,30 +130,23 @@ export function DriveGallery(props: Props) {
     anchor.remove();
   }
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    const root = document.documentElement;
     let savedTheme: string | null = null;
     try {
       savedTheme = window.localStorage.getItem("studiocore-drive-gallery-theme");
-    } catch {
-      return;
-    }
-    if (savedTheme === "dark") {
+    } catch {}
+    const dark = savedTheme === "dark";
+    root.classList.toggle("dark", dark);
+    if (dark) {
       const timeout = window.setTimeout(() => setTheme("dark"), 0);
-      return () => window.clearTimeout(timeout);
+      return () => {
+        window.clearTimeout(timeout);
+        restoreSiteTheme();
+      };
     }
+    return restoreSiteTheme;
   }, []);
-
-  useEffect(() => {
-    const root = document.documentElement;
-    previousDarkClassRef.current = root.classList.contains("dark");
-    return () => {
-      root.classList.toggle("dark", previousDarkClassRef.current === true);
-    };
-  }, []);
-
-  useEffect(() => {
-    document.documentElement.classList.toggle("dark", theme === "dark");
-  }, [theme]);
 
   useEffect(() => {
     filmstripCurrentRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
@@ -244,6 +247,7 @@ export function DriveGallery(props: Props) {
   function toggleTheme() {
     const next = theme === "dark" ? "light" : "dark";
     setTheme(next);
+    document.documentElement.classList.toggle("dark", next === "dark");
     try {
       window.localStorage.setItem("studiocore-drive-gallery-theme", next);
     } catch {
@@ -427,14 +431,7 @@ export function DriveGallery(props: Props) {
 
   return (
     <main
-      className={cn(
-        "min-h-screen pb-28 transition-colors",
-        theme === "dark" ? "dark bg-neutral-950 text-neutral-100" : "bg-[#f3f4f6] text-slate-900",
-      )}
-      style={{
-        backgroundColor: theme === "dark" ? "#0a0a0a" : "#f3f4f6",
-        color: theme === "dark" ? "#f5f5f5" : "#0f172a",
-      }}
+      className="min-h-screen bg-[#f3f4f6] pb-28 text-slate-900 transition-colors dark:bg-neutral-950 dark:text-neutral-100"
     >
       <header className="border-b border-slate-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
         <div className="mx-auto flex max-w-[1040px] flex-wrap items-center gap-3 px-4 py-3">
