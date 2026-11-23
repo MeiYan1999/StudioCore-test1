@@ -23,8 +23,11 @@ export type DriveMarkup = {
   notes: Partial<Record<DriveMarkupColor, string>>;
 };
 
+export const MAX_STROKES = 200;
+export const MAX_POINTS = 6000;
+export const MAX_SERIALIZED_BYTES = 64 * 1024;
+
 const PALETTE_COLORS = new Set<string>(DRIVE_MARKUP_PALETTE.map(({ color }) => color));
-const MAX_SERIALIZED_BYTES = 64 * 1024;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -76,7 +79,7 @@ export function parseDriveMarkup(input: unknown): DriveMarkup | null {
     !hasOnlyKeys(raw, ["v", "strokes", "notes"]) ||
     raw.v !== 1 ||
     !Array.isArray(raw.strokes) ||
-    raw.strokes.length > 200 ||
+    raw.strokes.length > MAX_STROKES ||
     !isRecord(raw.notes)
   ) {
     return invalid();
@@ -95,7 +98,7 @@ export function parseDriveMarkup(input: unknown): DriveMarkup | null {
     if (!Array.isArray(rawStroke.p) || rawStroke.p.length === 0) return invalid();
 
     pointCount += rawStroke.p.length;
-    if (pointCount > 6000) return invalid();
+    if (pointCount > MAX_POINTS) return invalid();
 
     const points = rawStroke.p.map((point): [number, number] => {
       if (!Array.isArray(point) || point.length !== 2) return invalid();
