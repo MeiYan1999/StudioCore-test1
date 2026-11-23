@@ -150,14 +150,14 @@ export function DriveGallery(props: Props) {
   }, [openFileId, showFilmstrip]);
 
   useEffect(() => {
-    if (openFile) {
+    if (openFileId) {
       lightboxRef.current?.focus();
       return;
     }
     const opener = lightboxOpenerRef.current;
     if (opener?.isConnected) opener.focus();
     lightboxOpenerRef.current = null;
-  }, [openFile?.id]);
+  }, [openFileId]);
 
   useEffect(() => {
     const updateFullscreen = () => setFullscreen(Boolean(document.fullscreenElement));
@@ -308,6 +308,34 @@ export function DriveGallery(props: Props) {
     [base, maxSelect, pickedCount, selecting, submitted],
   );
 
+  const savePhotoNote = useCallback(
+    async (fileId: string, text: string): Promise<boolean> => {
+      try {
+        const response = await fetch(`${base}/pick`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ fileId, note: text }),
+        });
+        const data = (await response.json().catch(() => null)) as
+          | { error?: string; note?: string | null; picked?: boolean }
+          | null;
+        if (!response.ok || !data) throw new Error(data?.error ?? "Không lưu được ghi chú.");
+        setFiles((current) =>
+          current.map((file) =>
+            file.id === fileId ? { ...file, picked: data.picked ?? file.picked, note: data.note ?? null } : file,
+          ),
+        );
+        setPhotoNote(data.note ?? "");
+        toast.success("Đã lưu ghi chú cho ảnh.");
+        return true;
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Không lưu được ghi chú.");
+        return false;
+      }
+    },
+    [base],
+  );
+
   const move = useCallback(
     async (delta: number) => {
       if (openIndex < 0) return;
@@ -321,7 +349,7 @@ export function DriveGallery(props: Props) {
       setDrawingActive(false);
       setInitialDrawingId(null);
     },
-    [list, openFile, openIndex, photoNote],
+    [list, openFile, openIndex, photoNote, savePhotoNote],
   );
 
   const closeLightbox = useCallback(async () => {
@@ -329,7 +357,7 @@ export function DriveGallery(props: Props) {
     setOpenId(null);
     setNotePanelOpen(false);
     setDrawingActive(false);
-  }, [openFile, photoNote]);
+  }, [openFile, photoNote, savePhotoNote]);
 
   useEffect(() => {
     if (!openFile) return;
@@ -352,31 +380,6 @@ export function DriveGallery(props: Props) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [openFile, closeLightbox, move, selecting, togglePick]);
-
-  async function savePhotoNote(fileId: string, text: string): Promise<boolean> {
-    try {
-      const response = await fetch(`${base}/pick`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fileId, note: text }),
-      });
-      const data = (await response.json().catch(() => null)) as
-        | { error?: string; note?: string | null; picked?: boolean }
-        | null;
-      if (!response.ok || !data) throw new Error(data?.error ?? "Không lưu được ghi chú.");
-      setFiles((current) =>
-        current.map((file) =>
-          file.id === fileId ? { ...file, picked: data.picked ?? file.picked, note: data.note ?? null } : file,
-        ),
-      );
-      setPhotoNote(data.note ?? "");
-      toast.success("Đã lưu ghi chú cho ảnh.");
-      return true;
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Không lưu được ghi chú.");
-      return false;
-    }
-  }
 
   async function saveMarkup(fileId: string, markup: DriveMarkup): Promise<boolean> {
     try {
