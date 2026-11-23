@@ -25,6 +25,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { DriveDownloadButtons } from "@/components/drive/drive-download-buttons";
 import {
   Dialog,
   DialogContent,
@@ -40,7 +41,7 @@ import {
   revokeDriveDeviceAction,
   updateDriveShareAction,
 } from "@/lib/actions/drive-actions";
-import { DRIVE_RELEASES_URL, formatDriveBytes } from "@/lib/drive/constants";
+import { formatDriveBytes } from "@/lib/drive/constants";
 import type { DriveDeviceView, DrivePick, DriveShareSummary } from "@/lib/services/drive-service";
 
 type Props = {
@@ -206,12 +207,7 @@ export function DriveManager({ devices, shares, canManage, siteUrl }: Props) {
             <CardDescription>Windows 10/11 và macOS 12 trở lên.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
-            <Button asChild variant="outline" className="w-full">
-              <a href={DRIVE_RELEASES_URL} target="_blank" rel="noopener noreferrer">
-                <Download className="h-4 w-4" aria-hidden />
-                Tải bộ cài StudioCore Drive
-              </a>
-            </Button>
+            <DriveDownloadButtons compact />
             <ol className="list-decimal space-y-1 pl-5 text-muted-foreground">
               <li>Cài và mở ứng dụng trên máy chứa ảnh.</li>
               <li>Bấm “Tạo mã kết nối”, dán mã vào ứng dụng.</li>

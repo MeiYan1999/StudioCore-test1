@@ -14,7 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { AmbientGlow } from "@/components/marketing/ambient-glow";
 import { FloatingContact } from "@/components/marketing/floating-contact";
-import { DRIVE_RELEASES_URL } from "@/lib/drive/constants";
+import { DriveDownloadButtons } from "@/components/drive/drive-download-buttons";
 import { marketingMetadata } from "@/lib/marketing/metadata";
 
 export const metadata = marketingMetadata({
@@ -80,16 +80,13 @@ export default function StudioCoreDrivePage() {
             StudioCore Drive biến thư mục trên máy bạn thành link xem, chọn và tải ảnh. Ảnh gốc vẫn nằm trên máy studio,
             không phải upload lên dịch vụ lưu trữ nào.
           </p>
-          <div className="mt-8 flex flex-wrap justify-center gap-3">
-            <Button asChild size="lg">
-              <a href={DRIVE_RELEASES_URL} target="_blank" rel="noopener noreferrer">
-                <Download className="h-4 w-4" aria-hidden />
-                Tải StudioCore Drive
-              </a>
-            </Button>
-            <Button asChild size="lg" variant="outline">
-              <Link href="/manage/drive">Mở trang quản lý</Link>
-            </Button>
+          <div className="mt-8">
+            <DriveDownloadButtons />
+            <div className="mt-3 flex flex-wrap justify-center gap-3">
+              <Button asChild size="lg" variant="outline">
+                <Link href="/manage/drive">Mở trang quản lý</Link>
+              </Button>
+            </div>
           </div>
           <p className="mt-3 text-sm text-muted-foreground">
             <Link className="underline underline-offset-4 hover:text-foreground" href="#mo-app-lan-dau">

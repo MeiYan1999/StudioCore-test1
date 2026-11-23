@@ -67,6 +67,12 @@ jobs:
         with:
           path: artifacts
           merge-multiple: true
+      - name: Add stable download names
+        run: |
+          version="${GITHUB_REF_NAME#drive-v}"
+          cp "artifacts/StudioCore-Drive-${version}-win-x64.exe" artifacts/StudioCore-Drive-win-x64.exe
+          cp "artifacts/StudioCore-Drive-${version}-mac-arm64.dmg" artifacts/StudioCore-Drive-mac-arm64.dmg
+          cp "artifacts/StudioCore-Drive-${version}-mac-x64.dmg" artifacts/StudioCore-Drive-mac-x64.dmg
       - run: gh release create "$GITHUB_REF_NAME" artifacts/* --repo "$GITHUB_REPOSITORY" --title "StudioCore Drive ${GITHUB_REF_NAME#drive-v}" --generate-notes
         env:
           GH_TOKEN: ${{ github.token }}
