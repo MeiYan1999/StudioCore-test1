@@ -34,7 +34,8 @@ function getS3Client() {
 export async function restoreDbFromR2IfMissing(
   targetPath?: string,
 ): Promise<"kept" | "restored" | "none"> {
-  const dbPath = targetPath || path.join(process.cwd(), "data", "studiocore.db");
+  const dbPath =
+    targetPath ?? (await import("./client")).resolveDbFilename();
   try {
     const stat = fs.statSync(/*turbopackIgnore: true*/ dbPath);
     if (stat.isFile() && stat.size > 0) return "kept";
@@ -42,14 +43,13 @@ export async function restoreDbFromR2IfMissing(
     if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
       const message = err instanceof Error ? err.message : String(err);
       console.warn(`[R2 Backup] Không thể kiểm tra database hiện có: ${message}`);
-      return "none";
+      throw err;
     }
   }
 
   const s3 = getS3Client();
   if (!s3) {
-    console.warn("[R2 Backup] R2 chưa được cấu hình, bỏ qua phục hồi database.");
-    return "none";
+    throw new Error("R2 chưa được cấu hình để phục hồi database.");
   }
 
   const restorePath = `${dbPath}.restore-tmp`;
@@ -61,10 +61,12 @@ export async function restoreDbFromR2IfMissing(
       }),
     );
 
-    if (!res.Body) return "none";
+    if (!res.Body) throw new Error("R2 không trả về nội dung database.");
 
     const bytes = await res.Body.transformToByteArray();
-    if (!bytes || bytes.length === 0) return "none";
+    if (!bytes || bytes.length === 0) {
+      throw new Error("Database được tải từ R2 đang trống.");
+    }
 
     fs.mkdirSync(/*turbopackIgnore: true*/ path.dirname(dbPath), { recursive: true });
     fs.writeFileSync(/*turbopackIgnore: true*/ restorePath, Buffer.from(bytes));
@@ -75,13 +77,24 @@ export async function restoreDbFromR2IfMissing(
     console.log(`[R2 Backup] ✅ Đã phục hồi database từ Cloudflare R2 (${(bytes.length / 1024 / 1024).toFixed(2)} MB)!`);
     return "restored";
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    if (message.includes("NoSuchKey") || message.includes("404")) {
+    const error =
+      typeof err === "object" && err !== null
+        ? (err as {
+            name?: string;
+            $metadata?: { httpStatusCode?: number };
+          })
+        : undefined;
+    if (
+      error?.name === "NoSuchKey" ||
+      error?.$metadata?.httpStatusCode === 404
+    ) {
       console.log("[R2 Backup] Chưa có bản sao lưu database trên R2, bắt đầu với database mới.");
+      return "none";
     } else {
+      const message = err instanceof Error ? err.message : String(err);
       console.warn(`[R2 Backup] Không thể tải database từ R2: ${message}`);
+      throw err;
     }
-    return "none";
   } finally {
     fs.rmSync(/*turbopackIgnore: true*/ restorePath, { force: true });
   }
@@ -116,30 +129,40 @@ async function performDbBackup(dbPath: string): Promise<boolean> {
 
   const snapshotPath = `${dbPath}.${process.pid}.${crypto.randomUUID()}.backup-tmp`;
   try {
-    let sqlite: SqliteClient | undefined;
-    try {
-      const { getDb } = await import("./client");
-      const db = getDb();
-      sqlite = (db as unknown as { $client?: SqliteClient }).$client;
-    } catch {}
-
+    const { resolveDbFilename } = await import("./client");
     let buffer: Buffer;
-    if (sqlite?.backup) {
-      try {
-        await sqlite.backup(snapshotPath);
-        buffer = fs.readFileSync(/*turbopackIgnore: true*/ snapshotPath);
-      } catch {
-        fs.rmSync(/*turbopackIgnore: true*/ snapshotPath, { force: true });
+    if (path.resolve(dbPath) === resolveDbFilename()) {
+      const { getDb } = await import("./client");
+      const sqlite = (getDb() as unknown as { $client?: SqliteClient }).$client;
+      if (sqlite?.backup) {
         try {
-          sqlite.pragma?.("wal_checkpoint(TRUNCATE)");
+          await sqlite.backup(snapshotPath);
+          buffer = fs.readFileSync(/*turbopackIgnore: true*/ snapshotPath);
+        } catch {
+          fs.rmSync(/*turbopackIgnore: true*/ snapshotPath, { force: true });
+          try {
+            sqlite.pragma?.("wal_checkpoint(TRUNCATE)");
+          } catch {}
+          buffer = fs.readFileSync(/*turbopackIgnore: true*/ dbPath);
+        }
+      } else {
+        try {
+          sqlite?.pragma?.("wal_checkpoint(TRUNCATE)");
         } catch {}
         buffer = fs.readFileSync(/*turbopackIgnore: true*/ dbPath);
       }
     } else {
+      const { default: Database } = await import("better-sqlite3");
+      const sqlite = new Database(dbPath, {
+        readonly: true,
+        fileMustExist: true,
+      });
       try {
-        sqlite?.pragma?.("wal_checkpoint(TRUNCATE)");
-      } catch {}
-      buffer = fs.readFileSync(/*turbopackIgnore: true*/ dbPath);
+        await sqlite.backup(snapshotPath);
+        buffer = fs.readFileSync(/*turbopackIgnore: true*/ snapshotPath);
+      } finally {
+        sqlite.close();
+      }
     }
 
     await s3.client.send(
@@ -161,8 +184,16 @@ async function performDbBackup(dbPath: string): Promise<boolean> {
   }
 }
 
-export function backupDbToR2(sourcePath?: string): Promise<boolean> {
-  const dbPath = sourcePath || path.join(process.cwd(), "data", "studiocore.db");
+export async function backupDbToR2(sourcePath?: string): Promise<boolean> {
+  let dbPath: string;
+  try {
+    dbPath = path.resolve(
+      sourcePath ?? (await import("./client")).resolveDbFilename(),
+    );
+  } catch (err: unknown) {
+    console.warn("[R2 Backup] Không thể xác định đường dẫn database:", err);
+    return false;
+  }
   const existing = backupJobs.get(dbPath);
   if (existing) return existing;
 

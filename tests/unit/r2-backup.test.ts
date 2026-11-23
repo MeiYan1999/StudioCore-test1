@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
+import Database from "better-sqlite3";
 import {
   backupDbToR2,
   restoreDbFromR2IfMissing,
@@ -11,6 +12,7 @@ import {
 const mocks = vi.hoisted(() => ({
   send: vi.fn(),
   getDb: vi.fn(),
+  resolveDbFilename: vi.fn(),
   getR2Config: vi.fn(),
 }));
 
@@ -32,6 +34,7 @@ vi.mock("@aws-sdk/client-s3", () => {
 
 vi.mock("@/lib/db/client", () => ({
   getDb: mocks.getDb,
+  resolveDbFilename: mocks.resolveDbFilename,
 }));
 
 vi.mock("@/lib/storage/r2-storage", () => ({
@@ -50,6 +53,9 @@ describe("R2 database backups", () => {
   beforeEach(() => {
     mocks.send.mockReset().mockResolvedValue({});
     mocks.getDb.mockReset();
+    mocks.resolveDbFilename.mockReset().mockReturnValue(
+      path.resolve("data/studiocore.db"),
+    );
     mocks.getR2Config.mockReturnValue({
       accountId: "test-account",
       accessKeyId: "test-access-key",
@@ -93,8 +99,36 @@ describe("R2 database backups", () => {
     expect(fs.existsSync(`${dbPath}.restore-tmp`)).toBe(false);
   });
 
+  it("returns none when R2 confirms that the backup object is missing", async () => {
+    const dbPath = makeDbPath();
+    const missingObject = Object.assign(new Error("Missing object"), {
+      name: "NoSuchKey",
+    });
+    mocks.send.mockRejectedValueOnce(missingObject);
+
+    await expect(restoreDbFromR2IfMissing(dbPath)).resolves.toBe("none");
+    expect(fs.existsSync(dbPath)).toBe(false);
+    expect(fs.existsSync(`${dbPath}.restore-tmp`)).toBe(false);
+  });
+
+  it("rethrows transient R2 errors without creating a database", async () => {
+    const dbPath = makeDbPath();
+    const serviceUnavailable = Object.assign(new Error("Service unavailable"), {
+      name: "ServiceUnavailable",
+      $metadata: { httpStatusCode: 503 },
+    });
+    mocks.send.mockRejectedValueOnce(serviceUnavailable);
+
+    await expect(restoreDbFromR2IfMissing(dbPath)).rejects.toBe(
+      serviceUnavailable,
+    );
+    expect(fs.existsSync(dbPath)).toBe(false);
+    expect(fs.existsSync(`${dbPath}.restore-tmp`)).toBe(false);
+  });
+
   it("skips a second upload when the database has not changed", async () => {
     const dbPath = makeDbPath();
+    mocks.resolveDbFilename.mockReturnValue(path.resolve(dbPath));
     fs.writeFileSync(dbPath, "current database");
     const backup = vi.fn(async (targetPath: string) => {
       fs.writeFileSync(targetPath, "consistent snapshot");
@@ -111,5 +145,36 @@ describe("R2 database backups", () => {
     await expect(backupDbToR2(dbPath)).resolves.toBe(true);
     expect(mocks.send).toHaveBeenCalledTimes(1);
     expect(backup).toHaveBeenCalledTimes(1);
+  });
+
+  it("snapshots an explicit database path instead of the live database", async () => {
+    const dbPath = makeDbPath();
+    const sourceDb = new Database(dbPath);
+    sourceDb.exec(
+      "CREATE TABLE records (value TEXT); INSERT INTO records VALUES ('source database')",
+    );
+    sourceDb.close();
+
+    mocks.resolveDbFilename.mockReturnValue(
+      path.resolve(path.dirname(dbPath), "live-database.db"),
+    );
+    const liveBackup = vi.fn(async (targetPath: string) => {
+      fs.writeFileSync(targetPath, "wrong database");
+    });
+    mocks.getDb.mockReturnValue({ $client: { backup: liveBackup } });
+
+    await expect(backupDbToR2(dbPath)).resolves.toBe(true);
+    const command = mocks.send.mock.calls[0][0] as PutObjectCommand;
+    const snapshotPath = path.join(path.dirname(dbPath), "snapshot.db");
+    fs.writeFileSync(snapshotPath, command.input.Body as Buffer);
+    const snapshotDb = new Database(snapshotPath, {
+      readonly: true,
+      fileMustExist: true,
+    });
+    expect(snapshotDb.prepare("SELECT value FROM records").get()).toEqual({
+      value: "source database",
+    });
+    snapshotDb.close();
+    expect(liveBackup).not.toHaveBeenCalled();
   });
 });

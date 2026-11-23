@@ -14,5 +14,4 @@ export async function registerNodeDbBackups() {
 
   const timer = setInterval(backup, 10 * 60 * 1000);
   timer.unref?.();
-  process.once("SIGTERM", backup);
 }
