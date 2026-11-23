@@ -5,6 +5,7 @@ const fs = require("node:fs");
 const http = require("node:http");
 const os = require("node:os");
 const path = require("node:path");
+const { EventEmitter } = require("node:events");
 const test = require("node:test");
 const { parseRange } = require("../src/core/agent");
 const { DriveAgent } = require("../src/core/agent");
@@ -32,6 +33,10 @@ const {
   buildContextMenuRegistryEntries,
   sharePathFromArgv,
 } = require("../src/platform/context-menu");
+const {
+  buildWindowsKeepAwakeScript,
+  startKeepAwake,
+} = require("../src/platform/keep-awake");
 const {
   CONTEXT_ACTIONS,
   contextActionFromArgv,
@@ -146,9 +151,153 @@ test("tác vụ Explorer dùng danh sách lệnh có thứ tự, trích dẫn v�
         entry.key === folderKey &&
         entry.value === "CommandFlags" &&
         entry.type === "REG_DWORD" &&
-        entry.data === "0x20",
+        entry.data === "0x40",
     ),
   );
+});
+
+test("lệnh PowerShell giữ máy luôn bật nêu lý do và chờ tiến trình cha", () => {
+  const script = buildWindowsKeepAwakeScript(4321);
+
+  assert.match(script, /StudioCore Drive: giữ máy luôn bật/);
+  assert.match(script, /PowerSetRequest/);
+  assert.match(script, /PowerCreateRequest/);
+  assert.match(script, /Wait-Process -Id 4321/);
+  assert.match(script, /Flags = 1/);
+});
+
+test("lệnh PowerShell giữ máy luôn bật từ chối PID không hợp lệ", () => {
+  for (const pid of [0, -1, 1.5, Number.NaN, "4321"]) {
+    assert.throws(() => buildWindowsKeepAwakeScript(pid), /positive integer/);
+  }
+});
+
+test("Windows khởi chạy PowerShell bằng EncodedCommand UTF-16LE", () => {
+  const child = new EventEmitter();
+  child.kill = () => true;
+  let spawned;
+  const powerSaveBlocker = {
+    start: () => 1,
+    isStarted: () => true,
+    stop: () => undefined,
+  };
+
+  const handle = startKeepAwake({
+    platform: "win32",
+    powerSaveBlocker,
+    pid: 4321,
+    spawn: (...args) => {
+      spawned = args;
+      return child;
+    },
+  });
+
+  const encodedIndex = spawned[1].indexOf("-EncodedCommand") + 1;
+  assert.equal(spawned[0], "powershell.exe");
+  assert.equal(
+    Buffer.from(spawned[1][encodedIndex], "base64").toString("utf16le"),
+    buildWindowsKeepAwakeScript(4321),
+  );
+  assert.deepEqual(spawned[2], { windowsHide: true, stdio: "ignore" });
+  handle.stop();
+});
+
+test("lỗi khởi chạy PowerShell chuyển sang powerSaveBlocker", () => {
+  const child = new EventEmitter();
+  child.kill = () => true;
+  const starts = [];
+  const stops = [];
+  const powerSaveBlocker = {
+    start: (mode) => {
+      starts.push(mode);
+      return 7;
+    },
+    isStarted: (id) => id === 7,
+    stop: (id) => stops.push(id),
+  };
+
+  const handle = startKeepAwake({
+    platform: "win32",
+    powerSaveBlocker,
+    spawn: () => child,
+  });
+  child.emit("error", new Error("PowerShell unavailable"));
+
+  assert.deepEqual(starts, ["prevent-app-suspension"]);
+  handle.stop();
+  assert.deepEqual(stops, [7]);
+});
+
+test("thoát bất ngờ của tiến trình PowerShell chuyển sang powerSaveBlocker", () => {
+  const child = new EventEmitter();
+  child.kill = () => true;
+  const starts = [];
+  const powerSaveBlocker = {
+    start: (mode) => {
+      starts.push(mode);
+      return 9;
+    },
+    isStarted: () => true,
+    stop: () => undefined,
+  };
+
+  const handle = startKeepAwake({
+    platform: "win32",
+    powerSaveBlocker,
+    spawn: () => child,
+  });
+  child.emit("exit", 2, null);
+
+  assert.deepEqual(starts, ["prevent-app-suspension"]);
+  handle.stop();
+});
+
+test("dừng chế độ giữ máy luôn bật sẽ hủy tiến trình và an toàn khi gọi lặp", () => {
+  const child = new EventEmitter();
+  let killCount = 0;
+  child.kill = () => {
+    killCount += 1;
+    return true;
+  };
+  const handle = startKeepAwake({
+    platform: "win32",
+    powerSaveBlocker: {
+      start: () => 1,
+      isStarted: () => true,
+      stop: () => undefined,
+    },
+    spawn: () => child,
+  });
+
+  handle.stop();
+  handle.stop();
+
+  assert.equal(killCount, 1);
+});
+
+test("macOS dùng powerSaveBlocker trực tiếp", () => {
+  const calls = [];
+  let spawnCount = 0;
+  const handle = startKeepAwake({
+    platform: "darwin",
+    powerSaveBlocker: {
+      start: (mode) => {
+        calls.push(["start", mode]);
+        return 11;
+      },
+      isStarted: (id) => id === 11,
+      stop: (id) => calls.push(["stop", id]),
+    },
+    spawn: () => {
+      spawnCount += 1;
+      throw new Error("should not spawn");
+    },
+  });
+
+  assert.deepEqual(calls, [["start", "prevent-app-suspension"]]);
+  assert.equal(spawnCount, 0);
+  handle.stop();
+  assert.deepEqual(calls[1], ["stop", 11]);
 });
 
 test("tác vụ dòng lệnh chỉ nhận ID được phép và mặc định mở ứng dụng", () => {
