@@ -80,6 +80,15 @@ describe("R2 database backups", () => {
     expect(fs.readFileSync(dbPath)).toEqual(contents);
   });
 
+  it("returns none when R2 is unconfigured and no local database exists", async () => {
+    const dbPath = makeDbPath();
+    mocks.getR2Config.mockReturnValueOnce(null);
+
+    await expect(restoreDbFromR2IfMissing(dbPath)).resolves.toBe("none");
+    expect(mocks.send).not.toHaveBeenCalled();
+    expect(fs.existsSync(dbPath)).toBe(false);
+  });
+
   it("restores a missing database and removes stale SQLite sidecars", async () => {
     const dbPath = makeDbPath();
     fs.writeFileSync(`${dbPath}-wal`, "stale wal");

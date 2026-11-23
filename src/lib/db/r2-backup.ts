@@ -49,7 +49,8 @@ export async function restoreDbFromR2IfMissing(
 
   const s3 = getS3Client();
   if (!s3) {
-    throw new Error("R2 chưa được cấu hình để phục hồi database.");
+    console.warn("[R2 Backup] R2 chưa được cấu hình, bỏ qua phục hồi database.");
+    return "none";
   }
 
   const restorePath = `${dbPath}.restore-tmp`;
