@@ -66,6 +66,9 @@
         <label>Tên khách (không bắt buộc)
           <input id="share-client" maxlength="120" />
         </label>
+        <label>Lời nhắn cho khách
+          <textarea id="share-message" maxlength="1000" rows="4"></textarea>
+        </label>
         <fieldset>
           <legend>Mục đích</legend>
           <label class="radio"><input type="radio" name="kind" value="select" checked /> Khách chọn ảnh</label>
@@ -95,8 +98,16 @@
       <form method="dialog">
         <h2>Cài đặt</h2>
         <label class="check"><input id="set-autocopy" type="checkbox" /> Tự chép ảnh khách chọn (kèm RAW) ra thư mục riêng</label>
+        <label class="check"><input id="set-keep-awake" type="checkbox" /> Giữ máy luôn bật (không cho máy ngủ để khách luôn mở được link)</label>
         <label>Tên thư mục chứa ảnh đã chọn
           <input id="set-folder" maxlength="60" />
+        </label>
+        <label class="check"><input id="set-message-shared" type="checkbox" /> Dùng chung một lời nhắn cho link chọn ảnh và link giao file</label>
+        <label id="row-message-select"><span id="label-message-select">Lời nhắn mặc định cho link chọn ảnh</span>
+          <textarea id="set-message-select" maxlength="1000" rows="3"></textarea>
+        </label>
+        <label id="row-message-deliver">Lời nhắn mặc định cho link giao file
+          <textarea id="set-message-deliver" maxlength="1000" rows="3"></textarea>
         </label>
         <label class="check"><input id="set-login" type="checkbox" /> Mở cùng máy tính</label>
         <label class="check" id="row-context"><input id="set-context" type="checkbox" /> Thêm “Chia sẻ bằng StudioCore Drive” vào menu chuột phải thư mục</label>

@@ -300,7 +300,7 @@ class DriveAgent extends EventEmitter {
     if (!share) throw new Error("Link này không được tạo từ máy tính này.");
     const { picks } = await this.client().picks(shareId);
     if (!picks || picks.length === 0) throw new Error("Khách chưa chọn ảnh nào.");
-    return copyPicks(share, picks, this.store.get("picksFolderName"));
+    return copyPicks(share, picks, this.store.get("picksFolderName"), this.images);
   }
 
   async previewFolder(folder) {
@@ -327,6 +327,7 @@ class DriveAgent extends EventEmitter {
     const result = await this.client().createShare({
       title: options.title || path.basename(real),
       clientName: options.clientName || null,
+      message: typeof options.message === "string" ? options.message.slice(0, 1000) : "",
       kind: options.kind === "deliver" ? "deliver" : "select",
       pin: options.pin || null,
       maxSelect: Number(options.maxSelect) || 0,

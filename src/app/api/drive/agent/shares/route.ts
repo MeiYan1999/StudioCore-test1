@@ -29,6 +29,7 @@ export async function POST(request: Request): Promise<Response> {
     const share = createDriveShare(db, device, {
       title: String(body.title ?? ""),
       clientName: typeof body.clientName === "string" ? body.clientName : null,
+      message: typeof body.message === "string" ? body.message : null,
       kind: body.kind as DriveShareKind,
       pin: (body.pin as string | null | undefined) ?? null,
       maxSelect: Number(body.maxSelect ?? 0),

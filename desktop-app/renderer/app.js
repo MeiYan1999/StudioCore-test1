@@ -9,6 +9,7 @@ let state = null;
 let currentFolder = null;
 let toastTimer = null;
 let queuedShareRequest = null;
+let shareMessageEdited = false;
 
 const STATUS_TEXT = {
   idle: "Chưa kết nối",
@@ -184,6 +185,13 @@ function syncKind() {
   const deliver = document.querySelector('input[name="kind"]:checked').value === "deliver";
   $("row-max").hidden = deliver;
   $("row-original").hidden = deliver;
+  if (!shareMessageEdited) {
+    $("share-message").value = state.settings.messageShared
+      ? state.settings.defaultMessageSelect
+      : deliver
+        ? state.settings.defaultMessageDeliver
+        : state.settings.defaultMessageSelect;
+  }
 }
 
 async function openShareDialog(folder) {
@@ -203,6 +211,8 @@ async function openShareDialog(folder) {
     $("share-title").value = info.name;
     $("share-client").value = "";
     $("share-pin").value = "";
+    shareMessageEdited = false;
+    $("share-message").value = "";
     showError("share-error", "");
     syncKind();
     if (!$("dlg-share").open) $("dlg-share").showModal();
@@ -236,6 +246,9 @@ $("btn-share").addEventListener("click", async () => {
 });
 $("btn-refresh").addEventListener("click", refresh);
 for (const radio of document.querySelectorAll('input[name="kind"]')) radio.addEventListener("change", syncKind);
+$("share-message").addEventListener("input", () => {
+  shareMessageEdited = true;
+});
 $("share-cancel").addEventListener("click", () => $("dlg-share").close());
 
 $("share-form").addEventListener("submit", async (event) => {
@@ -249,6 +262,7 @@ $("share-form").addEventListener("submit", async (event) => {
       folder: currentFolder,
       title: $("share-title").value,
       clientName: $("share-client").value,
+      message: $("share-message").value,
       kind: document.querySelector('input[name="kind"]:checked').value,
       pin: $("share-pin").value,
       maxSelect: Number($("share-max").value),
@@ -269,7 +283,13 @@ $("share-form").addEventListener("submit", async (event) => {
 $("btn-settings").addEventListener("click", () => {
   const s = state.settings;
   $("set-autocopy").checked = s.autoCopyPicks;
+  $("set-keep-awake").checked = s.keepAwake;
   $("set-folder").value = s.picksFolderName;
+  $("set-message-shared").checked = s.messageShared;
+  $("set-message-select").value = s.defaultMessageSelect;
+  $("set-message-deliver").value = s.defaultMessageDeliver;
+  $("row-message-deliver").hidden = s.messageShared;
+  $("label-message-select").textContent = s.messageShared ? "Lời nhắn mặc định cho cả hai loại link" : "Lời nhắn mặc định cho link chọn ảnh";
   $("set-login").checked = s.launchAtLogin;
   $("set-context").checked = s.contextMenu;
   $("row-context").hidden = state.platform !== "win32" && state.platform !== "darwin";
@@ -288,12 +308,21 @@ async function saveSetting(patch) {
   }
 }
 $("set-autocopy").addEventListener("change", (e) => saveSetting({ autoCopyPicks: e.target.checked }));
+$("set-keep-awake").addEventListener("change", (e) => saveSetting({ keepAwake: e.target.checked }));
 $("set-login").addEventListener("change", (e) => saveSetting({ launchAtLogin: e.target.checked }));
 $("set-context").addEventListener("change", (e) => saveSetting({ contextMenu: e.target.checked }));
 $("set-folder").addEventListener("change", async (e) => {
   await saveSetting({ picksFolderName: e.target.value });
   e.target.value = state.settings.picksFolderName;
 });
+$("set-message-shared").addEventListener("change", (e) => {
+  const shared = e.target.checked;
+  $("row-message-deliver").hidden = shared;
+  $("label-message-select").textContent = shared ? "Lời nhắn mặc định cho cả hai loại link" : "Lời nhắn mặc định cho link chọn ảnh";
+  saveSetting({ messageShared: shared });
+});
+$("set-message-select").addEventListener("change", (e) => saveSetting({ defaultMessageSelect: e.target.value }));
+$("set-message-deliver").addEventListener("change", (e) => saveSetting({ defaultMessageDeliver: e.target.value }));
 $("set-close").addEventListener("click", () => $("dlg-settings").close());
 $("set-unpair").addEventListener("click", async () => {
   if (!window.confirm("Ngắt kết nối máy này khỏi studio? Các link đã tạo sẽ không mở được cho tới khi kết nối lại.")) return;

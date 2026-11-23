@@ -32,6 +32,7 @@ h2 { font-size: 17px; margin: 0 0 8px; }
 label { display: grid; gap: 6px; font-weight: 600; font-size: 13px; }
 label.check, label.radio { display: flex; align-items: center; gap: 8px; font-weight: 500; }
 input:not([type="checkbox"]):not([type="radio"]) { height: 38px; padding: 0 10px; border: 1px solid var(--line); border-radius: 9px; font: inherit; background: #fff; width: 100%; }
+textarea { min-height: 72px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 9px; font: inherit; background: #fff; width: 100%; resize: vertical; }
 input:focus-visible, button:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
 button { height: 36px; padding: 0 14px; border-radius: 9px; border: 1px solid var(--line); background: #fff; font: inherit; font-weight: 600; cursor: pointer; }
 button:hover { background: #f1eff9; }

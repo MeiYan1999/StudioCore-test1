@@ -6,6 +6,7 @@ import type { AppDb } from "@/lib/db/client";
 import { eq } from "drizzle-orm";
 import { tenants, type DriveDevice } from "@/lib/db/schema";
 import { driveErrorResponse } from "@/lib/drive/http";
+import { parseDriveMarkup } from "@/lib/drive/markup";
 import {
   fulfillDriveJob,
   pollDriveJobs,
@@ -25,6 +26,7 @@ import {
   getDriveShareBySlug,
   listDriveDevices,
   listDrivePublicFiles,
+  listDriveSharesForDevice,
   listDriveSharesForTenant,
   listDriveSubmissionsSince,
   pairDriveDevice,
@@ -178,6 +180,24 @@ describe("ghép nối thiết bị", () => {
 });
 
 describe("link chia sẻ", () => {
+  it("lưu, hiển thị và cập nhật lời nhắn chào khách", () => {
+    const { device } = pair();
+    const share = createDriveShare(db, device, {
+      title: "Lời nhắn",
+      kind: "select",
+      message: "Xin chào\r\nStudio\u0000Core",
+      files: files(1),
+    });
+    expect(listDriveSharesForTenant(db, owner).find((item) => item.id === share.id)?.message).toBe(
+      "Xin chào\nStudioCore",
+    );
+
+    updateDriveShareByActor(db, owner, share.id, { message: "Dòng mới\nThứ hai" });
+    expect(listDriveSharesForDevice(db, device).find((item) => item.id === share.id)?.message).toBe("Dòng mới\nThứ hai");
+    updateDriveShareByActor(db, owner, share.id, { message: null });
+    expect(listDriveSharesForTenant(db, owner).find((item) => item.id === share.id)?.message).toBeNull();
+  });
+
   it("giữ nguyên tên có ký tự HTML dưới dạng văn bản và không nhận đường dẫn", () => {
     const { device } = pair();
     const share = createDriveShare(db, device, {
@@ -188,7 +208,7 @@ describe("link chia sẻ", () => {
     const [file] = listDrivePublicFiles(db, share.id);
     expect(file.name).not.toMatch(/[\\/]/);
     expect(file).not.toHaveProperty("fileKey");
-    expect(Object.keys(file).sort()).toEqual(["id", "kind", "name", "note", "picked", "size"]);
+    expect(Object.keys(file).sort()).toEqual(["id", "kind", "markup", "name", "note", "picked", "size"]);
     const summary = listDriveSharesForTenant(db, owner).find((s) => s.id === share.id);
     expect(summary?.title).toBe(`<img src=x onerror=alert(1)>`);
     expect(JSON.stringify(summary)).not.toContain("folder");
@@ -242,6 +262,47 @@ describe("link chia sẻ", () => {
 });
 
 describe("khách chọn ảnh", () => {
+  it("lưu nét vẽ, tự chọn ảnh và xóa ghi chú khi bỏ chọn", () => {
+    const { device } = pair();
+    const share = createDriveShare(db, device, { title: "Vẽ", kind: "select", maxSelect: 1, files: files(2) });
+    const [first, second] = listDrivePublicFiles(db, share.id);
+    const markup = {
+      v: 1,
+      strokes: [{ c: "#ef4444", w: 0.01, p: [[0.1, 0.2], [0.5, 0.7]] }],
+      notes: { "#ef4444": "Làm sáng vùng này" },
+    };
+
+    expect(setDrivePick(db, share, first.id, { markup })).toMatchObject({ picked: true, markup });
+    expect(listDrivePublicFiles(db, share.id)[0].markup).toEqual(parseDriveMarkup(markup));
+    expect(getDrivePicksForDevice(db, device, share.id)[0].markup).toEqual(parseDriveMarkup(markup));
+    expect(() => setDrivePick(db, share, second.id, { markup })).toThrow(ValidationError);
+    expect(setDrivePick(db, share, first.id, { picked: false })).toMatchObject({
+      picked: false,
+      markup: null,
+      note: null,
+    });
+    expect(listDrivePublicFiles(db, share.id)[0].markup).toBeNull();
+  });
+
+  it("không chấp nhận nét vẽ trên tệp không phải ảnh và khóa sau khi gửi", () => {
+    const { device } = pair();
+    const share = createDriveShare(db, device, {
+      title: "Vẽ",
+      kind: "select",
+      files: [
+        { key: "vid001", name: "video.mp4", kind: "video", size: 10 },
+        files(1)[0],
+      ],
+    });
+    const [video, image] = listDrivePublicFiles(db, share.id);
+    const markup = { v: 1, strokes: [{ c: "#ef4444", w: 0.01, p: [[0.1, 0.2]] }], notes: {} };
+
+    expect(() => setDrivePick(db, share, video.id, { markup })).toThrow(ValidationError);
+    setDrivePick(db, share, image.id, { markup });
+    submitDriveSelection(db, share, null);
+    expect(() => setDrivePick(db, share, image.id, { markup })).toThrow(ValidationError);
+  });
+
   it("giới hạn số ảnh, gửi lựa chọn, khoá sau khi gửi và cho chọn lại", () => {
     const { device } = pair();
     const share = createDriveShare(db, device, { title: "Cưới", kind: "select", maxSelect: 2, files: files(4) });

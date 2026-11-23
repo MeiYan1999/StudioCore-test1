@@ -14,6 +14,7 @@ const {
   dialog,
   ipcMain,
   nativeImage,
+  powerSaveBlocker,
   safeStorage,
   session,
   shell,
@@ -39,6 +40,7 @@ let store = null;
 let agent = null;
 let quitting = false;
 let pendingShare = null;
+let keepAwakeBlockerId = null;
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -79,6 +81,10 @@ function publicState() {
     settings: {
       autoCopyPicks: !!store.get("autoCopyPicks"),
       picksFolderName: store.get("picksFolderName"),
+      keepAwake: !!store.get("keepAwake"),
+      defaultMessageSelect: store.get("defaultMessageSelect"),
+      defaultMessageDeliver: store.get("defaultMessageDeliver"),
+      messageShared: !!store.get("messageShared"),
       launchAtLogin: !!store.get("launchAtLogin"),
       contextMenu:
         process.platform === "darwin" ? !!store.get("macQuickAction") : !!store.get("contextMenu"),
@@ -193,6 +199,29 @@ function str(value, max = 500) {
   return typeof value === "string" ? value.slice(0, max) : "";
 }
 
+function messageText(value) {
+  return typeof value === "string" ? value.replace(/[\u0000-\u0009\u000b-\u001f\u007f]/g, "").slice(0, 1000) : "";
+}
+
+function applyKeepAwake() {
+  const shouldBlock = !!store?.get("keepAwake") && !!agent?.paired;
+  if (shouldBlock && keepAwakeBlockerId === null) {
+    try {
+      keepAwakeBlockerId = powerSaveBlocker.start("prevent-app-suspension");
+    } catch (error) {
+      console.warn("Không thể giữ máy luôn bật:", error);
+    }
+  } else if (!shouldBlock && keepAwakeBlockerId !== null) {
+    try {
+      if (powerSaveBlocker.isStarted(keepAwakeBlockerId)) powerSaveBlocker.stop(keepAwakeBlockerId);
+    } catch (error) {
+      console.warn("Không thể dừng chế độ giữ máy luôn bật:", error);
+    } finally {
+      keepAwakeBlockerId = null;
+    }
+  }
+}
+
 function registerIpc() {
   handle("state", () => {
     const state = publicState();
@@ -202,10 +231,12 @@ function registerIpc() {
   handle("pair", async (p) => {
     const serverUrl = p && p.serverUrl ? normalizeServerUrl(str(p.serverUrl)) : undefined;
     await agent.pair(str(p && p.code, 200), serverUrl);
+    applyKeepAwake();
     return publicState();
   });
   handle("unpair", () => {
     agent.unpair();
+    applyKeepAwake();
     return publicState();
   });
   handle("pick-folder", () => pickFolder());
@@ -215,6 +246,7 @@ function registerIpc() {
       title: str(p.title, 160),
       clientName: str(p.clientName, 120),
       kind: p.kind === "deliver" ? "deliver" : "select",
+      message: messageText(p.message),
       pin: str(p.pin, 12),
       maxSelect: Number(p.maxSelect) || 0,
       allowOriginal: p.allowOriginal === true,
@@ -262,6 +294,10 @@ function registerIpc() {
     const patch = {};
     if (typeof p.autoCopyPicks === "boolean") patch.autoCopyPicks = p.autoCopyPicks;
     if (typeof p.picksFolderName === "string") patch.picksFolderName = safeFolderName(p.picksFolderName);
+    if (typeof p.keepAwake === "boolean") patch.keepAwake = p.keepAwake;
+    if (typeof p.defaultMessageSelect === "string") patch.defaultMessageSelect = messageText(p.defaultMessageSelect);
+    if (typeof p.defaultMessageDeliver === "string") patch.defaultMessageDeliver = messageText(p.defaultMessageDeliver);
+    if (typeof p.messageShared === "boolean") patch.messageShared = p.messageShared;
     if (typeof p.launchAtLogin === "boolean") {
       applyLoginItem(app, p.launchAtLogin);
       patch.launchAtLogin = p.launchAtLogin;
@@ -299,6 +335,7 @@ function registerIpc() {
       }
     }
     store.set(patch);
+    applyKeepAwake();
     return publicState();
   });
 }
@@ -368,6 +405,7 @@ function init() {
     images: new ImageCache(path.join(app.getPath("userData"), "cache"), { fallback: osThumbnail }),
     appVersion: app.getVersion(),
   });
+  applyKeepAwake();
   agent.on("status", (payload) => win && win.webContents.send("drive:status", payload));
   agent.on("submission", ({ share, copied }) => {
     if (win) win.webContents.send("drive:submission", { id: share.id });

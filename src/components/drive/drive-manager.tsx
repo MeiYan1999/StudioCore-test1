@@ -14,6 +14,7 @@ import {
   Link2,
   ListChecks,
   Lock,
+  MessageSquare,
   MonitorSmartphone,
   Pause,
   Play,
@@ -34,6 +35,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { DRIVE_MARKUP_PALETTE } from "@/lib/drive/markup";
 import {
   createDrivePairingCodeAction,
   deleteDriveShareAction,
@@ -75,6 +78,8 @@ export function DriveManager({ devices, shares, canManage, siteUrl }: Props) {
   const [pairing, setPairing] = useState<{ code: string; expiresAt: number } | null>(null);
   const [picksFor, setPicksFor] = useState<DriveShareSummary | null>(null);
   const [picks, setPicks] = useState<{ picks: DrivePick[]; codes: string[] } | null>(null);
+  const [messageFor, setMessageFor] = useState<DriveShareSummary | null>(null);
+  const [messageDraft, setMessageDraft] = useState("");
   const [filter, setFilter] = useState<"all" | "active" | "submitted" | "paused">("all");
 
   // Trạng thái trực tuyến và lượt chọn thay đổi theo thời gian thực phía máy studio/khách.
@@ -344,6 +349,17 @@ export function DriveManager({ devices, shares, canManage, siteUrl }: Props) {
                             <Button
                               size="sm"
                               variant="outline"
+                              onClick={() => {
+                                setMessageFor(share);
+                                setMessageDraft(share.message ?? "");
+                              }}
+                            >
+                              <MessageSquare className="h-4 w-4" aria-hidden />
+                              {share.message ? "Sửa lời nhắn" : "Thêm lời nhắn"}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
                               disabled={pending}
                               onClick={() =>
                                 run(
@@ -424,6 +440,22 @@ export function DriveManager({ devices, shares, canManage, siteUrl }: Props) {
                   <li key={pick.key}>
                     <span className="font-mono">{pick.name}</span>
                     {pick.note ? <span className="text-muted-foreground"> — {pick.note}</span> : null}
+                    {pick.markup ? (
+                      <div className="ml-4 mt-1 space-y-1">
+                        <Badge tone="info">Khách vẽ</Badge>
+                        {DRIVE_MARKUP_PALETTE.filter(({ color }) =>
+                          pick.markup?.strokes.some((stroke) => stroke.c === color),
+                        ).map(({ color, name }) => (
+                          <p key={color} className="flex items-start gap-2 text-xs text-muted-foreground">
+                            <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: color }} />
+                            <span>
+                              {name}
+                              {pick.markup?.notes[color] ? `: ${pick.markup.notes[color]}` : ""}
+                            </span>
+                          </p>
+                        ))}
+                      </div>
+                    ) : null}
                   </li>
                 ))}
               </ul>
@@ -444,6 +476,46 @@ export function DriveManager({ devices, shares, canManage, siteUrl }: Props) {
               </p>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!messageFor} onOpenChange={(open) => !open && setMessageFor(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Lời nhắn cho khách</DialogTitle>
+            <DialogDescription>{messageFor?.title}</DialogDescription>
+          </DialogHeader>
+          <Textarea
+            value={messageDraft}
+            onChange={(event) => setMessageDraft(event.target.value)}
+            maxLength={1000}
+            rows={5}
+            aria-label="Lời nhắn cho khách"
+            placeholder="Lời nhắn hiện ở đầu link chia sẻ."
+          />
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setMessageFor(null)}>
+              Hủy
+            </Button>
+            <Button
+              disabled={pending}
+              onClick={() => {
+                if (!messageFor) return;
+                startTransition(async () => {
+                  const result = await updateDriveShareAction(messageFor.id, { message: messageDraft });
+                  if (result.ok) {
+                    toast.success("Đã lưu lời nhắn.");
+                    setMessageFor(null);
+                    router.refresh();
+                  } else {
+                    toast.error(result.error ?? "Không thể lưu lời nhắn.");
+                  }
+                });
+              }}
+            >
+              Lưu lời nhắn
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

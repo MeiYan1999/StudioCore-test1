@@ -16,6 +16,7 @@ import { hashSecret, verifySecret } from "../auth/password";
 import { assertPermission } from "../auth/permissions";
 import type { ActorContext } from "../auth/types";
 import { writeAudit } from "../audit";
+import { parseDriveMarkup, type DriveMarkup } from "../drive/markup";
 import { AuthorizationError, NotFoundError, ValidationError } from "../errors";
 
 export class DriveSuspendedError extends AuthorizationError {
@@ -46,6 +47,7 @@ export type DriveFileInput = {
 export type DriveShareInput = {
   title: string;
   clientName?: string | null;
+  message?: string | null;
   kind: DriveShareKind;
   pin?: string | null;
   maxSelect?: number;
@@ -59,6 +61,7 @@ export type DriveShareSummary = {
   slug: string;
   title: string;
   clientName: string | null;
+  message: string | null;
   kind: DriveShareKind;
   status: "active" | "paused";
   hasPin: boolean;
@@ -88,6 +91,12 @@ function randomToken(prefix: string, bytes: number): string {
 function cleanText(value: unknown, max: number): string {
   return typeof value === "string"
     ? value.replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, max)
+    : "";
+}
+
+function cleanTextWithNewlines(value: unknown, max: number): string {
+  return typeof value === "string"
+    ? value.replace(/[\u0000-\u0009\u000b-\u001f\u007f]/g, "").trim().slice(0, max)
     : "";
 }
 
@@ -361,6 +370,7 @@ export function createDriveShare(db: AppDb, device: DriveDevice, input: DriveSha
         slug: randomBytes(12).toString("base64url"),
         title,
         clientName: cleanText(input.clientName, 120) || null,
+        welcomeMessage: cleanTextWithNewlines(input.message, 1000) || null,
         kind: input.kind,
         pinHash: pin ? hashSecret(pin) : null,
         maxSelect: input.kind === "select" ? maxSelect : 0,
@@ -431,6 +441,7 @@ export type DriveSharePatch = {
   status?: "active" | "paused";
   title?: string;
   clientName?: string | null;
+  message?: string | null;
   pin?: string | null;
   maxSelect?: number;
   allowOriginal?: boolean;
@@ -450,6 +461,7 @@ function applySharePatch(db: AppDb, share: DriveShareRow, patch: DriveSharePatch
     set.title = title;
   }
   if (patch.clientName !== undefined) set.clientName = cleanText(patch.clientName, 120) || null;
+  if (patch.message !== undefined) set.welcomeMessage = cleanTextWithNewlines(patch.message, 1000) || null;
   if (patch.pin !== undefined) {
     const pin = normalizePin(patch.pin);
     set.pinHash = pin ? hashSecret(pin) : null;
@@ -537,6 +549,7 @@ function summarize(db: AppDb, rows: DriveShareRow[]): DriveShareSummary[] {
     slug: r.slug,
     title: r.title,
     clientName: r.clientName,
+    message: r.welcomeMessage,
     kind: r.kind as DriveShareKind,
     status: r.status === "paused" ? "paused" : "active",
     hasPin: !!r.pinHash,
@@ -577,15 +590,21 @@ export function listDriveSharesForTenant(db: AppDb, actor: ActorContext): DriveS
   );
 }
 
-export type DrivePick = { key: string; name: string; note: string | null };
+export type DrivePick = { key: string; name: string; note: string | null; markup: DriveMarkup | null };
 
 function picksOf(db: AppDb, shareId: string): DrivePick[] {
   return db
-    .select({ key: driveShareFiles.fileKey, name: driveShareFiles.name, note: driveShareFiles.note })
+    .select({
+      key: driveShareFiles.fileKey,
+      name: driveShareFiles.name,
+      note: driveShareFiles.note,
+      markup: driveShareFiles.markup,
+    })
     .from(driveShareFiles)
     .where(and(eq(driveShareFiles.shareId, shareId), eq(driveShareFiles.picked, true)))
     .orderBy(asc(driveShareFiles.sortIndex))
-    .all();
+    .all()
+    .map((pick) => ({ ...pick, markup: parseDriveMarkup(pick.markup) }));
 }
 
 export function getDrivePicksForDevice(db: AppDb, device: DriveDevice, shareId: string): DrivePick[] {
@@ -664,6 +683,7 @@ export type DrivePublicFile = {
   size: number;
   picked: boolean;
   note: string | null;
+  markup: DriveMarkup | null;
 };
 
 export function listDrivePublicFiles(db: AppDb, shareId: string): DrivePublicFile[] {
@@ -680,6 +700,7 @@ export function listDrivePublicFiles(db: AppDb, shareId: string): DrivePublicFil
       size: f.size,
       picked: f.picked,
       note: f.note,
+      markup: parseDriveMarkup(f.markup),
     }));
 }
 
@@ -704,33 +725,39 @@ export function setDrivePick(
   db: AppDb,
   share: DriveShareRow,
   fileId: string,
-  input: { picked?: boolean; note?: string | null },
-): { picked: boolean; note: string | null; pickedCount: number } {
-  if (share.kind !== "select") throw new ValidationError("Link này không dùng để chọn ảnh.");
-  if (share.submittedAt) throw new ValidationError("Bạn đã gửi lựa chọn. Hãy liên hệ studio nếu muốn chọn lại.");
+  input: { picked?: boolean; note?: string | null; markup?: unknown | null },
+): { picked: boolean; note: string | null; markup: DriveMarkup | null; pickedCount: number } {
   return db.transaction((tx) => {
+    const currentShare = tx.select().from(driveShares).where(eq(driveShares.id, share.id)).get();
+    if (!currentShare) throw new NotFoundError();
+    if (currentShare.kind !== "select") throw new ValidationError("Link này không dùng để chọn ảnh.");
+    if (currentShare.submittedAt) throw new ValidationError("Bạn đã gửi lựa chọn. Hãy liên hệ studio nếu muốn chọn lại.");
     const file = tx
       .select()
       .from(driveShareFiles)
       .where(and(eq(driveShareFiles.id, fileId), eq(driveShareFiles.shareId, share.id)))
       .get();
     if (!file) throw new NotFoundError("Không tìm thấy ảnh.");
-    const picked = input.picked ?? file.picked;
+    const markup = parseDriveMarkup(input.markup === undefined ? file.markup : input.markup);
+    if (markup && file.kind !== "image" && file.kind !== "raw") {
+      throw new ValidationError("Chỉ có thể vẽ ghi chú trên ảnh.");
+    }
+    const picked = input.picked ?? (input.markup !== undefined && markup ? true : file.picked);
     const countPicked = () =>
       tx
         .select({ n: count() })
         .from(driveShareFiles)
         .where(and(eq(driveShareFiles.shareId, share.id), eq(driveShareFiles.picked, true)))
         .get()?.n ?? 0;
-    if (picked && !file.picked && share.maxSelect > 0 && countPicked() >= share.maxSelect) {
-      throw new ValidationError(`Bạn chỉ được chọn tối đa ${share.maxSelect} ảnh.`);
+    if (picked && !file.picked && currentShare.maxSelect > 0 && countPicked() >= currentShare.maxSelect) {
+      throw new ValidationError(`Bạn chỉ được chọn tối đa ${currentShare.maxSelect} ảnh.`);
     }
     const note = input.note === undefined ? file.note : cleanText(input.note, 500) || null;
     tx.update(driveShareFiles)
-      .set({ picked, note: picked ? note : null })
+      .set({ picked, note: picked ? note : null, markup: picked && markup ? JSON.stringify(markup) : null })
       .where(eq(driveShareFiles.id, file.id))
       .run();
-    return { picked, note: picked ? note : null, pickedCount: countPicked() };
+    return { picked, note: picked ? note : null, markup: picked ? markup : null, pickedCount: countPicked() };
   });
 }
 

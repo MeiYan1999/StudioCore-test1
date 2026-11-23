@@ -5,6 +5,7 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  Brush,
   Download,
   FileIcon,
   HardDrive,
@@ -18,7 +19,9 @@ import {
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { DriveMarkupEditor } from "@/components/drive/drive-markup-editor";
 import { formatDriveBytes } from "@/lib/drive/constants";
+import type { DriveMarkup } from "@/lib/drive/markup";
 import type { DrivePublicFile } from "@/lib/services/drive-service";
 import { cn } from "@/lib/utils";
 
@@ -26,6 +29,7 @@ type Props = {
   slug: string;
   title: string;
   clientName: string | null;
+  message: string | null;
   studioName: string;
   kind: "select" | "deliver";
   maxSelect: number;
@@ -138,6 +142,30 @@ export function DriveGallery(props: Props) {
     }
   }
 
+  async function saveMarkup(fileId: string, markup: DriveMarkup): Promise<boolean> {
+    try {
+      const response = await fetch(`${base}/pick`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileId, markup }),
+      });
+      const data = (await response.json().catch(() => null)) as
+        | { error?: string; picked?: boolean; markup?: DriveMarkup | null }
+        | null;
+      if (!response.ok || !data) throw new Error(data?.error ?? "Không lưu được nét vẽ.");
+      setFiles((current) =>
+        current.map((file) =>
+          file.id === fileId ? { ...file, markup: data.markup ?? null, picked: data.picked ?? true } : file,
+        ),
+      );
+      toast.success("Đã lưu nét vẽ cho ảnh.");
+      return true;
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Không lưu được nét vẽ.");
+      return false;
+    }
+  }
+
   async function submit() {
     setBusy(true);
     try {
@@ -206,6 +234,12 @@ export function DriveGallery(props: Props) {
         ) : null}
       </header>
 
+      {props.message ? (
+        <div className="mx-auto max-w-7xl px-4 pt-4">
+          <p className="whitespace-pre-line rounded-xl border border-border bg-surface p-4 text-sm">{props.message}</p>
+        </div>
+      ) : null}
+
       <div className="mx-auto max-w-7xl px-4 py-4">
         {list.length === 0 ? (
           <p className="py-20 text-center text-sm text-muted-foreground">
@@ -251,6 +285,11 @@ export function DriveGallery(props: Props) {
                       title="Ảnh có ghi chú"
                     >
                       <MessageSquare className="h-3.5 w-3.5" aria-hidden />
+                    </span>
+                  ) : null}
+                  {file.markup ? (
+                    <span className="absolute right-2 top-12 rounded-full bg-black/65 p-1.5 text-white" title="Ảnh có nét vẽ">
+                      <Brush className="h-3.5 w-3.5" aria-hidden />
                     </span>
                   ) : null}
                   <span className="absolute inset-x-0 bottom-0 truncate bg-gradient-to-t from-black/70 to-transparent px-2 pb-1 pt-4 text-left text-[11px] text-white">
@@ -336,7 +375,7 @@ export function DriveGallery(props: Props) {
       ) : null}
 
       {openFile ? (
-        <div className="fixed inset-0 z-50 flex flex-col bg-black/95 text-white" role="dialog" aria-modal="true" aria-label={openFile.name}>
+        <div className="fixed inset-0 z-50 flex flex-col bg-black text-white" role="dialog" aria-modal="true" aria-label={openFile.name}>
           <div className="flex items-center gap-3 px-4 py-3">
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium">{openFile.name}</p>
@@ -368,14 +407,20 @@ export function DriveGallery(props: Props) {
               <X className="h-5 w-5" aria-hidden />
             </button>
           </div>
-          <div className="relative flex min-h-0 flex-1 items-center justify-center px-2 pb-4">
+          <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center px-2 pb-4">
             {openFile.kind === "video" ? (
               <video key={openFile.id} src={fileUrl(openFile.id, "preview")} controls playsInline className="max-h-full max-w-full" />
             ) : openFile.kind === "other" ? (
               <p className="text-sm text-white/70">Không xem trước được loại tệp này.</p>
             ) : (
-              // eslint-disable-next-line @next/next/no-img-element -- ảnh được chuyển tiếp trực tiếp từ máy studio
-              <img key={openFile.id} src={fileUrl(openFile.id, "preview")} alt={openFile.name} className="max-h-full max-w-full object-contain" />
+              <DriveMarkupEditor
+                key={openFile.id}
+                fileName={openFile.name}
+                imageUrl={fileUrl(openFile.id, "preview")}
+                markup={openFile.markup}
+                editable={selecting && !submitted && (openFile.kind === "image" || openFile.kind === "raw")}
+                onSave={(markup) => saveMarkup(openFile.id, markup)}
+              />
             )}
             {openIndex > 0 ? (
               <button type="button" onClick={() => move(-1)} aria-label="Ảnh trước" className="absolute left-2 rounded-full bg-white/10 p-3 hover:bg-white/20">
