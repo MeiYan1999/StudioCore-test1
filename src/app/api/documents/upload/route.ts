@@ -21,7 +21,7 @@ export async function POST(request: Request): Promise<Response> {
       return NextResponse.json({ error: "Chưa chọn file." }, { status: 400 });
     }
     const buffer = Buffer.from(await file.arrayBuffer());
-    const documentId = createUploadedDocument(getDb(), actor, {
+    const documentId = await createUploadedDocument(getDb(), actor, {
       name: String(formData.get("name") ?? file.name),
       category: String(formData.get("category") ?? "other"),
       visibility: String(formData.get("visibility") ?? "internal"),

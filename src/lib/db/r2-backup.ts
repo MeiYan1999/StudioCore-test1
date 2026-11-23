@@ -1,3 +1,4 @@
+import Database from "better-sqlite3";
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
@@ -13,11 +14,6 @@ import { getR2Config } from "../storage/r2-storage";
 const DB_OBJECT_KEY = "db/studiocore.db";
 const lastSuccessfulBackups = new Map<string, string>();
 const backupJobs = new Map<string, Promise<boolean>>();
-
-type SqliteClient = {
-  backup?: (destination: string) => Promise<unknown>;
-  pragma?: (source: string) => unknown;
-};
 
 function getS3Client() {
   const cfg = getR2Config();
@@ -54,6 +50,9 @@ export async function restoreDbFromR2IfMissing(
 
   const s3 = getS3Client();
   if (!s3) {
+    if (process.env.STORAGE_PROVIDER === "r2") {
+      throw new Error("Cần cấu hình Cloudflare R2 trước khi khởi động với STORAGE_PROVIDER=r2.");
+    }
     console.warn("[R2 Backup] R2 chưa được cấu hình, bỏ qua phục hồi database.");
     return "none";
   }
@@ -85,15 +84,9 @@ export async function restoreDbFromR2IfMissing(
   } catch (err: unknown) {
     const error =
       typeof err === "object" && err !== null
-        ? (err as {
-            name?: string;
-            $metadata?: { httpStatusCode?: number };
-          })
+        ? (err as { name?: string })
         : undefined;
-    if (
-      error?.name === "NoSuchKey" ||
-      error?.$metadata?.httpStatusCode === 404
-    ) {
+    if (error?.name === "NoSuchKey") {
       console.log("[R2 Backup] Chưa có bản sao lưu database trên R2, bắt đầu với database mới.");
       return "none";
     } else {
@@ -107,18 +100,18 @@ export async function restoreDbFromR2IfMissing(
 }
 
 function getDatabaseFingerprint(dbPath: string): string {
-  const dbStat = fs.statSync(/*turbopackIgnore: true*/ dbPath);
+  const dbStat = fs.statSync(/*turbopackIgnore: true*/ dbPath, { bigint: true });
   if (!dbStat.isFile()) throw new Error("Database path is not a file");
 
   let walFingerprint = "missing";
   try {
-    const walStat = fs.statSync(/*turbopackIgnore: true*/ `${dbPath}-wal`);
-    walFingerprint = `${walStat.mtimeMs}:${walStat.size}`;
+    const walStat = fs.statSync(/*turbopackIgnore: true*/ `${dbPath}-wal`, { bigint: true });
+    walFingerprint = `${walStat.mtimeNs}:${walStat.ctimeNs}:${walStat.size}`;
   } catch (err: unknown) {
     if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
   }
 
-  return `${dbStat.mtimeMs}:${dbStat.size}:${walFingerprint}`;
+  return `${dbStat.mtimeNs}:${dbStat.ctimeNs}:${dbStat.size}:${walFingerprint}`;
 }
 
 async function performDbBackup(dbPath: string): Promise<boolean> {
@@ -181,40 +174,23 @@ async function performDbBackup(dbPath: string): Promise<boolean> {
   const snapshotPath = `${dbPath}.${process.pid}.${crypto.randomUUID()}.backup-tmp`;
   try {
     const { resolveDbFilename } = await import("./client");
-    let buffer: Buffer;
     if (path.resolve(dbPath) === resolveDbFilename()) {
       const { getDb } = await import("./client");
-      const sqlite = (getDb() as unknown as { $client?: SqliteClient }).$client;
-      if (sqlite?.backup) {
-        try {
-          await sqlite.backup(snapshotPath);
-          buffer = fs.readFileSync(/*turbopackIgnore: true*/ snapshotPath);
-        } catch {
-          fs.rmSync(/*turbopackIgnore: true*/ snapshotPath, { force: true });
-          try {
-            sqlite.pragma?.("wal_checkpoint(TRUNCATE)");
-          } catch {}
-          buffer = fs.readFileSync(/*turbopackIgnore: true*/ dbPath);
-        }
-      } else {
-        try {
-          sqlite?.pragma?.("wal_checkpoint(TRUNCATE)");
-        } catch {}
-        buffer = fs.readFileSync(/*turbopackIgnore: true*/ dbPath);
-      }
+      const sqlite = (getDb() as { $client?: Database.Database }).$client;
+      if (!sqlite) throw new Error("SQLite client không hỗ trợ sao lưu.");
+      await sqlite.backup(snapshotPath);
     } else {
-      const { default: Database } = await import("better-sqlite3");
       const sqlite = new Database(dbPath, {
         readonly: true,
         fileMustExist: true,
       });
       try {
         await sqlite.backup(snapshotPath);
-        buffer = fs.readFileSync(/*turbopackIgnore: true*/ snapshotPath);
       } finally {
         sqlite.close();
       }
     }
+    const buffer = fs.readFileSync(/*turbopackIgnore: true*/ snapshotPath);
 
     await s3.client.send(
       new PutObjectCommand({
@@ -256,13 +232,37 @@ export async function backupDbToR2(sourcePath?: string): Promise<boolean> {
   return job;
 }
 
-let backupTimeout: NodeJS.Timeout | null = null;
+export function watchDbBackups(dbPath: string): () => void {
+  let observer: Database.Database | undefined;
+  let attemptedVersion: number | undefined;
+  let running = false;
 
-export function triggerDbBackupDebounced(delayMs = 2000) {
-  if (backupTimeout) {
-    clearTimeout(backupTimeout);
+  async function check(periodic = false) {
+    if (running) return;
+    try {
+      if (!observer) {
+        if (!fs.existsSync(/*turbopackIgnore: true*/ dbPath)) return;
+        observer = new Database(dbPath, { readonly: true, fileMustExist: true });
+      }
+      const version = observer.pragma("data_version", { simple: true }) as number;
+      if (!periodic && version === attemptedVersion) return;
+      attemptedVersion = version;
+      running = true;
+      await backupDbToR2(dbPath);
+    } catch (error) {
+      console.warn("[R2 Backup] Không thể theo dõi thay đổi database:", error);
+    } finally {
+      running = false;
+    }
   }
-  backupTimeout = setTimeout(() => {
-    backupDbToR2().catch(() => {});
-  }, delayMs);
+
+  const changes = setInterval(() => void check(), 2_000);
+  const periodic = setInterval(() => void check(true), 60_000);
+  changes.unref();
+  periodic.unref();
+  return () => {
+    clearInterval(changes);
+    clearInterval(periodic);
+    observer?.close();
+  };
 }

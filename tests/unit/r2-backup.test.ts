@@ -11,6 +11,7 @@ import Database from "better-sqlite3";
 import {
   backupDbToR2,
   restoreDbFromR2IfMissing,
+  watchDbBackups,
 } from "@/lib/db/r2-backup";
 
 const mocks = vi.hoisted(() => ({
@@ -95,6 +96,15 @@ describe("R2 database backups", () => {
     expect(fs.existsSync(dbPath)).toBe(false);
   });
 
+  it("does not initialize an empty database when R2 is selected but unconfigured", async () => {
+    const dbPath = makeDbPath();
+    vi.stubEnv("STORAGE_PROVIDER", "r2");
+    mocks.getR2Config.mockReturnValueOnce(null);
+
+    await expect(restoreDbFromR2IfMissing(dbPath)).rejects.toThrow("Cloudflare R2");
+    expect(fs.existsSync(dbPath)).toBe(false);
+  });
+
   it("restores a missing database and removes stale SQLite sidecars", async () => {
     const dbPath = makeDbPath();
     fs.writeFileSync(`${dbPath}-wal`, "stale wal");
@@ -139,6 +149,18 @@ describe("R2 database backups", () => {
     );
     expect(fs.existsSync(dbPath)).toBe(false);
     expect(fs.existsSync(`${dbPath}.restore-tmp`)).toBe(false);
+  });
+
+  it("does not treat a missing bucket as an empty bucket", async () => {
+    const dbPath = makeDbPath();
+    const missingBucket = Object.assign(new Error("Missing bucket"), {
+      name: "NoSuchBucket",
+      $metadata: { httpStatusCode: 404 },
+    });
+    mocks.send.mockRejectedValueOnce(missingBucket);
+
+    await expect(restoreDbFromR2IfMissing(dbPath)).rejects.toBe(missingBucket);
+    expect(fs.existsSync(dbPath)).toBe(false);
   });
 
   it("skips a second upload when the database has not changed", async () => {
@@ -284,5 +306,52 @@ describe("R2 database backups", () => {
     expect(mocks.send).toHaveBeenCalledTimes(1);
     expect(mocks.send.mock.calls[0][0]).toBeInstanceOf(HeadObjectCommand);
     expect(backup).not.toHaveBeenCalled();
+  });
+
+  it("coalesces commits and follows up on changes made during an upload", async () => {
+    const dbPath = makeDbPath();
+    const writer = new Database(dbPath);
+    writer.pragma("journal_mode = WAL");
+    writer.exec("CREATE TABLE records (value TEXT)");
+    mocks.resolveDbFilename.mockReturnValue(dbPath);
+    mocks.getDb.mockReturnValue({
+      $client: {
+        async backup(target: string) {
+          const rows = writer.prepare("SELECT value FROM records").pluck().all();
+          fs.writeFileSync(target, JSON.stringify(rows));
+        },
+      },
+    });
+    vi.useFakeTimers();
+    const stop = watchDbBackups(dbPath);
+    const pending = Promise.withResolvers<unknown>();
+    try {
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(mocks.send).toHaveBeenCalledTimes(1);
+      writer.exec("BEGIN; INSERT INTO records VALUES ('rolled back'); ROLLBACK");
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(mocks.send).toHaveBeenCalledTimes(1);
+
+      mocks.send.mockReturnValueOnce(pending.promise);
+      writer.exec("INSERT INTO records VALUES ('one'), ('two')");
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(mocks.send).toHaveBeenCalledTimes(2);
+      expect(mocks.send.mock.calls[1][0].input.Body.toString()).toBe('["one","two"]');
+      writer.exec("INSERT INTO records VALUES ('three')");
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(mocks.send).toHaveBeenCalledTimes(2);
+
+      pending.resolve({});
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(mocks.send).toHaveBeenCalledTimes(3);
+      expect(mocks.send.mock.calls[2][0].input.Body.toString()).toBe('["one","two","three"]');
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(mocks.send).toHaveBeenCalledTimes(3);
+    } finally {
+      pending.resolve({});
+      stop();
+      vi.useRealTimers();
+      writer.close();
+    }
   });
 });

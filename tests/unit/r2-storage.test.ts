@@ -1,6 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { getR2Config, createR2Adapter } from "@/lib/storage/r2-storage";
-import { getStorageProvider, getStorageAdapter } from "@/lib/adapters/storage";
+import * as storage from "@/lib/adapters/storage";
+import { GET as getPublicFile } from "@/app/api/files/[...key]/route";
+
+const { getStorageProvider, getStorageAdapter } = storage;
 
 describe("Cloudflare R2 Storage Adapter", () => {
   const originalEnv = process.env;
@@ -61,5 +64,24 @@ describe("Cloudflare R2 Storage Adapter", () => {
     const adapter = getStorageAdapter();
     expect(adapter.provider).toBe("r2");
     expect(adapter.configured).toBe(true);
+  });
+
+  it("does not expose private R2 backups or documents through the public files route", async () => {
+    const adapter = vi.spyOn(storage, "getStorageAdapter");
+    try {
+      for (const key of [
+        ["db", "studiocore.db"],
+        ["db/studiocore.db"],
+        ["documents", "tenant", "private.pdf"],
+      ]) {
+        const response = await getPublicFile(new Request("https://studiocore.test"), {
+          params: Promise.resolve({ key }),
+        });
+        expect(response.status).toBe(404);
+      }
+      expect(adapter).not.toHaveBeenCalled();
+    } finally {
+      adapter.mockRestore();
+    }
   });
 });

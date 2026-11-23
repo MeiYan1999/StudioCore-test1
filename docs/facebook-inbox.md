@@ -4,7 +4,7 @@
 
 Dùng Node theo package.json, chạy `npm ci`, sao chép `.env.example` thành `.env.local`, cấu hình `AUTH_SECRET`, sau đó chạy `npm run db:migrate` và `npm run dev`. Với cơ sở dữ liệu thử riêng, đặt `DATABASE_URL=./data/omni-review.db` khi chạy migrate, seed và dev. `npm run db:seed` tạo tài khoản demo được mô tả trong README chính. Không seed dữ liệu vào cơ sở dữ liệu studio thật.
 
-Migration `0009_misty_gunslinger.sql` bổ sung bảng transport Facebook, OAuth state, cấu hình gói công khai, booking token, giữ chỗ, ghi chú, mẫu trả lời và khóa chống thu cọc lặp. Migration có trigger để các đường tạo lịch cũ cũng tôn trọng tài nguyên đang được giữ bởi Inbox. Sao lưu SQLite và khóa token trước khi triển khai. Giữ SQLite trên persistent disk, một ứng dụng sử dụng cùng một file. Không triển khai nhiều replica với các file SQLite độc lập.
+Migration `0009_misty_gunslinger.sql` bổ sung bảng transport Facebook, OAuth state, cấu hình gói công khai, booking token, giữ chỗ, ghi chú, mẫu trả lời và khóa chống thu cọc lặp. Migration có trigger để các đường tạo lịch cũ cũng tôn trọng tài nguyên đang được giữ bởi Inbox. Sao lưu SQLite và khóa token trước khi triển khai. Lưu SQLite trên persistent disk hoặc dùng phục hồi/sao lưu R2 trên Render Free. Không triển khai nhiều replica với các file SQLite độc lập.
 
 Mở **Cài đặt → Kênh bán hàng · Facebook**. Chủ studio chọn gói dịch vụ hiện có, tài nguyên phòng hoặc photographer, giờ mở cửa, ngày nghỉ, thời gian dọn set, thời hạn giữ chỗ và cọc tối thiểu. Link công khai có dạng `/book/{serviceId}`. Lịch tạo tại đây xuất hiện trong Lịch chụp ngày/tuần/tháng hiện có.
 

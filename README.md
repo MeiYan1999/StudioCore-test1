@@ -62,16 +62,19 @@ GHCR package mặc định có thể để private; đăng nhập `ghcr.io` trư
 
 ## Deploy lên Render
 
-Repo có Blueprint `render.yaml`: Docker web service `studiocore-test1`, region Singapore, plan Starter, persistent disk 1GB tại `/app/data`, health check `/login`, auto deploy từ `main`.
+Repo có Blueprint `render.yaml`: Docker web service `studiocore-test1`, region Singapore, gói Free không gắn disk, health check `/api/health`, tự deploy từ `main`.
 
 [Deploy to Render](https://render.com/deploy?repo=https://github.com/MeiYan1999/StudioCore-test1)
 
 Sau khi kết nối Render với GitHub và duyệt Blueprint:
 
 - `AUTH_SECRET`, `TOKEN_ENCRYPTION_KEY`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` khai báo `sync: false` trong `render.yaml`: không commit giá trị, nhập trực tiếp trên Render Dashboard (Environment).
-- Container chạy migration, sau đó seed demo idempotent khi `SEED_DEMO=true`; DB và uploads nằm trên persistent disk.
+- `STORAGE_PROVIDER=r2` và `R2_BUCKET_NAME=studiocore-data` có sẵn trong Blueprint. Tạo bucket **private** với quyền đọc/ghi cho token R2, giữ nguyên bucket đang dùng khi chuyển gói và không bật URL công khai cho bucket chứa SQLite hoặc tài liệu.
+- Container chỉ phục hồi SQLite từ `db/studiocore.db` khi chưa có DB cục bộ, sau đó chạy migration (và seed demo nếu bật `SEED_DEMO=true`). Nếu không truy cập được R2, container dừng thay vì mở DB mới. Ảnh và tài liệu tải lên được lưu trong R2.
+- Ứng dụng kiểm tra commit SQLite mỗi 2 giây và gộp thay đổi vào một bản sao; vẫn thử sao lưu mỗi phút và khi nhận tín hiệu dừng. Nếu instance bị dừng đột ngột, các thay đổi chưa tải lên thành công có thể mất. Không chạy nhiều replica với các file SQLite độc lập.
+- Với service hiện hữu, tạm ngừng ghi trước khi chuyển gói; xác nhận R2 có bản SQLite đầy đủ và lưu bản sao an toàn của dữ liệu cũ. Chép các ảnh chỉ có ở thư mục uploads vào R2 với nguyên đường dẫn tương đối, và tài liệu cũ trong `data/documents` vào tiền tố `documents/`. Sau đó gỡ disk (nếu có), chọn Free và đặt các biến trên trong Render Dashboard nếu service không được Blueprint quản lý.
 - URL dự kiến: https://studiocore-test1.onrender.com. Nếu tên service bị trùng, đổi `name` và `NEXT_PUBLIC_SITE_URL` trong `render.yaml` trước khi deploy.
-- Persistent disk yêu cầu plan trả phí (Starter trở lên); free plan không giữ dữ liệu qua restart/redeploy.
+- Render Free xóa file cục bộ khi khởi động lại, deploy lại hoặc ngủ do không có truy cập; lượt truy cập đầu tiên sau khi ngủ phải chờ khởi động.
 - Đây là môi trường demo công khai với tài khoản demo. Production: đặt `SEED_DEMO=false`, vô hiệu hóa/đổi mật khẩu tài khoản demo, dùng private storage và PostgreSQL.
 
 ## Chức năng đã có
