@@ -879,7 +879,7 @@ test("exports customer markup as a correctly sized composite JPEG", async () => 
     { sharp },
   );
 
-  const output = path.join(dir, "Khach-chon", "Khách note màu", "photo.jpg");
+  const output = path.join(dir, "Khach-chon", "Khách note màu", "photo_note.jpg");
   assert.ok(fs.existsSync(output));
   const { data, info } = await sharp(output).raw().toBuffer({ resolveWithObject: true });
   assert.equal(info.width, 100);
@@ -898,13 +898,13 @@ test("customer markup composites mirror the source subfolder", async () => {
   fs.mkdirSync(path.join(dir, "gallery"));
   await sharp({ create: { width: 40, height: 20, channels: 3, background: { r: 0, g: 0, b: 0 } } })
     .jpeg()
-    .toFile(path.join(dir, "gallery", "photo.jpg"));
+    .toFile(path.join(dir, "gallery", "photo.jpeg"));
 
   const result = await copyPicks(
-    { folder: dir, files: { photo: "gallery/photo.jpg" } },
+    { folder: dir, files: { photo: "gallery/photo.jpeg" } },
     [{
       key: "photo",
-      name: "photo.jpg",
+      name: "photo.jpeg",
       note: null,
       markup: { v: 1, strokes: [{ c: "#ef4444", w: 0.04, p: [[0.1, 0.5]] }], notes: {} },
     }],
@@ -912,8 +912,8 @@ test("customer markup composites mirror the source subfolder", async () => {
     { sharp },
   );
 
-  assert.ok(fs.existsSync(path.join(result.dest, "Khách note màu", "gallery", "photo.jpg")));
-  assert.ok(!fs.existsSync(path.join(result.dest, "Khách note màu", "photo.jpg")));
+  assert.ok(fs.existsSync(path.join(result.dest, "Khách note màu", "gallery", "photo_note.jpg")));
+  assert.ok(!fs.existsSync(path.join(result.dest, "Khách note màu", "photo_note.jpg")));
 });
 
 test("resubmitting customer markup replaces the existing composite", async () => {
@@ -930,7 +930,7 @@ test("resubmitting customer markup replaces the existing composite", async () =>
     note: null,
     markup: { v: 1, strokes: [{ c: color, w: 0.08, p: [[0.1, 0.5], [0.9, 0.5]] }], notes: {} },
   });
-  const output = path.join(dir, "Khach-chon", "Khách note màu", "photo.jpg");
+  const output = path.join(dir, "Khach-chon", "Khách note màu", "photo_note.jpg");
 
   await copyPicks(share, [pick("#ef4444")], "Khach-chon", { sharp });
   await copyPicks(share, [pick("#3b82f6")], "Khach-chon", { sharp });
@@ -941,20 +941,20 @@ test("resubmitting customer markup replaces the existing composite", async () =>
   assert.ok(data[pixel + 2] > 150);
 });
 
-test("same-stem customer markup exports get distinct composite names", async () => {
+test("same-stem customer markup exports use stable extension-aware names", async () => {
   const sharp = require("sharp");
   const dir = tmp();
+  fs.mkdirSync(path.join(dir, "gallery"));
   const image = await sharp({
     create: { width: 100, height: 50, channels: 3, background: { r: 0, g: 0, b: 0 } },
   })
     .jpeg()
     .toBuffer();
-  fs.writeFileSync(path.join(dir, "a.jpg"), image);
-  fs.writeFileSync(path.join(dir, "a.png"), image);
+  fs.writeFileSync(path.join(dir, "gallery", "a.jpg"), image);
+  fs.writeFileSync(path.join(dir, "gallery", "a.png"), image);
 
-  const result = await copyPicks(
-    { folder: dir, files: { jpg: "a.jpg", png: "a.png" } },
-    ["jpg", "png"].map((key, index) => ({
+  const share = { folder: dir, files: { jpg: "gallery/a.jpg", png: "gallery/a.png" } };
+  const picks = ["jpg", "png"].map((key, index) => ({
       key,
       name: `a.${index ? "png" : "jpg"}`,
       note: null,
@@ -963,15 +963,15 @@ test("same-stem customer markup exports get distinct composite names", async () 
         strokes: [{ c: index ? "#3b82f6" : "#ef4444", w: 0.04, p: [[0.1, 0.5], [0.9, 0.5]] }],
         notes: {},
       },
-    })),
-    "Khach-chon",
-    { sharp },
-  );
+    }));
+  const result = await copyPicks(share, picks, "Khach-chon", { sharp });
+  const markupDir = path.join(result.dest, "Khách note màu", "gallery");
+  assert.deepEqual(fs.readdirSync(markupDir).sort(), ["a_note.jpg", "a_png_note.jpg"]);
+  assert.ok(fs.statSync(path.join(markupDir, "a_note.jpg")).size > 0);
+  assert.ok(fs.statSync(path.join(markupDir, "a_png_note.jpg")).size > 0);
 
-  const markupDir = path.join(result.dest, "Khách note màu");
-  assert.deepEqual(fs.readdirSync(markupDir).sort(), ["a (png).jpg", "a.jpg"]);
-  assert.ok(fs.statSync(path.join(markupDir, "a.jpg")).size > 0);
-  assert.ok(fs.statSync(path.join(markupDir, "a (png).jpg")).size > 0);
+  await copyPicks(share, [picks[1]], "Khach-chon", { sharp });
+  assert.deepEqual(fs.readdirSync(markupDir).sort(), ["a_note.jpg", "a_png_note.jpg"]);
 });
 
 test("markup export failure does not prevent picked files or the pick list from being written", async () => {

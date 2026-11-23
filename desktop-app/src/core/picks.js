@@ -118,18 +118,11 @@ async function writeMarkupComposite(source, target, markup, images) {
   }
 }
 
-function markupCompositeName(source, usedNames) {
+function markupCompositeName(source) {
   const parsed = path.parse(path.basename(source));
-  const extension = parsed.ext.slice(1) || "file";
-  let name = `${parsed.name}.jpg`;
-  if (usedNames.has(name.toLowerCase())) name = `${parsed.name} (${extension}).jpg`;
-  let suffix = 2;
-  while (usedNames.has(name.toLowerCase())) {
-    name = `${parsed.name} (${extension} ${suffix}).jpg`;
-    suffix += 1;
-  }
-  usedNames.add(name.toLowerCase());
-  return name;
+  const extension = parsed.ext.slice(1).toLowerCase() || "file";
+  const suffix = extension === "jpg" || extension === "jpeg" ? "" : `_${extension}`;
+  return `${parsed.name}${suffix}_note.jpg`;
 }
 
 function safeFolderName(name) {
@@ -153,7 +146,6 @@ async function copyPicks(share, picks, folderName, images = null) {
   let missing = 0;
   let markupFailed = 0;
   const codes = [];
-  const usedMarkupNames = new Set();
   for (const pick of picks) {
     const rel = share.files[pick.key];
     const source = rel ? await resolveInside(share.folder, rel) : null;
@@ -225,7 +217,7 @@ async function copyPicks(share, picks, folderName, images = null) {
           markupFailed += 1;
           continue;
         }
-        const annotated = path.join(realMarkupDir, markupCompositeName(source, usedMarkupNames));
+        const annotated = path.join(realMarkupDir, markupCompositeName(source));
         await writeMarkupComposite(source, annotated, markup, images);
         copied += 1;
       } catch (error) {
