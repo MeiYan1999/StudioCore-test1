@@ -15,6 +15,50 @@ const DB_OBJECT_KEY = "db/studiocore.db";
 const lastSuccessfulBackups = new Map<string, string>();
 const backupJobs = new Map<string, Promise<boolean>>();
 
+type BackupState = { etag: string; digest: string };
+
+function readBackupState(dbPath: string): BackupState | undefined {
+  const statePath = `${dbPath}.r2-state.json`;
+  try {
+    const state = JSON.parse(fs.readFileSync(/*turbopackIgnore: true*/ statePath, "utf8"));
+    if (!state || typeof state.etag !== "string" || !state.etag ||
+      typeof state.digest !== "string" || !/^[a-f0-9]{64}$/.test(state.digest)) {
+      throw new Error("Trạng thái sao lưu R2 không hợp lệ.");
+    }
+    return state;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+}
+
+function writeBackupState(dbPath: string, state: BackupState) {
+  const statePath = `${dbPath}.r2-state.json`;
+  const tempPath = `${statePath}.tmp`;
+  fs.writeFileSync(/*turbopackIgnore: true*/ tempPath, JSON.stringify(state), { mode: 0o600 });
+  fs.renameSync(/*turbopackIgnore: true*/ tempPath, statePath);
+}
+
+function snapshotDigest(bytes: Buffer) {
+  const hash = crypto.createHash("sha256");
+  if (bytes.subarray(0, 16).toString("ascii") === "SQLite format 3\0") {
+    // SQLite header bytes 18 and 19 change when switching journal modes.
+    return hash.update(bytes.subarray(0, 18)).update(bytes.subarray(20)).digest("hex");
+  }
+  return hash.update(bytes).digest("hex");
+}
+
+async function snapshotDatabase(dbPath: string, sqlite?: Database.Database) {
+  const snapshotPath = `${dbPath}.${process.pid}.${crypto.randomUUID()}.backup-tmp`;
+  const source = sqlite ?? new Database(dbPath, { readonly: true, fileMustExist: true });
+  try {
+    await source.backup(snapshotPath);
+    return fs.readFileSync(/*turbopackIgnore: true*/ snapshotPath);
+  } finally {
+    if (!sqlite) source.close();
+    fs.rmSync(/*turbopackIgnore: true*/ snapshotPath, { force: true });
+  }
+}
+
 function getS3Client() {
   const cfg = getR2Config();
   if (!cfg) return null;
@@ -66,7 +110,7 @@ export async function restoreDbFromR2IfMissing(
       }),
     );
 
-    if (!res.Body) throw new Error("R2 không trả về nội dung database.");
+    if (!res.Body || !res.ETag) throw new Error("R2 không trả về database hoặc ETag.");
 
     const bytes = await res.Body.transformToByteArray();
     if (!bytes || bytes.length === 0) {
@@ -75,8 +119,10 @@ export async function restoreDbFromR2IfMissing(
 
     fs.mkdirSync(/*turbopackIgnore: true*/ path.dirname(dbPath), { recursive: true });
     fs.writeFileSync(/*turbopackIgnore: true*/ restorePath, Buffer.from(bytes));
+    const digest = snapshotDigest(await snapshotDatabase(restorePath));
     fs.rmSync(/*turbopackIgnore: true*/ `${dbPath}-wal`, { force: true });
     fs.rmSync(/*turbopackIgnore: true*/ `${dbPath}-shm`, { force: true });
+    writeBackupState(dbPath, { etag: res.ETag, digest });
     fs.renameSync(/*turbopackIgnore: true*/ restorePath, dbPath);
 
     console.log(`[R2 Backup] ✅ Đã phục hồi database từ Cloudflare R2 (${(bytes.length / 1024 / 1024).toFixed(2)} MB)!`);
@@ -87,6 +133,8 @@ export async function restoreDbFromR2IfMissing(
         ? (err as { name?: string })
         : undefined;
     if (error?.name === "NoSuchKey") {
+      const statePath = `${dbPath}.r2-state.json`;
+      fs.rmSync(/*turbopackIgnore: true*/ statePath, { force: true });
       console.log("[R2 Backup] Chưa có bản sao lưu database trên R2, bắt đầu với database mới.");
       return "none";
     } else {
@@ -96,6 +144,8 @@ export async function restoreDbFromR2IfMissing(
     }
   } finally {
     fs.rmSync(/*turbopackIgnore: true*/ restorePath, { force: true });
+    fs.rmSync(/*turbopackIgnore: true*/ `${restorePath}-wal`, { force: true });
+    fs.rmSync(/*turbopackIgnore: true*/ `${restorePath}-shm`, { force: true });
   }
 }
 
@@ -171,46 +221,47 @@ async function performDbBackup(dbPath: string): Promise<boolean> {
     }
   }
 
-  const snapshotPath = `${dbPath}.${process.pid}.${crypto.randomUUID()}.backup-tmp`;
   try {
+    let sqlite: Database.Database | undefined;
     const { resolveDbFilename } = await import("./client");
     if (path.resolve(dbPath) === resolveDbFilename()) {
       const { getDb } = await import("./client");
-      const sqlite = (getDb() as { $client?: Database.Database }).$client;
+      sqlite = (getDb() as { $client?: Database.Database }).$client;
       if (!sqlite) throw new Error("SQLite client không hỗ trợ sao lưu.");
-      await sqlite.backup(snapshotPath);
-    } else {
-      const sqlite = new Database(dbPath, {
-        readonly: true,
-        fileMustExist: true,
-      });
-      try {
-        await sqlite.backup(snapshotPath);
-      } finally {
-        sqlite.close();
-      }
     }
-    const buffer = fs.readFileSync(/*turbopackIgnore: true*/ snapshotPath);
+    const state = readBackupState(dbPath);
+    const buffer = await snapshotDatabase(dbPath, sqlite);
+    const digest = snapshotDigest(buffer);
+    if (state?.digest === digest) {
+      lastSuccessfulBackups.set(dbPath, fingerprint);
+      return true;
+    }
 
-    await s3.client.send(
+    const result = await s3.client.send(
       new PutObjectCommand({
         Bucket: s3.bucket,
         Key: DB_OBJECT_KEY,
         Body: buffer,
         ContentType: "application/x-sqlite3",
+        ...(state ? { IfMatch: state.etag } : { IfNoneMatch: "*" }),
         ...(generation !== undefined
           ? { Metadata: { generation } }
           : {}),
       }),
     );
+    if (!result.ETag) throw new Error("R2 không trả về ETag sau khi sao lưu.");
+    writeBackupState(dbPath, { etag: result.ETag, digest });
     lastSuccessfulBackups.set(dbPath, fingerprint);
     console.log(`[R2 Backup] ☁️ Đã sao lưu database lên Cloudflare R2 (${(buffer.length / 1024 / 1024).toFixed(2)} MB).`);
     return true;
   } catch (err: unknown) {
+    const error = err as { name?: string; $metadata?: { httpStatusCode?: number } } | null;
+    if (error?.name === "PreconditionFailed" || error?.$metadata?.httpStatusCode === 412) {
+      console.error("[R2 Backup] XUNG ĐỘT: bản SQLite trên R2 đã thay đổi. Không ghi đè. Kiểm tra và giữ lại database cục bộ trước khi khởi động lại.");
+      return false;
+    }
     console.warn("[R2 Backup] Lỗi khi sao lưu database lên R2:", err);
     return false;
-  } finally {
-    fs.rmSync(/*turbopackIgnore: true*/ snapshotPath, { force: true });
   }
 }
 
