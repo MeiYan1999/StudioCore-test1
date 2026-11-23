@@ -19,6 +19,10 @@ type Props = {
   markup: DriveMarkup | null;
   editable: boolean;
   onSave: (markup: DriveMarkup) => Promise<boolean>;
+  startInDrawingMode?: boolean;
+  drawingRequest?: number;
+  hideStartButton?: boolean;
+  onDrawingChange?: (drawing: boolean) => void;
 };
 
 const DRAW_LIMIT_MESSAGE = "Đã đạt giới hạn nét vẽ, hãy lưu hoặc tẩy bớt.";
@@ -45,8 +49,19 @@ function strokeHit(stroke: DriveMarkupStroke, point: [number, number], width: nu
   return false;
 }
 
-export function DriveMarkupEditor({ fileName, imageUrl, markup, editable, onSave }: Props) {
-  const [drawing, setDrawing] = useState(false);
+export function DriveMarkupEditor({
+  fileName,
+  imageUrl,
+  markup,
+  editable,
+  onSave,
+  startInDrawingMode = false,
+  drawingRequest = 0,
+  hideStartButton = false,
+  onDrawingChange,
+}: Props) {
+  const [drawing, setDrawing] = useState(startInDrawingMode);
+  const drawingRequestRef = useRef(drawingRequest);
   const [showMarkup, setShowMarkup] = useState(true);
   const [draft, setDraft] = useState<DriveMarkup>(markup ?? { v: 1, strokes: [], notes: {} });
   const [activeStroke, setActiveStroke] = useState<DriveMarkupStroke | null>(null);
@@ -65,6 +80,16 @@ export function DriveMarkupEditor({ fileName, imageUrl, markup, editable, onSave
 
   const usedColors = [...new Set(draft.strokes.map((stroke) => stroke.c))];
   const pointCount = draft.strokes.reduce((total, stroke) => total + stroke.p.length, 0);
+
+  useEffect(() => {
+    if (drawingRequest === drawingRequestRef.current) return;
+    drawingRequestRef.current = drawingRequest;
+    const timeout = window.setTimeout(() => {
+      setDrawing(true);
+      onDrawingChange?.(true);
+    }, 0);
+    return () => window.clearTimeout(timeout);
+  }, [drawingRequest, onDrawingChange]);
 
   useEffect(() => {
     const stage = stageRef.current;
@@ -191,7 +216,10 @@ export function DriveMarkupEditor({ fileName, imageUrl, markup, editable, onSave
     setLimitMessage("");
     setBusy(true);
     try {
-      if (await onSave(nextMarkup)) setDrawing(false);
+      if (await onSave(nextMarkup)) {
+        setDrawing(false);
+        onDrawingChange?.(false);
+      }
     } finally {
       setBusy(false);
     }
@@ -199,6 +227,7 @@ export function DriveMarkupEditor({ fileName, imageUrl, markup, editable, onSave
 
   function cancel() {
     setDrawing(false);
+    onDrawingChange?.(false);
     setDraft(markup ?? { v: 1, strokes: [], notes: {} });
     setActiveStroke(null);
     activeStrokeRef.current = null;
@@ -212,7 +241,17 @@ export function DriveMarkupEditor({ fileName, imageUrl, markup, editable, onSave
       {editable || markup ? (
         <div className="flex flex-wrap items-center justify-center gap-2 py-2">
           {editable && !drawing ? (
-            <Button size="sm" onClick={() => setDrawing(true)}>Bút vẽ</Button>
+            hideStartButton ? null : (
+              <Button
+                size="sm"
+                onClick={() => {
+                  setDrawing(true);
+                  onDrawingChange?.(true);
+                }}
+              >
+                Bút vẽ
+              </Button>
+            )
           ) : null}
           {drawing ? (
             <>
