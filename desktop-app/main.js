@@ -26,6 +26,7 @@ const { safeFolderName } = require("./src/core/picks");
 const { Store } = require("./src/core/store");
 const { applyLoginItem, setWindowsAppUserModelId } = require("./src/platform/app-identity");
 const { setWindowsContextMenu, sharePathFromArgv } = require("./src/platform/context-menu");
+const { startKeepAwake } = require("./src/platform/keep-awake");
 const {
   contextActionFromArgv,
   contextActionRouteFromArgv,
@@ -47,7 +48,7 @@ let store = null;
 let agent = null;
 let quitting = false;
 let pendingShare = null;
-let keepAwakeBlockerId = null;
+let keepAwakeHandle = null;
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -308,22 +309,27 @@ function messageText(value) {
   return typeof value === "string" ? value.replace(/[\u0000-\u0009\u000b-\u001f\u007f]/g, "").slice(0, 1000) : "";
 }
 
+function stopKeepAwake() {
+  if (keepAwakeHandle === null) return;
+  const handle = keepAwakeHandle;
+  keepAwakeHandle = null;
+  try {
+    handle.stop();
+  } catch (error) {
+    console.warn("Không thể dừng chế độ giữ máy luôn bật:", error);
+  }
+}
+
 function applyKeepAwake() {
   const shouldBlock = !!store?.get("keepAwake") && !!agent?.paired;
-  if (shouldBlock && keepAwakeBlockerId === null) {
+  if (shouldBlock && keepAwakeHandle === null) {
     try {
-      keepAwakeBlockerId = powerSaveBlocker.start("prevent-app-suspension");
+      keepAwakeHandle = startKeepAwake({ platform: process.platform, powerSaveBlocker });
     } catch (error) {
       console.warn("Không thể giữ máy luôn bật:", error);
     }
-  } else if (!shouldBlock && keepAwakeBlockerId !== null) {
-    try {
-      if (powerSaveBlocker.isStarted(keepAwakeBlockerId)) powerSaveBlocker.stop(keepAwakeBlockerId);
-    } catch (error) {
-      console.warn("Không thể dừng chế độ giữ máy luôn bật:", error);
-    } finally {
-      keepAwakeBlockerId = null;
-    }
+  } else if (!shouldBlock) {
+    stopKeepAwake();
   }
 }
 
@@ -537,6 +543,7 @@ function init() {
   app.on("activate", showWindow);
   app.on("before-quit", () => {
     quitting = true;
+    stopKeepAwake();
     agent.stop();
   });
   app.on("window-all-closed", () => undefined);

@@ -29,7 +29,7 @@ function buildContextMenuRegistryEntries(exePath) {
     const itemKey = `${CONTEXT_MENU_KEY}\\shell\\${String(index + 1).padStart(2, "0")}${id}`;
     entries.push({ key: itemKey, value: "MUIVerb", type: "REG_SZ", data: label });
     if (id === "folder") {
-      entries.push({ key: itemKey, value: "CommandFlags", type: "REG_DWORD", data: "0x20" });
+      entries.push({ key: itemKey, value: "CommandFlags", type: "REG_DWORD", data: "0x40" });
     }
     entries.push({
       key: `${itemKey}\\command`,
