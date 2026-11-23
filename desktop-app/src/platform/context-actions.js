@@ -30,6 +30,16 @@ function shareOptionsForAction(action) {
   return null;
 }
 
+function sharesWithPicks(shares) {
+  return shares
+    .filter((share) => share && typeof share.pickedCount === "number" && share.pickedCount > 0)
+    .sort(
+      (a, b) =>
+        Number(b.submittedAt != null) - Number(a.submittedAt != null) ||
+        (b.createdAt || 0) - (a.createdAt || 0),
+    );
+}
+
 async function findSharesForFolder(shares, folder, platform = process.platform, realpath = fs.realpath) {
   if (typeof folder !== "string" || !folder) return [];
   let target;
@@ -57,4 +67,4 @@ async function findSharesForFolder(shares, folder, platform = process.platform, 
   return matches;
 }
 
-module.exports = { CONTEXT_ACTIONS, contextActionFromArgv, findSharesForFolder, shareOptionsForAction };
+module.exports = { CONTEXT_ACTIONS, contextActionFromArgv, findSharesForFolder, shareOptionsForAction, sharesWithPicks };

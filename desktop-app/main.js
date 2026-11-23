@@ -30,6 +30,7 @@ const {
   contextActionFromArgv,
   findSharesForFolder,
   shareOptionsForAction,
+  sharesWithPicks,
 } = require("./src/platform/context-actions");
 const { macBundlePath, removeMacLoginItems } = require("./src/platform/mac-login-cleanup");
 const { installMacQuickActions, removeMacQuickActions } = require("./src/platform/mac-quick-action");
@@ -117,14 +118,16 @@ async function runShareContextAction(action, folder) {
     return;
   }
   if (action === "picks") {
-    try {
-      const result = await agent.copyPicks(newest.id);
-      notifyContextAction(`Đã chép ${result.codes.length} ảnh khách chọn vào ${result.dest}`);
-    } catch (error) {
-      notifyContextAction(
-        error.message === "Khách chưa chọn ảnh nào." ? "Khách chưa chọn ảnh nào" : error.message,
-      );
+    for (const share of sharesWithPicks(matches)) {
+      try {
+        const result = await agent.copyPicks(share.id);
+        notifyContextAction(`Đã chép ${result.codes.length} ảnh khách chọn vào ${result.dest}`);
+        return;
+      } catch (error) {
+        if (error.message !== "Khách chưa chọn ảnh nào.") throw error;
+      }
     }
+    notifyContextAction("Khách chưa chọn ảnh nào");
     return;
   }
   if (action === "rescan") {

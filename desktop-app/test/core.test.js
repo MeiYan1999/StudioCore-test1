@@ -37,6 +37,7 @@ const {
   contextActionFromArgv,
   findSharesForFolder,
   shareOptionsForAction,
+  sharesWithPicks,
 } = require("../src/platform/context-actions");
 const { getMacSigningOptions } = require("../src/platform/mac-signing");
 
@@ -170,6 +171,17 @@ test("tác vụ dòng lệnh chỉ nhận ID được phép và mặc định m�
     allowOriginal: true,
     includeAllFiles: true,
   });
+});
+
+test("lọc ảnh chọn ưu tiên share đã gửi và bỏ qua share mới nhất chưa có ảnh chọn", () => {
+  const matches = sharesWithPicks([
+    { id: "newest-empty", pickedCount: 0, createdAt: 300, submittedAt: null },
+    { id: "newest-active", pickedCount: 1, createdAt: 400, submittedAt: null },
+    { id: "older-submitted", pickedCount: 2, createdAt: 100, submittedAt: 150 },
+    { id: "newer-submitted", pickedCount: 1, createdAt: 200, submittedAt: 250 },
+  ]);
+
+  assert.deepEqual(matches.map((share) => share.id), ["newer-submitted", "older-submitted", "newest-active"]);
 });
 
 test("tìm share theo realpath và so sánh không phân biệt hoa thường trên Windows", async () => {
