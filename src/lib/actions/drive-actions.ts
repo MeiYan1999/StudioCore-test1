@@ -61,6 +61,7 @@ export async function updateDriveShareAction(shareId: string, patch: DriveShareP
     if (patch.status !== undefined) safe.status = patch.status;
     if (patch.title !== undefined) safe.title = String(patch.title);
     if (patch.clientName !== undefined) safe.clientName = patch.clientName === null ? null : String(patch.clientName);
+    if (patch.message !== undefined) safe.message = patch.message === null ? null : String(patch.message);
     if (patch.pin !== undefined) safe.pin = patch.pin === null ? null : String(patch.pin);
     if (patch.maxSelect !== undefined) safe.maxSelect = Number(patch.maxSelect);
     if (patch.allowOriginal !== undefined) safe.allowOriginal = patch.allowOriginal === true;

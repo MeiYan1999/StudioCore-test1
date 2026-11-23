@@ -55,6 +55,7 @@ export default async function DriveSharePage({ params }: { params: Promise<{ slu
       slug={slug}
       title={share.title}
       clientName={share.clientName}
+      message={share.welcomeMessage}
       studioName={studioName}
       kind={share.kind === "deliver" ? "deliver" : "select"}
       maxSelect={share.maxSelect}

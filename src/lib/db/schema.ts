@@ -1815,6 +1815,7 @@ export const driveShares = sqliteTable(
     slug: text("slug").notNull(),
     title: text("title").notNull(),
     clientName: text("client_name"),
+    welcomeMessage: text("welcome_message"),
     kind: text("kind").notNull().default("select"),
     status: text("status").notNull().default("active"),
     pinHash: text("pin_hash"),
@@ -1852,6 +1853,7 @@ export const driveShareFiles = sqliteTable(
     sortIndex: integer("sort_index").notNull().default(0),
     picked: integer("picked", { mode: "boolean" }).notNull().default(false),
     note: text("note"),
+    markup: text("markup"),
   },
   (table) => [
     uniqueIndex("drive_share_files_key_unique").on(table.shareId, table.fileKey),

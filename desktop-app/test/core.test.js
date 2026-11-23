@@ -123,6 +123,9 @@ test("Store defaults to the canonical host and migrates exact apex URLs", () => 
 
 test("macOS Finder Quick Action is enabled by default", () => {
   assert.equal(new Store(tmp()).get("macQuickAction"), true);
+  assert.equal(new Store(tmp()).get("keepAwake"), false);
+  assert.equal(new Store(tmp()).get("defaultMessageSelect"), "");
+  assert.equal(new Store(tmp()).get("defaultMessageDeliver"), "");
 });
 
 test("poll initializes the submission cursor from server time", async () => {
@@ -850,4 +853,41 @@ test("Windows uninstall removes the registered context menu and login-item value
   assert.ok(installer.includes(`DeleteRegKey HKCU "${contextMenuKeyPath}"`));
   assert.ok(installer.includes(`DeleteRegValue HKCU "${runKeyPath}" "${APP_USER_MODEL_ID}"`));
   assert.ok(installer.includes(`DeleteRegValue HKCU "${runKeyPath}" "electron.app.StudioCore Drive"`));
+});
+
+test("exports customer markup as a correctly sized composite JPEG", async () => {
+  const sharp = require("sharp");
+  const dir = tmp();
+  const source = path.join(dir, "photo.jpg");
+  await sharp({ create: { width: 100, height: 50, channels: 3, background: { r: 0, g: 0, b: 0 } } })
+    .jpeg()
+    .toFile(source);
+
+  await copyPicks(
+    { folder: dir, files: { photo: "photo.jpg" } },
+    [{
+      key: "photo",
+      name: "photo.jpg",
+      note: null,
+      markup: {
+        v: 1,
+        strokes: [{ c: "#ef4444", w: 0.08, p: [[0.1, 0.5], [0.9, 0.5]] }],
+        notes: { "#ef4444": "Làm sáng vùng này" },
+      },
+    }],
+    "Khach-chon",
+    { sharp },
+  );
+
+  const output = path.join(dir, "Khach-chon", "Khách note màu", "photo.jpg");
+  assert.ok(fs.existsSync(output));
+  const { data, info } = await sharp(output).raw().toBuffer({ resolveWithObject: true });
+  assert.equal(info.width, 100);
+  assert.equal(info.height, 50);
+  const pixel = (25 * info.width + 50) * info.channels;
+  assert.ok(data[pixel] > 160);
+  assert.ok(data[pixel + 1] < 100);
+  assert.ok(fs.readFileSync(path.join(dir, "Khach-chon", "danh-sach-chon.txt"), "utf8").includes(
+    "Ghi chú vẽ của khách:\r\nphoto.jpg: đỏ: Làm sáng vùng này",
+  ));
 });

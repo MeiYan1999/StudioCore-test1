@@ -12,10 +12,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
     const { slug } = await params;
     const { db, state, share } = await resolveDrivePublicAccess(slug);
     if (state !== "ok" || !share) return driveStateResponse(state);
-    const body = await readJsonBody(request, 4096);
+    const body = await readJsonBody(request, 80_000);
     const result = setDrivePick(db, share, String(body.fileId ?? ""), {
       picked: typeof body.picked === "boolean" ? body.picked : undefined,
       note: body.note === undefined ? undefined : body.note === null ? null : String(body.note),
+      markup: body.markup,
     });
     return Response.json(result);
   } catch (error) {
