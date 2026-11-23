@@ -20,16 +20,26 @@ const {
 const { macBundlePath, removeMacLoginItems } = require("../src/platform/mac-login-cleanup");
 const { Store } = require("../src/core/store");
 const {
-  QUICK_ACTION_NAME,
-  installMacQuickAction,
-  removeMacQuickAction,
+  LEGACY_QUICK_ACTION_NAME,
+  quickActionName,
+  installMacQuickActions,
+  removeMacQuickActions,
 } = require("../src/platform/mac-quick-action");
 const {
   CONTEXT_MENU_KEY,
   WINDOWS_RUN_KEY,
   buildContextMenuCommand,
+  buildContextMenuRegistryEntries,
   sharePathFromArgv,
 } = require("../src/platform/context-menu");
+const {
+  CONTEXT_ACTIONS,
+  contextActionFromArgv,
+  contextActionRouteFromArgv,
+  findSharesForFolder,
+  shareOptionsForAction,
+  sharesWithPicks,
+} = require("../src/platform/context-actions");
 const { getMacSigningOptions } = require("../src/platform/mac-signing");
 
 function tmp() {
@@ -43,6 +53,163 @@ test("quét thư mục: bỏ RAW đã có JPG, khoá không lộ đường dẫn
   assert.deepEqual(files.map((f) => [f.name, f.kind]), [["a.jpg", "image"], ["b.NEF", "raw"], ["c.mp4", "video"]]);
   for (const f of files) assert.match(f.key, /^[A-Za-z0-9_-]{22}$/);
   assert.notEqual((await scanFolder(dir, "salt-khac"))[0].key, files[0].key);
+});
+
+test("quét mọi loại tệp khi được yêu cầu và tính cả kích thước", async () => {
+  const dir = tmp();
+  for (const [name, contents] of [
+    ["a.jpg", "jpg"],
+    ["a.CR3", "raw"],
+    ["b.MOV", "video"],
+    ["ghi-chu.txt", "ghi chú"],
+    ["README", "file"],
+    [".an.txt", "ẩn"],
+  ]) {
+    fs.writeFileSync(path.join(dir, name), contents);
+  }
+
+  const media = await scanFolder(dir, "media");
+  assert.deepEqual(media.map((file) => file.name), ["a.jpg", "b.MOV"]);
+  const all = await scanFolder(dir, "all", { includeAllFiles: true });
+  assert.deepEqual(
+    all.map((file) => [file.name, file.kind]).sort((a, b) => a[0].localeCompare(b[0])),
+    [
+      ["README", "other"],
+      ["a.CR3", "raw"],
+      ["a.jpg", "image"],
+      ["b.MOV", "video"],
+      ["ghi-chu.txt", "other"],
+    ].sort((a, b) => a[0].localeCompare(b[0])),
+  );
+  assert.equal(all.find((file) => file.name === "ghi-chu.txt").size, Buffer.byteLength("ghi chú"));
+});
+
+test("lưu chế độ quét mọi tệp để lần đồng bộ sau vẫn giữ", async () => {
+  const dir = tmp();
+  fs.writeFileSync(path.join(dir, "ghi-chu.txt"), "first");
+  const store = new Store(tmp());
+  store.set({ deviceToken: "scdt-test" });
+  const agent = new DriveAgent({ store, images: {} });
+  let replacedFiles = [];
+  agent.client = () => ({
+    createShare: async () => ({ id: "share-all", url: "https://example.test/drive/share-all" }),
+    replaceFiles: async (_shareId, files) => { replacedFiles = files; },
+  });
+
+  await agent.createShare(dir, { kind: "deliver", includeAllFiles: true });
+  assert.equal(store.getShare("share-all").includeAllFiles, true);
+  fs.writeFileSync(path.join(dir, "more.txt"), "second");
+  const result = await agent.rescanShare("share-all");
+
+  assert.equal(result.count, 2);
+  assert.deepEqual(replacedFiles.map((file) => file.kind), ["other", "other"]);
+  assert.equal(store.getShare("share-all").includeAllFiles, true);
+});
+
+test("tác vụ Explorer dùng danh sách lệnh có thứ tự, trích dẫn và dấu phân cách", () => {
+  const exePath = "C:\\Program Files\\StudioCore Drive\\StudioCore Drive.exe";
+  const entries = buildContextMenuRegistryEntries(exePath);
+  assert.deepEqual(
+    CONTEXT_ACTIONS.map(({ id, label }) => [id, label]),
+    [
+      ["select", "Tạo album chọn ảnh cho khách"],
+      ["view", "Tạo album xem & tải (không chọn)"],
+      ["folder", "Chia sẻ thư mục cho khách tải về"],
+      ["copylink", "Copy link đã chia sẻ"],
+      ["picks", "Lọc ảnh khách chọn"],
+      ["rescan", "Đồng bộ ngay với thư mục"],
+      ["toggle", "Bật / tắt chia sẻ"],
+      ["open", "Mở StudioCore Drive"],
+    ],
+  );
+  const rootEntries = entries.filter((entry) => entry.key === CONTEXT_MENU_KEY);
+  assert.deepEqual(rootEntries, [
+    { key: CONTEXT_MENU_KEY, value: "MUIVerb", type: "REG_SZ", data: "StudioCore Drive" },
+    { key: CONTEXT_MENU_KEY, value: "Icon", type: "REG_SZ", data: `"${exePath}"` },
+    { key: CONTEXT_MENU_KEY, value: "SubCommands", type: "REG_SZ", data: "" },
+  ]);
+  for (const [index, action] of CONTEXT_ACTIONS.entries()) {
+    const itemKey = `${CONTEXT_MENU_KEY}\\shell\\${String(index + 1).padStart(2, "0")}${action.id}`;
+    assert.ok(entries.some((entry) => entry.key === itemKey && entry.value === "MUIVerb" && entry.data === action.label));
+    assert.ok(
+      entries.some(
+        (entry) =>
+          entry.key === `${itemKey}\\command` &&
+          entry.data === `"${exePath}" --action=${action.id} --share="%1"`,
+      ),
+    );
+  }
+  const folderKey = `${CONTEXT_MENU_KEY}\\shell\\03folder`;
+  assert.ok(
+    entries.some(
+      (entry) =>
+        entry.key === folderKey &&
+        entry.value === "CommandFlags" &&
+        entry.type === "REG_DWORD" &&
+        entry.data === "0x20",
+    ),
+  );
+});
+
+test("tác vụ dòng lệnh chỉ nhận ID được phép và mặc định mở ứng dụng", () => {
+  assert.equal(contextActionFromArgv(["app.exe", "--action=select"]), "select");
+  assert.equal(contextActionFromArgv(["app.exe", "--action=folder"]), "folder");
+  assert.equal(contextActionFromArgv(["app.exe", '--action=select" --share=C:\\secret']), "open");
+  assert.equal(contextActionFromArgv(["app.exe", "--action=delete"]), "open");
+  assert.equal(contextActionFromArgv(["app.exe"]), null);
+  assert.equal(contextActionRouteFromArgv(["app.exe"]), "show");
+  assert.equal(contextActionRouteFromArgv(["app.exe", "--hidden"]), "hidden");
+  assert.equal(contextActionRouteFromArgv(["app.exe", "--action=select", "--share=C:\\Photos"]), "context");
+  assert.equal(contextActionRouteFromArgv(["app.exe", "--action=delete"]), "show");
+  assert.equal(contextActionRouteFromArgv(["app.exe", "--hidden", "--action=delete"]), "hidden");
+  assert.deepEqual(shareOptionsForAction("select"), {
+    kind: "select",
+    allowOriginal: false,
+    includeAllFiles: false,
+  });
+  assert.deepEqual(shareOptionsForAction("view"), {
+    kind: "deliver",
+    allowOriginal: true,
+    includeAllFiles: false,
+  });
+  assert.deepEqual(shareOptionsForAction("folder"), {
+    kind: "deliver",
+    allowOriginal: true,
+    includeAllFiles: true,
+  });
+});
+
+test("lọc ảnh chọn ưu tiên share đã gửi và bỏ qua share mới nhất chưa có ảnh chọn", () => {
+  const matches = sharesWithPicks([
+    { id: "newest-empty", pickedCount: 0, createdAt: 300, submittedAt: null },
+    { id: "newest-active", pickedCount: 1, createdAt: 400, submittedAt: null },
+    { id: "older-submitted", pickedCount: 2, createdAt: 100, submittedAt: 150 },
+    { id: "newer-submitted", pickedCount: 1, createdAt: 200, submittedAt: 250 },
+  ]);
+
+  assert.deepEqual(matches.map((share) => share.id), ["newer-submitted", "older-submitted", "newest-active"]);
+});
+
+test("tìm share theo realpath và so sánh không phân biệt hoa thường trên Windows", async () => {
+  const folder = tmp();
+  const alias = path.join(tmp(), "alias");
+  if (process.platform !== "win32") {
+    fs.symlinkSync(folder, alias, "dir");
+    const shares = [
+      { id: "alias", folder: alias },
+      { id: "other", folder: tmp() },
+    ];
+    assert.deepEqual((await findSharesForFolder(shares, folder)).map((share) => share.id), ["alias"]);
+  }
+
+  const winShares = [{ id: "windows", folder: "C:\\Users\\Studio\\Photos" }];
+  const winMatches = await findSharesForFolder(
+    winShares,
+    "c:\\users\\studio\\photos",
+    "win32",
+    async (value) => value,
+  );
+  assert.deepEqual(winMatches.map((share) => share.id), ["windows"]);
 });
 
 test("quét thư mục bỏ qua tên thư mục xuất tùy chỉnh không phân biệt hoa thường", async () => {
@@ -618,8 +785,8 @@ test("địa chỉ máy chủ, Range và tham số dòng lệnh", () => {
     null,
   );
   assert.equal(
-    buildContextMenuCommand("C:\\Program Files\\StudioCore Drive\\StudioCore Drive.exe"),
-    '"C:\\Program Files\\StudioCore Drive\\StudioCore Drive.exe" --share="%1"',
+    buildContextMenuCommand("C:\\Program Files\\StudioCore Drive\\StudioCore Drive.exe", "select"),
+    '"C:\\Program Files\\StudioCore Drive\\StudioCore Drive.exe" --action=select --share="%1"',
   );
 });
 
@@ -723,23 +890,39 @@ test("macOS login cleanup resolves errors instead of rejecting", async () => {
   assert.deepEqual(await cleanup, { ok: false, error: error.message });
 });
 
-test("macOS Quick Action install copies templates and refreshes Finder only when changed", async () => {
+test("macOS installs a distinct Finder Quick Action per action and removes the legacy workflow", async () => {
   const templateDir = path.join(__dirname, "..", "assets", "mac-quick-action");
   const servicesDir = tmp();
-  const contentsDir = path.join(servicesDir, `${QUICK_ACTION_NAME}.workflow`, "Contents");
+  const legacyPath = path.join(servicesDir, `${LEGACY_QUICK_ACTION_NAME}.workflow`);
+  fs.mkdirSync(legacyPath);
   const calls = [];
   const execFileImpl = (command, args, options, callback) => {
     calls.push({ command, args, options });
     callback(null, "", "");
   };
 
-  assert.deepEqual(await installMacQuickAction({ templateDir, servicesDir, execFileImpl }), { changed: true });
-  for (const fileName of ["Info.plist", "document.wflow"]) {
-    assert.deepEqual(
-      await fs.promises.readFile(path.join(contentsDir, fileName)),
-      await fs.promises.readFile(path.join(templateDir, fileName)),
-    );
+  assert.deepEqual(await installMacQuickActions({ templateDir, servicesDir, execFileImpl }), { changed: true });
+  assert.equal(fs.existsSync(legacyPath), false);
+  const toggleAction = CONTEXT_ACTIONS.find(({ id }) => id === "toggle");
+  assert.equal(quickActionName(toggleAction), "StudioCore Drive – Bật – tắt chia sẻ");
+  const unsafeName = quickActionName({ label: 'A/B\\C:<>"|?*\u0000' });
+  assert.equal(unsafeName, "StudioCore Drive – A–B–C");
+  assert.doesNotMatch(unsafeName, /[\\/:*?"<>|\u0000-\u001f]/);
+  const bundleIds = new Set();
+  for (const action of CONTEXT_ACTIONS) {
+    const workflowPath = path.join(servicesDir, `${quickActionName(action)}.workflow`);
+    assert.equal(path.dirname(workflowPath), servicesDir);
+    const contentsDir = path.join(workflowPath, "Contents");
+    const info = await fs.promises.readFile(path.join(contentsDir, "Info.plist"), "utf8");
+    const workflow = await fs.promises.readFile(path.join(contentsDir, "document.wflow"), "utf8");
+    assert.ok(info.includes(`<string>${quickActionName(action).replaceAll("&", "&amp;")}</string>`));
+    assert.ok(info.includes(`<string>vn.io.studiocore.drive.context.${action.id}</string>`));
+    const command = workflow.match(/<key>COMMAND_STRING<\/key>\s*<string>([^<]+)<\/string>/)?.[1];
+    assert.equal(command, `open -n -a "StudioCore Drive" --args --action=${action.id} --share="$@"`);
+    const bundleId = info.match(/<key>CFBundleIdentifier<\/key>\s*<string>([^<]+)<\/string>/)?.[1];
+    bundleIds.add(bundleId);
   }
+  assert.equal(bundleIds.size, CONTEXT_ACTIONS.length);
   assert.deepEqual(calls, [
     {
       command: "/System/Library/CoreServices/pbs",
@@ -748,12 +931,12 @@ test("macOS Quick Action install copies templates and refreshes Finder only when
     },
   ]);
 
-  assert.deepEqual(await installMacQuickAction({ templateDir, servicesDir, execFileImpl }), { changed: false });
+  assert.deepEqual(await installMacQuickActions({ templateDir, servicesDir, execFileImpl }), { changed: false });
   assert.equal(calls.length, 1);
 });
 
 test("macOS Quick Action install ignores pbs errors", async () => {
-  const result = await installMacQuickAction({
+  const result = await installMacQuickActions({
     templateDir: path.join(__dirname, "..", "assets", "mac-quick-action"),
     servicesDir: tmp(),
     execFileImpl: (_command, _args, _options, callback) => callback(new Error("pbs failed")),
@@ -762,19 +945,22 @@ test("macOS Quick Action install ignores pbs errors", async () => {
   assert.deepEqual(result, { changed: true });
 });
 
-test("macOS Quick Action removal deletes the workflow and refreshes Finder only when present", async () => {
+test("macOS Quick Action removal deletes every workflow and refreshes Finder only when present", async () => {
   const servicesDir = tmp();
-  const bundlePath = path.join(servicesDir, `${QUICK_ACTION_NAME}.workflow`);
+  const names = [LEGACY_QUICK_ACTION_NAME, ...CONTEXT_ACTIONS.map(quickActionName)];
+  const bundlePaths = names.map((name) => path.join(servicesDir, `${name}.workflow`));
   const calls = [];
   const execFileImpl = (command, args, options, callback) => {
     calls.push({ command, args, options });
     callback(new Error("pbs failed"));
   };
-  fs.mkdirSync(path.join(bundlePath, "Contents"), { recursive: true });
-  fs.writeFileSync(path.join(bundlePath, "Contents", "Info.plist"), "fixture");
+  for (const bundlePath of bundlePaths) {
+    fs.mkdirSync(path.join(bundlePath, "Contents"), { recursive: true });
+    fs.writeFileSync(path.join(bundlePath, "Contents", "Info.plist"), "fixture");
+  }
 
-  await removeMacQuickAction({ servicesDir, execFileImpl });
-  assert.equal(fs.existsSync(bundlePath), false);
+  await removeMacQuickActions({ servicesDir, execFileImpl });
+  assert.ok(bundlePaths.every((bundlePath) => !fs.existsSync(bundlePath)));
   assert.deepEqual(calls, [
     {
       command: "/System/Library/CoreServices/pbs",
@@ -783,7 +969,7 @@ test("macOS Quick Action removal deletes the workflow and refreshes Finder only 
     },
   ]);
 
-  await removeMacQuickAction({ servicesDir, execFileImpl });
+  await removeMacQuickActions({ servicesDir, execFileImpl });
   assert.equal(calls.length, 1);
 });
 
@@ -821,7 +1007,7 @@ test("macOS Quick Action templates describe a Finder folder service and have val
   const menuTitle = infoPlist.match(
     /<key>NSMenuItem<\/key>\s*<dict>\s*<key>default<\/key>\s*<string>([^<]+)<\/string>/,
   )?.[1];
-  assert.equal(menuTitle, QUICK_ACTION_NAME);
+  assert.equal(menuTitle, LEGACY_QUICK_ACTION_NAME);
 
   const command = workflow.match(/<key>COMMAND_STRING<\/key>\s*<string>([^<]+)<\/string>/)?.[1];
   assert.equal(command, `open -b ${APP_USER_MODEL_ID} "$@"`);

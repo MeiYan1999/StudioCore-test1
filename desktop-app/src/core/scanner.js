@@ -43,11 +43,12 @@ function fileKey(salt, relPath) {
 const collator = new Intl.Collator("vi", { numeric: true, sensitivity: "base" });
 
 /**
- * Quét thư mục thành danh mục tệp. File RAW có ảnh JPG cùng tên trong cùng thư mục
+ * Quét thư mục thành danh mục tệp. Ở chế độ thông thường, RAW có ảnh JPG cùng tên
  * không được đưa lên link (khách xem JPG; RAW được ghép lại khi lọc ảnh đã chọn).
  */
 async function scanFolder(root, salt, options = {}) {
   const entries = [];
+  const includeAllFiles = options.includeAllFiles === true;
   const skipDirs = new Set([
     ...SKIP_DIRS,
     ...(Array.isArray(options.skipDirs)
@@ -74,9 +75,10 @@ async function scanFolder(root, salt, options = {}) {
         continue;
       }
       if (!item.isFile()) continue;
-      const kind = kindOf(item.name);
+      const detectedKind = kindOf(item.name);
+      const kind = detectedKind || (includeAllFiles ? "other" : null);
       if (!kind) continue;
-      if (kind === "raw" && viewable.has(stem(item.name))) continue;
+      if (!includeAllFiles && kind === "raw" && viewable.has(stem(item.name))) continue;
       let stat;
       try {
         stat = await fs.stat(full);

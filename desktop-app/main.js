@@ -26,8 +26,15 @@ const { safeFolderName } = require("./src/core/picks");
 const { Store } = require("./src/core/store");
 const { applyLoginItem, setWindowsAppUserModelId } = require("./src/platform/app-identity");
 const { setWindowsContextMenu, sharePathFromArgv } = require("./src/platform/context-menu");
+const {
+  contextActionFromArgv,
+  contextActionRouteFromArgv,
+  findSharesForFolder,
+  shareOptionsForAction,
+  sharesWithPicks,
+} = require("./src/platform/context-actions");
 const { macBundlePath, removeMacLoginItems } = require("./src/platform/mac-login-cleanup");
-const { installMacQuickAction, removeMacQuickAction } = require("./src/platform/mac-quick-action");
+const { installMacQuickActions, removeMacQuickActions } = require("./src/platform/mac-quick-action");
 
 setWindowsAppUserModelId(app);
 
@@ -46,8 +53,7 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on("second-instance", (_event, argv) => {
-    requestShare(sharePathFromArgv(argv));
-    showWindow();
+    void handleContextMenuArguments(argv);
   });
   // macOS: kéo thư mục vào biểu tượng Dock hoặc "Mở bằng → StudioCore Drive".
   app.on("open-file", (event, file) => {
@@ -58,7 +64,7 @@ if (!app.requestSingleInstanceLock()) {
   app.whenReady().then(init);
 }
 
-function requestShare(folder) {
+function requestShare(folder, options = {}) {
   if (!folder) return;
   let stat = null;
   try {
@@ -67,8 +73,105 @@ function requestShare(folder) {
     return;
   }
   if (!stat.isDirectory()) return;
-  if (win && !win.webContents.isLoading()) win.webContents.send("drive:share-request", folder);
-  else pendingShare = folder;
+  const request = { folder, ...options };
+  if (win && !win.webContents.isLoading()) win.webContents.send("drive:share-request", request);
+  else pendingShare = request;
+}
+
+function notifyContextAction(body, onClick) {
+  if (!Notification.isSupported()) {
+    onClick?.();
+    return;
+  }
+  const notification = new Notification({ title: "StudioCore Drive", body });
+  if (onClick) notification.on("click", onClick);
+  notification.show();
+}
+
+async function runShareContextAction(action, folder) {
+  const localShares = Object.entries(store.get("shares") || {}).map(([id, share]) => ({
+    id,
+    folder: share.folder,
+  }));
+  const localMatches = await findSharesForFolder(localShares, folder);
+  const notifyUnshared = () => {
+    notifyContextAction("Thư mục này chưa được chia sẻ", () => {
+      requestShare(folder, { kind: "select", allowOriginal: false, includeAllFiles: false });
+      showWindow();
+    });
+  };
+  if (localMatches.length === 0) {
+    notifyUnshared();
+    return;
+  }
+  const localIds = new Set(localMatches.map((share) => share.id));
+  const matches = (await agent.listShares())
+    .filter((share) => localIds.has(share.id))
+    .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  if (matches.length === 0) {
+    notifyUnshared();
+    return;
+  }
+  const newest = matches[0];
+  if (action === "copylink") {
+    clipboard.writeText(matches.map((share) => share.url).filter(Boolean).join("\n"));
+    notifyContextAction("Đã sao chép link");
+    return;
+  }
+  if (action === "picks") {
+    for (const share of sharesWithPicks(matches)) {
+      try {
+        const result = await agent.copyPicks(share.id);
+        notifyContextAction(`Đã chép ${result.codes.length} ảnh khách chọn vào ${result.dest}`);
+        return;
+      } catch (error) {
+        if (error.message !== "Khách chưa chọn ảnh nào.") throw error;
+      }
+    }
+    notifyContextAction("Khách chưa chọn ảnh nào");
+    return;
+  }
+  if (action === "rescan") {
+    const result = await agent.rescanShare(newest.id);
+    notifyContextAction(`Đã đồng bộ: ${result.count} tệp`);
+    return;
+  }
+  if (action === "toggle") {
+    const status = newest.status === "paused" ? "active" : "paused";
+    await agent.updateShare(newest.id, { status });
+    notifyContextAction(status === "paused" ? "Đã tạm dừng chia sẻ" : "Đã bật lại chia sẻ");
+  }
+}
+
+async function handleContextMenuArguments(argv) {
+  const route = contextActionRouteFromArgv(argv);
+  const action = contextActionFromArgv(argv);
+  const folder = sharePathFromArgv(argv);
+  if (route === "hidden") return;
+  if (route === "show") {
+    if (action === null && folder) requestShare(folder);
+    showWindow();
+    return;
+  }
+  if (action === "open") {
+    showWindow();
+    return;
+  }
+  const shareOptions = shareOptionsForAction(action);
+  if (shareOptions) {
+    if (folder) requestShare(folder, shareOptions);
+    showWindow();
+    return;
+  }
+  if (!folder) {
+    showWindow();
+    return;
+  }
+  try {
+    await runShareContextAction(action, folder);
+  } catch (error) {
+    notifyContextAction(error.message || "Không thể thực hiện thao tác.");
+  }
 }
 
 function publicState() {
@@ -123,7 +226,9 @@ function createWindow() {
   win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   win.webContents.on("will-attach-webview", (event) => event.preventDefault());
   win.once("ready-to-show", () => {
-    if (!process.argv.includes("--hidden")) win.show();
+    const startupAction = contextActionFromArgv(process.argv);
+    const showsWindow = startupAction === null || ["open", "select", "view", "folder"].includes(startupAction);
+    if (!process.argv.includes("--hidden") && showsWindow) win.show();
   });
   win.on("close", (event) => {
     if (!quitting) {
@@ -240,12 +345,15 @@ function registerIpc() {
     return publicState();
   });
   handle("pick-folder", () => pickFolder());
-  handle("preview-folder", (folder) => agent.previewFolder(str(folder, 4096)));
+  handle("preview-folder", (p) =>
+    agent.previewFolder(str(p && p.folder, 4096), { includeAllFiles: p && p.includeAllFiles === true }),
+  );
   handle("create-share", async (p) => {
     const result = await agent.createShare(str(p && p.folder, 4096), {
       title: str(p.title, 160),
       clientName: str(p.clientName, 120),
       kind: p.kind === "deliver" ? "deliver" : "select",
+      includeAllFiles: p.includeAllFiles === true,
       message: messageText(p.message),
       pin: str(p.pin, 12),
       maxSelect: Number(p.maxSelect) || 0,
@@ -323,11 +431,11 @@ function registerIpc() {
         patch.contextMenu = p.contextMenu;
       } else if (process.platform === "darwin") {
         if (p.contextMenu) {
-          await installMacQuickAction({
+          await installMacQuickActions({
             templateDir: path.join(__dirname, "assets", "mac-quick-action"),
           });
         } else {
-          await removeMacQuickAction({
+          await removeMacQuickActions({
             servicesDir: path.join(os.homedir(), "Library", "Services"),
           });
         }
@@ -386,7 +494,7 @@ function init() {
     });
   }
   if (process.platform === "darwin" && store.get("macQuickAction")) {
-    installMacQuickAction({
+    installMacQuickActions({
       templateDir: path.join(__dirname, "assets", "mac-quick-action"),
     }).catch((error) => {
       console.warn("Không thể cài mục chia sẻ trong Finder:", error);
@@ -423,7 +531,7 @@ function init() {
   registerIpc();
   createWindow();
   createTray();
-  requestShare(sharePathFromArgv(process.argv));
+  void handleContextMenuArguments(process.argv);
   agent.start();
 
   app.on("activate", showWindow);
