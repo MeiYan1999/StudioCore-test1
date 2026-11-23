@@ -108,6 +108,7 @@ export function DriveGallery(props: Props) {
   const openIndex = openId ? list.findIndex((f) => f.id === openId) : -1;
   const openFile = openIndex >= 0 ? list[openIndex] : null;
   const openFileId = openFile?.id ?? "";
+  const isLightboxOpen = openFile !== null;
   const photoCodes = useMemo(
     () => files.filter((file) => file.picked).map((file) => file.name.replace(/\.[^.]+$/, "")),
     [files],
@@ -153,14 +154,14 @@ export function DriveGallery(props: Props) {
   }, [openFileId, showFilmstrip]);
 
   useEffect(() => {
-    if (openFileId) {
+    if (isLightboxOpen) {
       lightboxRef.current?.focus();
       return;
     }
     const opener = lightboxOpenerRef.current;
     if (opener?.isConnected) opener.focus();
     lightboxOpenerRef.current = null;
-  }, [openFileId]);
+  }, [isLightboxOpen]);
 
   useEffect(() => {
     const updateFullscreen = () => setFullscreen(Boolean(document.fullscreenElement));
