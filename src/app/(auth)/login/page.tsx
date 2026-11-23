@@ -33,14 +33,15 @@ export default async function LoginPage({
 
   return (
     <div>
-      <div className="mb-6">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">
+      <div className="mb-7">
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-indigo-500/20 bg-indigo-500/[0.07] px-2.5 py-1 text-xs font-medium text-indigo-600 dark:text-indigo-300">
+          <span className="h-1.5 w-1.5 rounded-full bg-indigo-500" aria-hidden="true" />
           Chào mừng trở lại
-        </p>
-        <h1 className="mt-2 text-2xl font-semibold leading-8 text-foreground">
+        </span>
+        <h1 className="mt-4 text-[28px] font-semibold leading-9 tracking-tight text-foreground">
           Đăng nhập StudioCore
         </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">
           Chủ Studio đăng nhập nhanh bằng Google hoặc Email; Nhân viên dùng Mã NV &amp; PIN để vào ca làm.
         </p>
       </div>
@@ -109,19 +110,26 @@ export default async function LoginPage({
         </Alert>
       ) : null}
 
-      <div className="rounded-xl border border-border bg-surface p-5 shadow-sm sm:p-6">
+      <div className="rounded-2xl border border-zinc-200/80 bg-white/70 p-5 shadow-xl shadow-zinc-900/[0.04] ring-1 ring-black/[0.02] backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-900/60 dark:shadow-black/30 sm:p-6">
         <LoginForm
           initialTab={isPinTab ? "pin" : "owner"}
           initialCode={query.code ?? ""}
         />
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-        <Link href="/reset-password" className="text-primary hover:underline">
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-2 px-1 text-sm">
+        <Link
+          href="/reset-password"
+          className="rounded font-medium text-muted-foreground transition-colors hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/30 dark:hover:text-indigo-300"
+        >
           Quên mật khẩu?
         </Link>
-        <Link href="/register" className="text-primary hover:underline">
-          Chưa có tài khoản? Đăng ký dùng thử
+        <Link
+          href="/register"
+          className="rounded text-muted-foreground transition-colors hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/30 dark:hover:text-indigo-300"
+        >
+          Chưa có tài khoản?{" "}
+          <span className="font-semibold text-indigo-600 dark:text-indigo-300">Đăng ký dùng thử</span>
         </Link>
       </div>
 
@@ -169,7 +177,7 @@ export default async function LoginPage({
         </details>
       ) : null}
 
-      <p className="mt-5 text-center text-xs text-muted-foreground">
+      <p className="mt-8 text-center text-xs text-muted-foreground/80">
         StudioCore · Nền tảng quản lý studio chuyên nghiệp
       </p>
     </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { Eye, EyeOff, KeyRound, Loader2, Mail } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, KeyRound, Loader2, LockKeyhole, Mail } from "lucide-react";
 import { loginWithPasswordAction, loginWithPinAction } from "@/app/(auth)/login/actions";
 import { initialActionState } from "@/lib/actions/action-state";
 import { Alert } from "@/components/ui/alert";
@@ -9,6 +9,29 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { cn } from "@/lib/utils";
+
+const fieldClassName =
+  "h-11 rounded-xl border-zinc-300 bg-white/80 text-[15px] shadow-none transition-all placeholder:text-zinc-400 hover:border-zinc-400 focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500/20 focus-visible:ring-offset-0 aria-[invalid=true]:border-[var(--danger)] aria-[invalid=true]:focus-visible:ring-red-500/20 dark:border-zinc-700 dark:bg-zinc-950/40 dark:placeholder:text-zinc-500 dark:hover:border-zinc-600 dark:focus-visible:border-indigo-400 sm:text-sm";
+
+const fieldIconClassName =
+  "pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400 transition-colors group-focus-within:text-indigo-500 dark:text-zinc-500";
+
+const revealButtonClassName =
+  "absolute right-1 top-1/2 h-9 w-9 -translate-y-1/2 rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-foreground focus-visible:ring-indigo-500/30 focus-visible:ring-offset-0 dark:hover:bg-zinc-800";
+
+const submitClassName =
+  "h-11 w-full rounded-xl bg-gradient-to-b from-indigo-500 to-indigo-600 text-[15px] font-semibold text-white shadow-lg shadow-indigo-600/25 ring-1 ring-inset ring-white/10 transition-all hover:from-indigo-400 hover:to-indigo-500 hover:shadow-indigo-500/30 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500/40 disabled:opacity-70 sm:text-sm";
+
+function SubmitButton({ pending, label }: { pending: boolean; label: string }) {
+  return (
+    <Button type="submit" className={submitClassName} disabled={pending} aria-busy={pending}>
+      {pending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
+      <span>{pending ? "Đang đăng nhập..." : label}</span>
+      {pending ? null : <ArrowRight className="h-4 w-4 opacity-80" aria-hidden="true" />}
+    </Button>
+  );
+}
 
 function FieldError({ id, message }: { id: string; message?: string }) {
   if (!message) {
@@ -53,18 +76,15 @@ function PasswordLoginForm() {
   const [showPassword, setShowPassword] = useState(false);
 
   return (
-    <form action={formAction} className="mt-4 space-y-4" noValidate>
+    <form action={formAction} className="space-y-4" noValidate>
       {state.status === "error" && state.message ? (
         <Alert tone="danger">{state.message}</Alert>
       ) : null}
 
       <div>
-        <Label htmlFor="email">Email chủ studio / quản lý</Label>
-        <div className="relative mt-1.5">
-          <Mail
-            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-            aria-hidden="true"
-          />
+        <Label htmlFor="email" className="text-[13px]">Email chủ studio / quản lý</Label>
+        <div className="group relative mt-1.5">
+          <Mail className={fieldIconClassName} aria-hidden="true" />
           <Input
             id="email"
             name="email"
@@ -74,7 +94,7 @@ function PasswordLoginForm() {
             defaultValue={state.values?.email ?? ""}
             aria-invalid={Boolean(state.fieldErrors?.email)}
             aria-describedby={state.fieldErrors?.email ? "email-error" : undefined}
-            className="pl-9"
+            className={cn(fieldClassName, "pl-10")}
             required
           />
         </div>
@@ -82,8 +102,9 @@ function PasswordLoginForm() {
       </div>
 
       <div>
-        <Label htmlFor="password">Mật khẩu</Label>
-        <div className="relative mt-1.5">
+        <Label htmlFor="password" className="text-[13px]">Mật khẩu</Label>
+        <div className="group relative mt-1.5">
+          <LockKeyhole className={fieldIconClassName} aria-hidden="true" />
           <Input
             id="password"
             name="password"
@@ -92,14 +113,14 @@ function PasswordLoginForm() {
             placeholder="Nhập mật khẩu"
             aria-invalid={Boolean(state.fieldErrors?.password)}
             aria-describedby={state.fieldErrors?.password ? "password-error" : undefined}
-            className="pr-10"
+            className={cn(fieldClassName, "pl-10 pr-11")}
             required
           />
           <Button
             type="button"
             variant="ghost"
             size="icon"
-            className="absolute right-0 top-0 h-10 w-10"
+            className={revealButtonClassName}
             onClick={() => setShowPassword((value) => !value)}
             aria-label={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
           >
@@ -113,10 +134,7 @@ function PasswordLoginForm() {
         <FieldError id="password-error" message={state.fieldErrors?.password} />
       </div>
 
-      <Button type="submit" className="w-full" disabled={pending} aria-busy={pending}>
-        {pending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
-        {pending ? "Đang đăng nhập..." : "Đăng nhập với Email"}
-      </Button>
+      <SubmitButton pending={pending} label="Đăng nhập với Email" />
     </form>
   );
 }
@@ -129,27 +147,24 @@ function PinLoginForm({ initialCode = "" }: { initialCode?: string }) {
   const [showPin, setShowPin] = useState(false);
 
   return (
-    <form action={formAction} className="mt-4 space-y-4" noValidate>
+    <form action={formAction} className="space-y-4" noValidate>
       {state.status === "error" && state.message ? (
         <Alert tone="danger">{state.message}</Alert>
       ) : null}
 
       <div>
-        <Label htmlFor="code">Mã nhân viên</Label>
-        <div className="relative mt-1.5">
-          <KeyRound
-            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-            aria-hidden="true"
-          />
+        <Label htmlFor="code" className="text-[13px]">Mã nhân viên</Label>
+        <div className="group relative mt-1.5">
+          <KeyRound className={fieldIconClassName} aria-hidden="true" />
           <Input
             id="code"
             name="code"
             autoComplete="username"
-            placeholder="NV01"
+            placeholder="VD: NV-102"
             defaultValue={state.values?.code ?? initialCode}
             aria-invalid={Boolean(state.fieldErrors?.code)}
             aria-describedby={state.fieldErrors?.code ? "code-error" : undefined}
-            className="pl-9 uppercase"
+            className={cn(fieldClassName, "pl-10 uppercase placeholder:normal-case")}
             required
           />
         </div>
@@ -157,8 +172,9 @@ function PinLoginForm({ initialCode = "" }: { initialCode?: string }) {
       </div>
 
       <div>
-        <Label htmlFor="pin">Mã PIN (6 số)</Label>
-        <div className="relative mt-1.5">
+        <Label htmlFor="pin" className="text-[13px]">Mã PIN (6 số)</Label>
+        <div className="group relative mt-1.5">
+          <LockKeyhole className={fieldIconClassName} aria-hidden="true" />
           <Input
             id="pin"
             name="pin"
@@ -170,14 +186,14 @@ function PinLoginForm({ initialCode = "" }: { initialCode?: string }) {
             placeholder="••••••"
             aria-invalid={Boolean(state.fieldErrors?.pin)}
             aria-describedby={state.fieldErrors?.pin ? "pin-error" : undefined}
-            className="pr-10 tracking-[0.3em]"
+            className={cn(fieldClassName, "pl-10 pr-11 font-mono tracking-[0.4em] placeholder:tracking-[0.3em]")}
             required
           />
           <Button
             type="button"
             variant="ghost"
             size="icon"
-            className="absolute right-0 top-0 h-10 w-10"
+            className={revealButtonClassName}
             onClick={() => setShowPin((value) => !value)}
             aria-label={showPin ? "Ẩn PIN" : "Hiện PIN"}
           >
@@ -191,67 +207,71 @@ function PinLoginForm({ initialCode = "" }: { initialCode?: string }) {
         <FieldError id="pin-error" message={state.fieldErrors?.pin} />
       </div>
 
-      <Button type="submit" className="w-full" disabled={pending} aria-busy={pending}>
-        {pending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
-        {pending ? "Đang đăng nhập..." : "Đăng nhập bằng PIN"}
-      </Button>
+      <SubmitButton pending={pending} label="Đăng nhập bằng PIN" />
     </form>
   );
 }
+
+type LoginTab = "owner" | "pin";
+
+const segmentTriggerClassName =
+  "relative z-10 h-full min-w-0 flex-1 rounded-lg px-1.5 text-xs font-medium text-zinc-500 transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-indigo-500/30 data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none dark:text-zinc-400 sm:text-sm";
 
 export function LoginForm({
   initialTab = "owner",
   initialCode = "",
 }: {
-  initialTab?: "owner" | "pin";
+  initialTab?: LoginTab;
   initialCode?: string;
 }) {
+  const [tab, setTab] = useState<LoginTab>(initialTab);
+
   return (
-    <Tabs defaultValue={initialTab}>
-      <TabsList className="w-full">
-        <TabsTrigger value="owner" className="flex-1 font-medium">
+    <Tabs value={tab} onValueChange={(value) => setTab(value as LoginTab)}>
+      <TabsList className="relative flex h-11 w-full rounded-xl border border-zinc-200/80 bg-zinc-100/80 p-1 dark:border-zinc-800 dark:bg-zinc-950/60">
+        <span
+          className={cn(
+            "absolute inset-y-1 left-1 w-[calc(50%-4px)] rounded-lg bg-white shadow-sm ring-1 ring-zinc-900/5 transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] dark:bg-zinc-800 dark:ring-white/10",
+            tab === "pin" ? "translate-x-full" : "translate-x-0",
+          )}
+          aria-hidden="true"
+        />
+        <TabsTrigger value="owner" className={segmentTriggerClassName}>
           Chủ Studio &amp; Quản lý
         </TabsTrigger>
-        <TabsTrigger value="pin" className="flex-1 font-medium">
+        <TabsTrigger value="pin" className={segmentTriggerClassName}>
           Nhân viên (Mã &amp; PIN)
         </TabsTrigger>
       </TabsList>
 
-      <TabsContent value="owner" className="mt-4">
-        <div className="mb-4">
-          <p className="text-xs text-muted-foreground">
-            Dành cho Chủ Studio &amp; Quản lý. Đăng nhập nhanh 1 chạm bằng tài khoản Google liên kết.
-          </p>
-        </div>
+      <TabsContent value="owner" className="mt-5">
+        <p className="mb-4 text-xs leading-5 text-muted-foreground">
+          Dành cho Chủ Studio &amp; Quản lý. Đăng nhập nhanh 1 chạm bằng tài khoản Google liên kết.
+        </p>
 
         <a
           href="/api/auth/google/login"
-          className="flex w-full items-center justify-center gap-3 rounded-lg border border-border bg-surface px-4 py-2.5 text-sm font-semibold text-foreground shadow-sm transition hover:bg-muted/50 hover:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+          className="group flex h-11 w-full items-center justify-center gap-3 rounded-xl border border-zinc-200 bg-white px-4 text-sm font-semibold text-foreground shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-md active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/30 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-zinc-600"
         >
           <GoogleIcon />
           <span>Đăng nhập bằng Google</span>
         </a>
 
-        <div className="relative my-4">
-          <div className="absolute inset-0 flex items-center">
-            <span className="w-full border-t border-border" />
-          </div>
-          <div className="relative flex justify-center text-xs uppercase">
-            <span className="bg-surface px-2 text-muted-foreground">
-              hoặc dùng Email &amp; Mật khẩu
-            </span>
-          </div>
+        <div className="my-5 flex items-center gap-3" role="separator">
+          <span className="h-px flex-1 bg-gradient-to-r from-transparent to-zinc-200 dark:to-zinc-800" />
+          <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-400 dark:text-zinc-500">
+            hoặc dùng Email &amp; Mật khẩu
+          </span>
+          <span className="h-px flex-1 bg-gradient-to-l from-transparent to-zinc-200 dark:to-zinc-800" />
         </div>
 
         <PasswordLoginForm />
       </TabsContent>
 
-      <TabsContent value="pin" className="mt-4">
-        <div className="mb-4">
-          <p className="text-xs text-muted-foreground">
-            Dành cho Thợ chụp, Trang điểm, Retoucher, Lễ tân &amp; Sale. Nhập mã nhân viên và PIN 6 số để vào ca làm.
-          </p>
-        </div>
+      <TabsContent value="pin" className="mt-5">
+        <p className="mb-4 text-xs leading-5 text-muted-foreground">
+          Dành cho Thợ chụp, Trang điểm, Retoucher, Lễ tân &amp; Sale. Nhập mã nhân viên và PIN 6 số để vào ca làm.
+        </p>
 
         <PinLoginForm initialCode={initialCode} />
       </TabsContent>
