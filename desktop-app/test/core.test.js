@@ -35,6 +35,7 @@ const {
 const {
   CONTEXT_ACTIONS,
   contextActionFromArgv,
+  contextActionRouteFromArgv,
   findSharesForFolder,
   shareOptionsForAction,
   sharesWithPicks,
@@ -156,6 +157,11 @@ test("tác vụ dòng lệnh chỉ nhận ID được phép và mặc định m�
   assert.equal(contextActionFromArgv(["app.exe", '--action=select" --share=C:\\secret']), "open");
   assert.equal(contextActionFromArgv(["app.exe", "--action=delete"]), "open");
   assert.equal(contextActionFromArgv(["app.exe"]), null);
+  assert.equal(contextActionRouteFromArgv(["app.exe"]), "show");
+  assert.equal(contextActionRouteFromArgv(["app.exe", "--hidden"]), "hidden");
+  assert.equal(contextActionRouteFromArgv(["app.exe", "--action=select", "--share=C:\\Photos"]), "context");
+  assert.equal(contextActionRouteFromArgv(["app.exe", "--action=delete"]), "show");
+  assert.equal(contextActionRouteFromArgv(["app.exe", "--hidden", "--action=delete"]), "hidden");
   assert.deepEqual(shareOptionsForAction("select"), {
     kind: "select",
     allowOriginal: false,

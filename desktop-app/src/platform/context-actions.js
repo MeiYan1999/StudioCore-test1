@@ -23,6 +23,12 @@ function contextActionFromArgv(argv) {
   return ACTION_IDS.has(action) ? action : "open";
 }
 
+function contextActionRouteFromArgv(argv) {
+  const argument = argv.find((item) => typeof item === "string" && item.startsWith("--action="));
+  if (argument && ACTION_IDS.has(argument.slice("--action=".length))) return "context";
+  return argv.includes("--hidden") ? "hidden" : "show";
+}
+
 function shareOptionsForAction(action) {
   if (action === "select") return { kind: "select", allowOriginal: false, includeAllFiles: false };
   if (action === "view") return { kind: "deliver", allowOriginal: true, includeAllFiles: false };
@@ -67,4 +73,11 @@ async function findSharesForFolder(shares, folder, platform = process.platform, 
   return matches;
 }
 
-module.exports = { CONTEXT_ACTIONS, contextActionFromArgv, findSharesForFolder, shareOptionsForAction, sharesWithPicks };
+module.exports = {
+  CONTEXT_ACTIONS,
+  contextActionFromArgv,
+  contextActionRouteFromArgv,
+  findSharesForFolder,
+  shareOptionsForAction,
+  sharesWithPicks,
+};

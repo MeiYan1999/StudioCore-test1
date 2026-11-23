@@ -28,6 +28,7 @@ const { applyLoginItem, setWindowsAppUserModelId } = require("./src/platform/app
 const { setWindowsContextMenu, sharePathFromArgv } = require("./src/platform/context-menu");
 const {
   contextActionFromArgv,
+  contextActionRouteFromArgv,
   findSharesForFolder,
   shareOptionsForAction,
   sharesWithPicks,
@@ -143,10 +144,12 @@ async function runShareContextAction(action, folder) {
 }
 
 async function handleContextMenuArguments(argv) {
+  const route = contextActionRouteFromArgv(argv);
   const action = contextActionFromArgv(argv);
   const folder = sharePathFromArgv(argv);
-  if (action === null) {
-    if (folder) requestShare(folder);
+  if (route === "hidden") return;
+  if (route === "show") {
+    if (action === null && folder) requestShare(folder);
     showWindow();
     return;
   }
