@@ -1001,6 +1001,37 @@ test("concurrent markup exports use independent temp files", async () => {
   assert.deepEqual(fs.readdirSync(markupDir).filter((name) => name.endsWith(".tmp")), []);
 });
 
+test("markup composites use a short temp filename for long source names", async (t) => {
+  const sharp = require("sharp");
+  const dir = tmp();
+  const sourceName = `${"x".repeat(230)}.jpg`;
+  const compositeName = `${sourceName}_note.jpg`;
+  if (Buffer.byteLength(compositeName) > 255) {
+    t.skip("composite filename exceeds the platform component limit");
+    return;
+  }
+  const image = await sharp({
+    create: { width: 40, height: 20, channels: 3, background: { r: 0, g: 0, b: 0 } },
+  })
+    .jpeg()
+    .toBuffer();
+  fs.writeFileSync(path.join(dir, sourceName), image);
+
+  const result = await copyPicks(
+    { folder: dir, files: { long: sourceName } },
+    [{
+      key: "long",
+      name: sourceName,
+      note: null,
+      markup: { v: 1, strokes: [{ c: "#ef4444", w: 0.04, p: [[0.1, 0.5], [0.9, 0.5]] }], notes: {} },
+    }],
+    "Khach-chon",
+    { sharp },
+  );
+
+  assert.ok(fs.existsSync(path.join(result.dest, "Khách note màu", compositeName)));
+});
+
 test("markup export failure does not prevent picked files or the pick list from being written", async () => {
   const dir = tmp();
   fs.writeFileSync(path.join(dir, "unreadable.jpg"), "not a decodable image");

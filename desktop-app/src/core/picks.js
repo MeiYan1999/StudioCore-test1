@@ -103,7 +103,7 @@ async function writeMarkupComposite(source, target, markup, images) {
     .composite([{ input: Buffer.from(markupSvg(markup, width, height)) }])
     .jpeg({ quality: 90 })
     .toBuffer();
-  const temp = `${target}.${process.pid}.${crypto.randomUUID()}.tmp`;
+  const temp = path.join(path.dirname(target), `.scd-${crypto.randomUUID()}.tmp`);
   let ownsTemp = false;
   try {
     const handle = await fs.open(temp, "wx");
