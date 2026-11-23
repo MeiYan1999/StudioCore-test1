@@ -84,12 +84,13 @@ export function DriveGallery(props: Props) {
         if (!response.ok || !data || typeof data.picked !== "boolean") {
           throw new Error(data?.error ?? "Không lưu được lựa chọn.");
         }
+        const picked = data.picked;
         setFiles((current) =>
           current.map((currentFile) =>
             currentFile.id === file.id
               ? {
                   ...currentFile,
-                  picked: data.picked,
+                  picked,
                   note: data.note ?? null,
                   markup: data.markup ?? null,
                 }
