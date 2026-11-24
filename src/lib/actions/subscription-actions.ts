@@ -25,6 +25,13 @@ export async function createSubscriptionInvoiceAction(
     };
   }
 
+  if (!hasPermission(actor.permissions, "settings.manage")) {
+    return {
+      success: false,
+      error: "Chỉ người có quyền quản lý cài đặt mới được mua hoặc gia hạn gói.",
+    };
+  }
+
   try {
     const db = getDb();
     const result = createSubscriptionInvoice(

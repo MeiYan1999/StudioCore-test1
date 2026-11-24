@@ -68,10 +68,10 @@ Trạng thái dùng trong tài liệu: `ĐÃ XÁC MINH` · `ĐÃ TRIỂN KHAI, C
 | F-10 | P2 | CHƯA CÓ | Thiết bị không có luồng mượn/trả: `equipment_usages` chỉ được đọc (`getEquipmentDetail`), không có hàm ghi ngoài seed | `src/lib/services/equipment-service.ts` |
 | F-11 | P2 | LỖI LOGIC | Hủy lịch chỉ đổi trạng thái lịch; phiếu thuê trang phục của cùng đơn không được nhắc/giải phóng | `cancelAppointment` (`appointment-service.ts`), `createRental` (`wardrobe-service.ts`) |
 | F-12 | P2 | LỖI LOGIC | Trên R2, bản "gốc" là WebP nén lại và preview không có watermark (local có) | `processImage` (`r2-storage.ts`) |
-| F-13 | P3 | LỖI LOGIC | Mọi nhân sự đã đăng nhập đều tạo được đơn mua gói cho studio | `createSubscriptionInvoiceAction` |
+| F-13 | P3 | ĐÃ SỬA | Mọi nhân sự đã đăng nhập đều tạo được đơn mua gói cho studio | `createSubscriptionInvoiceAction` |
 | F-14 | P3 | LỖI LOGIC | Nhật ký hoạt động không lọc theo chi nhánh; quản lý chi nhánh có `audit.view` thấy toàn tenant | `listActivityLogs` (`audit-service.ts`) |
 | F-15 | P3 | LỖI LOGIC | `getPlatformBillingConfig` đọc setting `platform.*` không lọc tenant | `subscription-service.ts` |
-| F-16 | P3 | LỖI LOGIC | Đơn mua gói đã quá `expiresAt` vẫn kích hoạt được khi webhook tới; kích hoạt đặt lại `tenants.status = active` kể cả studio đang bị khóa | `activateSubscription` |
+| F-16 | P3 | ĐÃ SỬA (phần mở khóa) | Kích hoạt gói đặt lại `tenants.status = active` kể cả studio đang bị khóa (đã sửa). Đơn quá `expiresAt` vẫn kích hoạt khi tiền tới: giữ nguyên có chủ ý, vì khách đã chuyển tiền | `activateSubscription` |
 
 ## 3. Hiện trạng từng phân hệ
 

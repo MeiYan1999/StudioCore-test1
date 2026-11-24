@@ -1,3 +1,4 @@
+import { eq } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 import type { AppDb } from "@/lib/db/client";
 import { tenants } from "@/lib/db/schema";
@@ -121,6 +122,21 @@ describe("Subscription & Automated VietQR Billing Service", () => {
     expect(current?.tenant.plan).toBe("pro");
     expect(current?.tenant.planExpiresAt).toBeDefined();
     expect(current?.tenant.planExpiresAt!.getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it("thanh toán không tự mở lại studio đang bị khóa", () => {
+    const invoice = createSubscriptionInvoice(db, TEST_TENANT_ID, "pro", "monthly");
+    db.update(tenants).set({ status: "suspended" }).where(eq(tenants.id, TEST_TENANT_ID)).run();
+    const result = processPlatformBillingWebhook(
+      db,
+      { transferType: "in", transferAmount: 499_000, content: invoice.code },
+      "Apikey studiocore_platform_secret",
+    );
+    expect(result.success).toBe(true);
+    const tenant = db.select().from(tenants).where(eq(tenants.id, TEST_TENANT_ID)).get();
+    expect(tenant?.status).toBe("suspended");
+    expect(tenant?.plan).toBe("pro");
+    db.update(tenants).set({ status: "active" }).where(eq(tenants.id, TEST_TENANT_ID)).run();
   });
 
   it("Webhook xác thực chính xác API Key SePay (Apikey studiocore_platform_secret)", () => {
