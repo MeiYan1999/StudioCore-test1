@@ -9,7 +9,7 @@ export function MarketingFooter() {
         <div>
           <BrandLogo stacked />
           <p className="mt-3 text-sm leading-6 text-muted-foreground">
-            Nền tảng quản lý studio chụp ảnh &amp; áo cưới hàng đầu Việt Nam: CRM, đơn hàng, lịch chụp, hợp đồng số, PhotoShare và quản trị tài chính toàn diện.
+            Hệ điều hành quản lý studio chuyên nghiệp hàng đầu Việt Nam: CRM, đơn hàng, lịch chụp, hợp đồng số, PhotoShare và quản trị tài chính toàn diện.
           </p>
           <p className="mt-3 text-xs text-muted-foreground">
             © 2026 StudioCore. Bản quyền thuộc về StudioCore. Hotline hỗ trợ: {MARKETING_CONTACT.phone}.

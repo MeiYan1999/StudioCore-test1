@@ -3,7 +3,7 @@ import { marketingMetadata } from "@/lib/marketing/metadata";
 export const metadata = marketingMetadata({
   title: "Điều khoản sử dụng — StudioCore",
   description:
-    "Điều khoản sử dụng nền tảng phần mềm SaaS quản lý studio chụp ảnh & áo cưới StudioCore.",
+    "Điều khoản sử dụng nền tảng phần mềm SaaS quản lý studio chuyên nghiệp StudioCore.",
   path: "/terms",
 });
 
@@ -67,7 +67,7 @@ export default function TermsPage() {
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Pháp lý</p>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Điều khoản dịch vụ</h1>
           <p className="mt-3 text-sm text-muted-foreground">
-            Áp dụng từ: 01/11/2026 · Nền tảng quản lý Studio chụp ảnh &amp; Áo cưới StudioCore.
+            Áp dụng từ: 01/11/2026 · Nền tảng quản lý Studio chuyên nghiệp StudioCore.
           </p>
         </div>
       </section>

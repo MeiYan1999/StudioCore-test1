@@ -336,7 +336,7 @@ export function BillingManagementView({
                 </h4>
               </div>
               <p className="text-xs text-slate-500 min-h-8">
-                Cho chuỗi studio lớn, thương hiệu áo cưới nhiều cơ sở.
+                Cho chuỗi studio lớn, thương hiệu nhiều cơ sở.
               </p>
               <div className="pt-1">
                 <span className="text-2xl font-black text-slate-900 dark:text-slate-100">
