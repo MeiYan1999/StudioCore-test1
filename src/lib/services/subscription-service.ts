@@ -349,12 +349,12 @@ export function activateSubscription(
     .where(eq(platformSubscriptions.id, subscription.id))
     .run();
 
-  // 2. Cập nhật tenant plan & planExpiresAt
+  // 2. Cập nhật tenant plan & planExpiresAt. Trạng thái studio do quản trị nền tảng
+  // quyết định: thanh toán không tự mở lại studio đang bị khóa.
   db.update(tenants)
     .set({
       plan: subscription.plan,
       planExpiresAt: newExpiryDate,
-      status: "active",
       updatedAt: new Date(),
     })
     .where(eq(tenants.id, tenant.id))

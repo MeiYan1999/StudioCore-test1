@@ -63,11 +63,13 @@ export function AiHubView({ initialData, recentJobs = [] }: AiHubViewProps) {
 
   // Success message banner
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
+  const [feedbackTone, setFeedbackTone] = useState<"success" | "error">("success");
 
   // Copied state
   const [copiedKeyId, setCopiedKeyId] = useState<string | null>(null);
 
-  const showFeedback = (msg: string) => {
+  const showFeedback = (msg: string, tone: "success" | "error" = "success") => {
+    setFeedbackTone(tone);
     setFeedbackMessage(msg);
     setTimeout(() => setFeedbackMessage(null), 4000);
   };
@@ -98,7 +100,7 @@ export function AiHubView({ initialData, recentJobs = [] }: AiHubViewProps) {
           showFeedback(`Đã ${nextEnabled ? "bật" : "tắt"} tính năng thành công.`);
         }
       } catch (err) {
-        showFeedback((err as Error)?.message || "Lỗi cập nhật tính năng.");
+        showFeedback((err as Error)?.message || "Lỗi cập nhật tính năng.", "error");
       }
     });
   };
@@ -154,7 +156,7 @@ export function AiHubView({ initialData, recentJobs = [] }: AiHubViewProps) {
           showFeedback(`Đã reset số liệu cho ${featureName}.`);
         }
       } catch (err) {
-        showFeedback((err as Error)?.message || "Không thể reset số liệu.");
+        showFeedback((err as Error)?.message || "Không thể reset số liệu.", "error");
       }
     });
   };
@@ -192,7 +194,7 @@ export function AiHubView({ initialData, recentJobs = [] }: AiHubViewProps) {
           showFeedback(`Đã ${nextActive ? "bật" : "tạm dừng"} API Key.`);
         }
       } catch (err) {
-        showFeedback((err as Error)?.message || "Lỗi cập nhật key.");
+        showFeedback((err as Error)?.message || "Lỗi cập nhật key.", "error");
       }
     });
   };
@@ -209,7 +211,7 @@ export function AiHubView({ initialData, recentJobs = [] }: AiHubViewProps) {
           showFeedback(`Đã xóa API Key "${name}".`);
         }
       } catch (err) {
-        showFeedback((err as Error)?.message || "Lỗi xóa API key.");
+        showFeedback((err as Error)?.message || "Lỗi xóa API key.", "error");
       }
     });
   };
@@ -218,9 +220,9 @@ export function AiHubView({ initialData, recentJobs = [] }: AiHubViewProps) {
     startTransition(async () => {
       try {
         const res = await testAiHubApiKeyAction(keyId);
-        showFeedback(res.message);
+        showFeedback(res.message, res.success ? "success" : "error");
       } catch (err) {
-        showFeedback((err as Error)?.message || "Lỗi kiểm tra key.");
+        showFeedback((err as Error)?.message || "Lỗi kiểm tra key.", "error");
       }
     });
   };
@@ -291,7 +293,14 @@ export function AiHubView({ initialData, recentJobs = [] }: AiHubViewProps) {
         </div>
 
         {feedbackMessage && (
-          <div className="rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 border border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800 animate-in fade-in">
+          <div
+            role={feedbackTone === "error" ? "alert" : "status"}
+            className={
+              feedbackTone === "error"
+                ? "rounded-lg bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 border border-red-200 dark:bg-red-950/50 dark:text-red-300 dark:border-red-800 animate-in fade-in"
+                : "rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 border border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800 animate-in fade-in"
+            }
+          >
             {feedbackMessage}
           </div>
         )}

@@ -43,7 +43,7 @@ type Props = {
 export function SepaySettingsView({ initialSettings }: Props) {
   const [apiKey, setApiKey] = useState(initialSettings.apiKey);
   const [enabled, setEnabled] = useState(initialSettings.enabled);
-  const [stats, setStats] = useState(initialSettings.stats);
+  const [stats] = useState(initialSettings.stats);
   const [showApiKey, setShowApiKey] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
@@ -150,18 +150,8 @@ export function SepaySettingsView({ initialSettings }: Props) {
     try {
       const res = await sendTestSepayWebhookAction();
       if (res.ok) {
-        setFeedback({
-          tone: "success",
-          text: "Đã gửi thử giao dịch SePay 10.000đ thành công. Hệ thống đã nhận tín hiệu!",
-        });
-        setStats((prev) => ({
-          ...prev,
-          totalCalls: prev.totalCalls + 1,
-          recordedCount: prev.recordedCount + 1,
-          lastCallAt: new Date().toISOString(),
-          lastTransactionText: "+10.000đ",
-          hasSignals: true,
-        }));
+        // A test call writes nothing, so the counters stay as they are.
+        setFeedback({ tone: "success", text: res.message });
       } else {
         setFeedback({ tone: "danger", text: res.message });
       }
