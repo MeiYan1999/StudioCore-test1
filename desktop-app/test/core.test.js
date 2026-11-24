@@ -41,6 +41,7 @@ const {
   CONTEXT_ACTIONS,
   contextActionFromArgv,
   contextActionRouteFromArgv,
+  copyFirstAvailablePicks,
   findSharesForFolder,
   shareOptionsForAction,
   sharesWithPicks,
@@ -337,6 +338,40 @@ test("lọc ảnh chọn ưu tiên share đã gửi và bỏ qua share mới nh�
   ]);
 
   assert.deepEqual(matches.map((share) => share.id), ["newer-submitted", "older-submitted", "newest-active"]);
+});
+
+test("lọc ảnh chọn bỏ qua album mà mọi ảnh chọn đều không còn trong thư mục", async () => {
+  const shares = [
+    { id: "gone", pickedCount: 2, createdAt: 200, submittedAt: 250 },
+    { id: "empty", pickedCount: 1, createdAt: 150, submittedAt: null },
+    { id: "ok", pickedCount: 1, createdAt: 100, submittedAt: null },
+  ];
+  const calls = [];
+  const copy = async (id) => {
+    calls.push(id);
+    if (id === "gone") return { dest: "/d", codes: [] };
+    if (id === "empty") throw new Error("Khách chưa chọn ảnh nào.");
+    return { dest: "/d", codes: ["IMG_1"] };
+  };
+  const outcome = await copyFirstAvailablePicks(shares, copy);
+  assert.equal(outcome.status, "copied");
+  assert.deepEqual(outcome.result.codes, ["IMG_1"]);
+  assert.deepEqual(calls, ["gone", "empty", "ok"]);
+
+  assert.deepEqual(await copyFirstAvailablePicks(shares.slice(0, 2), copy), { status: "missing" });
+  assert.deepEqual(await copyFirstAvailablePicks(shares.slice(1, 2), copy), { status: "none" });
+  await assert.rejects(copyFirstAvailablePicks(shares, async () => { throw new Error("mất mạng"); }), /mất mạng/);
+});
+
+test("không ghi đè danh sách Lightroom khi không còn ảnh chọn nào trong thư mục", async () => {
+  const dir = tmp();
+  fs.writeFileSync(path.join(dir, "IMG_1.jpg"), "1");
+  const kept = await copyPicks({ folder: dir, files: { k1: "IMG_1.jpg" } }, [{ key: "k1", name: "IMG_1.jpg" }], "Chon");
+  const list = path.join(kept.dest, "danh-sach-chon.txt");
+  const before = fs.readFileSync(list, "utf8");
+  const gone = await copyPicks({ folder: dir, files: { k9: "IMG_9.jpg" } }, [{ key: "k9", name: "IMG_9.jpg" }], "Chon");
+  assert.deepEqual([gone.copied, gone.missing, gone.codes], [0, 1, []]);
+  assert.equal(fs.readFileSync(list, "utf8"), before);
 });
 
 test("tìm share theo realpath và so sánh không phân biệt hoa thường trên Windows", async () => {
