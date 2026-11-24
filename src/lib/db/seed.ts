@@ -52,6 +52,7 @@ import {
   DEMO_PLATFORM_ACCOUNT,
   DEMO_SECONDARY_TENANT,
   DEMO_TENANT,
+  demoStaffId,
 } from "../demo-accounts";
 import {
   DEMO_ALBUM,
@@ -61,10 +62,6 @@ import {
 } from "../demo-album";
 import { createShareTokenRecord } from "../share/token";
 import { normalizeVietnamesePhone } from "../utils/phone";
-
-function demoStaffId(code: string): string {
-  return `staff-${code.toLowerCase()}`;
-}
 
 function permissionId(tenantId: string, role: string, permission: string): string {
   return `rp-${tenantId}-${role}-${permission}`;
@@ -262,7 +259,7 @@ export function seedDatabase(db: AppDb): SeedSummary {
     }));
 
     staffRows.push({
-      id: "staff-sc-platform",
+      id: demoStaffId(DEMO_PLATFORM_ACCOUNT.code),
       tenantId: DEMO_TENANT.id,
       code: DEMO_PLATFORM_ACCOUNT.code,
       name: DEMO_PLATFORM_ACCOUNT.name,

@@ -205,6 +205,11 @@ export default async function PlatformPage({
             <Button asChild variant="outline" size="sm">
               <Link href="/">Xem website</Link>
             </Button>
+            {actor.canChangePassword ? (
+              <Button asChild variant="ghost" size="sm">
+                <Link href="/change-password">Đổi mật khẩu</Link>
+              </Button>
+            ) : null}
             <form action={logoutAction}>
               <Button type="submit" variant="ghost" size="sm">
                 Đăng xuất

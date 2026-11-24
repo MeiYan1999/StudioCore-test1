@@ -137,3 +137,17 @@ export const DEMO_PLATFORM_ACCOUNT = {
   pin: "000000",
   password: "Demo@123",
 } as const;
+
+export function demoStaffId(code: string): string {
+  return `staff-${code.toLowerCase()}`;
+}
+
+const sharedDemoStaffIds = new Set([
+  ...DEMO_ACCOUNTS.map((account) => demoStaffId(account.code)),
+  demoStaffId(DEMO_PLATFORM_ACCOUNT.code),
+  DEMO_SECONDARY_TENANT.owner.id,
+]);
+
+export function isSharedDemoStaff(staffId: string): boolean {
+  return sharedDemoStaffIds.has(staffId);
+}

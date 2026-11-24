@@ -1,9 +1,9 @@
 import { test, expect } from "@playwright/test";
 
-async function login(page: import("@playwright/test").Page, email: string) {
+async function login(page: import("@playwright/test").Page, email: string, password = "Demo@123") {
   await page.goto("/login");
   await page.locator("#email").fill(email);
-  await page.locator("#password").fill("Demo@123");
+  await page.locator("#password").fill(password);
   await page.getByRole("button", { name: "Đăng nhập với mật khẩu", exact: true }).click();
 }
 
@@ -101,13 +101,58 @@ test.describe("app thật và vai trò", () => {
     await page.waitForURL("**/manage/dashboard?demo=1");
     await expect(page.getByText("Đây là dữ liệu demo. Chế độ chỉ xem")).toBeVisible();
     await expect(page.getByRole("link", { name: "Người dùng" })).toHaveCount(0);
+    await page.getByRole("button", { name: "Mở menu tài khoản" }).click();
+    await expect(page.getByRole("menuitem", { name: "Đổi mật khẩu" })).toHaveCount(0);
+    await page.goto("/change-password");
+    await expect(page.getByText("Không thể đổi mật khẩu trong phiên demo chỉ xem.")).toBeVisible();
   });
 
   test("platform admin vào /platform, không vào dữ liệu tenant", async ({ page }) => {
     await login(page, "platform@studiocore.demo");
     await page.waitForURL("**/platform");
     await expect(page.getByRole("heading", { name: "Quản lý Studio Khách hàng & Gói cước" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Đổi mật khẩu" })).toHaveCount(0);
+    await page.goto("/change-password");
+    await expect(page.getByText("Không thể đổi mật khẩu của tài khoản demo dùng chung.")).toBeVisible();
+    await page.getByRole("link", { name: "Quay lại" }).click();
+    await page.waitForURL("**/platform");
     await page.goto("/manage/customers");
     await expect(page.getByText("403 — Không có quyền truy cập")).toBeVisible();
+  });
+
+  test("chủ studio đổi mật khẩu và đăng nhập lại bằng mật khẩu mới", async ({ page }) => {
+    const email = `password-change-${crypto.randomUUID()}@example.test`;
+    const currentPassword = "Test-original-123!";
+    const newPassword = "Test-changed-456!";
+
+    await page.goto("/change-password");
+    await expect(page).toHaveURL(/\/login$/);
+    await page.goto("/register");
+    await page.getByLabel("Tên studio").fill("Studio kiểm thử đổi mật khẩu");
+    await page.getByLabel("Tên chủ studio").fill("Người dùng kiểm thử");
+    await page.getByLabel("Email", { exact: true }).fill(email);
+    await page.getByLabel("Mật khẩu", { exact: true }).fill(currentPassword);
+    await page.getByLabel("Xác nhận mật khẩu").fill(currentPassword);
+    await page.getByRole("checkbox").check();
+    await page.getByRole("button", { name: "Tạo tài khoản dùng thử" }).click();
+    await page.waitForURL("**/manage/dashboard?welcome=1");
+
+    await page.goto("/manage/customers?q=Studio");
+    await page.getByRole("button", { name: "Mở menu tài khoản" }).click();
+    await page.getByRole("menuitem", { name: "Đổi mật khẩu" }).click();
+    await page.getByRole("link", { name: "Quay lại" }).click();
+    await expect(page).toHaveURL(/\/manage\/customers\?q=Studio$/);
+
+    await page.getByRole("button", { name: "Mở menu tài khoản" }).click();
+    await page.getByRole("menuitem", { name: "Đổi mật khẩu" }).click();
+    await page.getByLabel("Mật khẩu hiện tại").fill(currentPassword);
+    await page.getByLabel("Mật khẩu mới", { exact: true }).fill(newPassword);
+    await page.getByLabel("Xác nhận mật khẩu mới").fill(newPassword);
+    await page.getByRole("button", { name: "Đổi mật khẩu", exact: true }).click();
+    await expect(page.getByText("Đã đổi mật khẩu. Vui lòng đăng nhập lại bằng mật khẩu mới.")).toBeVisible();
+    await login(page, email, currentPassword);
+    await expect(page.getByText("Thông tin đăng nhập không đúng.")).toBeVisible();
+    await login(page, email, newPassword);
+    await page.waitForURL("**/manage/dashboard");
   });
 });

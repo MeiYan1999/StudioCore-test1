@@ -1,11 +1,15 @@
-import { and, asc, eq, gt, isNull } from "drizzle-orm";
+import { and, asc, eq, gt, gte, isNull } from "drizzle-orm";
 import { SignJWT, jwtVerify } from "jose";
+import { PASSWORD_CHANGED } from "../audit";
 import { getEnv } from "../env";
 import type { AppDb } from "../db/client";
-import { branches, rolePermissions, sessions, staff, staffBranches, tenants } from "../db/schema";
+import { activityLogs, branches, rolePermissions, sessions, staff, staffBranches, tenants } from "../db/schema";
+import { isSharedDemoStaff } from "../demo-accounts";
 import type { ActorBranch, ActorContext } from "./types";
 import { PERMISSIONS, type Role } from "./roles";
 import { AuthorizationError } from "../errors";
+
+export const RECOVERED_SESSION_USER_AGENT = "self-healed";
 
 function getSecret(): Uint8Array {
   return new TextEncoder().encode(getEnv().AUTH_SECRET);
@@ -14,11 +18,12 @@ function getSecret(): Uint8Array {
 export async function signSessionToken(
   sessionId: string,
   expiresAt: Date,
-  extra?: { staffId?: string; tenantId?: string },
+  extra?: { staffId?: string; tenantId?: string; issuedAtMs?: number },
 ): Promise<string> {
   const payload: Record<string, unknown> = { sid: sessionId };
   if (extra?.staffId) payload.uid = extra.staffId;
   if (extra?.tenantId) payload.tid = extra.tenantId;
+  if (extra?.issuedAtMs !== undefined) payload.iatMs = extra.issuedAtMs;
 
   return new SignJWT(payload)
     .setProtectedHeader({ alg: "HS256" })
@@ -40,6 +45,7 @@ export type SessionTokenPayload = {
   sessionId: string;
   staffId?: string;
   tenantId?: string;
+  issuedAtMs?: number;
 };
 
 export async function decodeSessionToken(token: string): Promise<SessionTokenPayload | null> {
@@ -50,6 +56,9 @@ export async function decodeSessionToken(token: string): Promise<SessionTokenPay
       sessionId: payload.sid,
       staffId: typeof payload.uid === "string" ? payload.uid : undefined,
       tenantId: typeof payload.tid === "string" ? payload.tid : undefined,
+      issuedAtMs: typeof payload.iatMs === "number"
+        ? payload.iatMs
+        : payload.iat === undefined ? undefined : payload.iat * 1000,
     };
   } catch {
     return null;
@@ -76,7 +85,8 @@ export async function createSession(
 ): Promise<SessionCreation> {
   const ttlMinutes = input.ttlMinutes ?? getEnv().SESSION_TTL_HOURS * 60;
   const sessionId = crypto.randomUUID();
-  const expiresAt = new Date(Date.now() + ttlMinutes * 60 * 1000);
+  const issuedAtMs = Date.now();
+  const expiresAt = new Date(issuedAtMs + ttlMinutes * 60 * 1000);
 
   db.insert(sessions)
     .values({
@@ -91,9 +101,10 @@ export async function createSession(
     })
     .run();
 
-  const token = await signSessionToken(sessionId, expiresAt, {
+  const token = await signSessionToken(sessionId, expiresAt, input.readOnly ? undefined : {
     staffId: input.staffId,
     tenantId: input.tenantId,
+    issuedAtMs,
   });
 
   return { sessionId, token, expiresAt };
@@ -158,10 +169,24 @@ export async function getActorFromToken(
     .get();
 
   // Tự động khôi phục session nếu container vừa khởi động lại nhưng SQLite chưa kịp sync session
-  if (!row && decoded.staffId && decoded.tenantId) {
-    const staffRow = db.select().from(staff).where(eq(staff.id, decoded.staffId)).get();
+  if (!row && decoded.staffId && decoded.tenantId && decoded.issuedAtMs !== undefined) {
+    // A backup may have the password change but not the original session row.
+    const changedSinceIssue = db.select({ id: activityLogs.id }).from(activityLogs)
+      .where(and(
+        eq(activityLogs.tenantId, decoded.tenantId),
+        eq(activityLogs.actorId, decoded.staffId),
+        eq(activityLogs.action, PASSWORD_CHANGED),
+        gte(activityLogs.createdAt, new Date(decoded.issuedAtMs)),
+      ))
+      .get();
+    if (changedSinceIssue) return null;
+
+    const staffRow = db.select().from(staff).where(and(
+      eq(staff.id, decoded.staffId),
+      eq(staff.tenantId, decoded.tenantId),
+    )).get();
     const tenantRow = db.select().from(tenants).where(eq(tenants.id, decoded.tenantId)).get();
-    if (staffRow && tenantRow && staffRow.active && tenantRow.status === "active") {
+    if (staffRow && tenantRow && staffRow.active && !staffRow.archivedAt && tenantRow.status === "active") {
       try {
         db.insert(sessions)
           .values({
@@ -170,7 +195,7 @@ export async function getActorFromToken(
             staffId: decoded.staffId,
             activeBranchId: null,
             ip: "0.0.0.0",
-            userAgent: "self-healed",
+            userAgent: RECOVERED_SESSION_USER_AGENT,
             expiresAt: new Date(Date.now() + 72 * 60 * 60 * 1000),
             readOnly: false,
           })
@@ -186,16 +211,12 @@ export async function getActorFromToken(
           .from(sessions)
           .innerJoin(staff, eq(sessions.staffId, staff.id))
           .innerJoin(tenants, eq(sessions.tenantId, tenants.id))
-          .where(and(eq(sessions.id, sessionId), isNull(sessions.revokedAt)))
+          .where(and(eq(sessions.id, sessionId), isNull(sessions.revokedAt), gt(sessions.expiresAt, new Date())))
           .get();
       } catch {
         // bỏ qua
       }
     }
-  }
-
-  if (!row) {
-    return null;
   }
 
   if (!row) {
@@ -252,6 +273,10 @@ export async function getActorFromToken(
     branches: allowedBranches,
     activeBranchId,
     readOnly,
+    canChangePassword: Boolean(
+      !readOnly && !isSharedDemoStaff(row.staff.id) &&
+      row.session.userAgent !== RECOVERED_SESSION_USER_AGENT && row.staff.passwordHash,
+    ),
   };
 }
 

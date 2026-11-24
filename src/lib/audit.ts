@@ -1,6 +1,8 @@
 import type { AppDb } from "./db/client";
 import { activityLogs } from "./db/schema";
 
+export const PASSWORD_CHANGED = "auth.password.change.success";
+
 type AuditInput = {
   tenantId: string | null;
   actorId: string | null;
@@ -29,6 +31,8 @@ const AUDIT_LABELS: Record<string, string> = {
   "auth.login.success": "Đăng nhập thành công",
   "auth.login.failed": "Đăng nhập thất bại",
   "auth.logout": "Đăng xuất",
+  [PASSWORD_CHANGED]: "Đổi mật khẩu",
+  "auth.password.change.failed": "Đổi mật khẩu thất bại",
   "auth.branch.switch": "Chuyển chi nhánh",
   "system.seed": "Khởi tạo dữ liệu demo",
   "settings.user.create": "Thêm nhân sự",

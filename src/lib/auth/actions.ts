@@ -2,12 +2,31 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { getFormString } from "@/lib/actions/action-state";
+import { getFormString, type ActionState } from "@/lib/actions/action-state";
 import { writeAudit } from "@/lib/audit";
-import { clearSessionCookie, getActorContext } from "@/lib/auth/session";
+import { clearSessionCookie, getActorContext, requireActor } from "@/lib/auth/session";
+import { changeOwnPassword } from "@/lib/auth/password-change-service";
 import { revokeSessionById, setActiveBranch } from "@/lib/auth/session-core";
 import { getDb } from "@/lib/db/client";
 import { safeReturnTo } from "@/lib/utils";
+
+export async function changePasswordAction(
+  _previousState: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const actor = await requireActor();
+  const result = changeOwnPassword(getDb(), actor, {
+    currentPassword: getFormString(formData, "currentPassword"),
+    newPassword: getFormString(formData, "newPassword"),
+    confirmation: getFormString(formData, "confirmation"),
+  });
+  if (!result.ok) {
+    return { status: "error", message: result.error };
+  }
+
+  await clearSessionCookie();
+  redirect("/login?passwordChanged=1");
+}
 
 export async function logoutAction(): Promise<void> {
   const actor = await getActorContext();

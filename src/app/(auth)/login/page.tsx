@@ -21,6 +21,7 @@ export default async function LoginPage({
     code?: string;
     name?: string;
     message?: string;
+    passwordChanged?: string;
   }>;
 }) {
   const actor = await getActorContext();
@@ -45,6 +46,12 @@ export default async function LoginPage({
           Chủ Studio đăng nhập nhanh bằng Google hoặc Email; Nhân viên dùng Mã NV &amp; PIN để vào ca làm.
         </p>
       </div>
+
+      {query.passwordChanged === "1" ? (
+        <Alert tone="success" className="mb-4">
+          Đã đổi mật khẩu. Vui lòng đăng nhập lại bằng mật khẩu mới.
+        </Alert>
+      ) : null}
 
       {query.error === "google_not_configured" ? (
         <Alert tone="warning" className="mb-4">

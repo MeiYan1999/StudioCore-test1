@@ -20,4 +20,5 @@ export type ActorContext = {
   branches: ActorBranch[];
   activeBranchId: string | null;
   readOnly: boolean;
+  canChangePassword: boolean;
 };
