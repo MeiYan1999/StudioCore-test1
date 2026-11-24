@@ -7,7 +7,7 @@ import type { ActorContext } from "@/lib/auth/types";
 import type { AppDb } from "@/lib/db/client";
 import { rolePermissions } from "@/lib/db/schema";
 import { setTenantSetting } from "@/lib/services/settings-write-service";
-import { updateRolePermissions } from "@/lib/services/staff-service";
+import { updateRolePermissions, updateStaff } from "@/lib/services/staff-service";
 import { getPlatformBillingConfig } from "@/lib/services/subscription-service";
 import { createTestDb } from "../helpers/test-db";
 
@@ -69,6 +69,13 @@ describe("ranh giới quyền quản trị nền tảng", () => {
 
     vi.stubEnv("NODE_ENV", "production");
     expect(hasPermission((await login("platform@studiocore.demo")).permissions, "tenants.manage")).toBe(false);
+  });
+
+  it("chủ studio không sửa được tài khoản quản trị nền tảng nằm trong studio mình", async () => {
+    const owner = await login("owner@studiocore.demo");
+    expect(() => updateStaff(db, owner, "staff-sc-platform", {} as never)).toThrow(
+      "Không tìm thấy nhân sự.",
+    );
   });
 
   it("cấu hình thanh toán nền tảng không đọc setting platform.* của studio thường", async () => {

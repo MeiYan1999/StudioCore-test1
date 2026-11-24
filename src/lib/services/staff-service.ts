@@ -342,6 +342,7 @@ export function updateStaff(
         eq(staff.id, staffId),
         eq(staff.tenantId, actor.tenantId),
         isNull(staff.archivedAt),
+        ne(staff.role, "platform_admin"),
       ),
     )
     .get();
