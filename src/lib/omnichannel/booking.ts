@@ -364,7 +364,7 @@ export function updateBooking(
         .where(eq(orders.id, b.orderId))
         .get()!;
       assertBranchAccess(actor, order.branchId);
-      if (actor.readOnly) throw new Error("Tài khoản chỉ đọc.");
+      if (actor.readOnly || actor.planLapsed) throw new Error("Tài khoản chỉ đọc.");
       if (b.conversationId) authorizeThread(tx, actor, b.conversationId, true);
       assertPermission(actor, "schedule.manage");
       if (input.action === "deposit") {
