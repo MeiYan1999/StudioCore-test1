@@ -1,4 +1,4 @@
-import { and, eq, isNull, ne } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, ne } from "drizzle-orm";
 import type { AppDb } from "../db/client";
 import { albums, albumSources } from "../db/schema";
 import type { ActorContext } from "../auth/types";
@@ -86,8 +86,16 @@ async function addAnyoneReader(
   return { ok: false, reason: driveErrorReason(response.status, body) };
 }
 
-function isClosed(album: { shareRevokedAt: Date | null; status: string }): boolean {
-  return album.shareRevokedAt !== null || album.status === "archived";
+function isClosed(album: {
+  shareRevokedAt: Date | null;
+  status: string;
+  expiresAt: Date | null;
+}): boolean {
+  return (
+    album.shareRevokedAt !== null ||
+    album.status === "archived" ||
+    (album.expiresAt !== null && album.expiresAt.getTime() <= Date.now())
+  );
 }
 
 /**
@@ -127,10 +135,29 @@ export async function syncAlbumDriveSharing(
     .all()
     .filter((source) => Boolean(source.externalFolderId));
 
-  const pending =
-    target === "private"
-      ? sources.filter((source) => source.driveAccessRevokedAt === null)
-      : sources.filter((source) => source.driveAccessRevokedAt !== null);
+  // Dấu "StudioCore đã gỡ quyền" tính theo thư mục, không theo album: thư mục
+  // dùng chung do album nào gỡ thì album còn lại mở link vẫn bật lại được.
+  const revokedFolders = new Set(
+    db
+      .select({ folderId: albumSources.externalFolderId })
+      .from(albumSources)
+      .where(
+        and(
+          eq(albumSources.tenantId, actor.tenantId),
+          eq(albumSources.provider, "google"),
+          isNotNull(albumSources.driveAccessRevokedAt),
+        ),
+      )
+      .all()
+      .map((row) => row.folderId),
+  );
+  const seenFolders = new Set<string>();
+  const pending = sources.filter((source) => {
+    const folderId = source.externalFolderId as string;
+    if (seenFolders.has(folderId)) return false;
+    seenFolders.add(folderId);
+    return revokedFolders.has(folderId) === (target === "public");
+  });
   const result: DriveSharingSyncResult = {
     status: "none",
     target,
@@ -166,7 +193,10 @@ export async function syncAlbumDriveSharing(
   const sharedElsewhere = new Set<string>();
   if (target === "private") {
     const others = db
-      .select({ folderId: albumSources.externalFolderId })
+      .select({
+        folderId: albumSources.externalFolderId,
+        expiresAt: albums.expiresAt,
+      })
       .from(albumSources)
       .innerJoin(albums, eq(albums.id, albumSources.albumId))
       .where(
@@ -180,7 +210,9 @@ export async function syncAlbumDriveSharing(
       )
       .all();
     for (const other of others) {
-      if (other.folderId) sharedElsewhere.add(other.folderId);
+      const expired =
+        other.expiresAt !== null && other.expiresAt.getTime() <= Date.now();
+      if (other.folderId && !expired) sharedElsewhere.add(other.folderId);
     }
   }
 
@@ -215,7 +247,13 @@ export async function syncAlbumDriveSharing(
           target === "private" && outcome.changed ? new Date() : null,
         updatedAt: new Date(),
       })
-      .where(eq(albumSources.id, source.id))
+      .where(
+        and(
+          eq(albumSources.tenantId, actor.tenantId),
+          eq(albumSources.provider, "google"),
+          eq(albumSources.externalFolderId, folderId),
+        ),
+      )
       .run();
   }
 

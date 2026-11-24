@@ -196,6 +196,48 @@ describe("Đồng bộ quyền chia sẻ Google Drive theo link album", () => {
     expect(source(sourceId).driveAccessRevokedAt).toBeNull();
   });
 
+  it("thư mục dùng chung: album đóng trước vẫn bật lại được quyền khi mở lại", async () => {
+    const template = db
+      .select()
+      .from(albums)
+      .where(eq(albums.id, albumIds[0]))
+      .get()!;
+    db.insert(albums)
+      .values({ ...template, id: "album-second", token: "second-token" })
+      .run();
+    connect();
+    mockGoogle();
+    addSource(albumIds[0], "folder-shared");
+    addSource("album-second", "folder-shared");
+
+    setAlbumShareRevoked(db, actor, albumIds[0], true);
+    await syncAlbumDriveSharing(db, actor, albumIds[0]);
+    setAlbumShareRevoked(db, actor, "album-second", true);
+    await syncAlbumDriveSharing(db, actor, "album-second");
+    expect(calls.map((call) => call.method)).toEqual(["DELETE"]);
+
+    setAlbumShareRevoked(db, actor, albumIds[0], false);
+    const restored = await syncAlbumDriveSharing(db, actor, albumIds[0]);
+    expect(restored).toMatchObject({ target: "public", changed: 1 });
+    expect(calls.map((call) => call.method)).toEqual(["DELETE", "POST"]);
+  });
+
+  it("album đã hết hạn không bật lại quyền Drive khi mở lại link", async () => {
+    connect();
+    mockGoogle();
+    addSource(albumIds[0], "folder-a");
+    setAlbumShareRevoked(db, actor, albumIds[0], true);
+    await syncAlbumDriveSharing(db, actor, albumIds[0]);
+    db.update(albums)
+      .set({ expiresAt: new Date(Date.now() - 60_000) })
+      .where(eq(albums.id, albumIds[0]))
+      .run();
+    setAlbumShareRevoked(db, actor, albumIds[0], false);
+    const result = await syncAlbumDriveSharing(db, actor, albumIds[0]);
+    expect(result.target).toBe("private");
+    expect(calls.map((call) => call.method)).toEqual(["DELETE"]);
+  });
+
   it("báo rõ khi chưa kết nối Google Drive và không gọi Google", async () => {
     mockGoogle();
     addSource(albumIds[0], "folder-a");
@@ -240,6 +282,7 @@ describe("Đồng bộ quyền chia sẻ Google Drive theo link album", () => {
       actor.staffId,
       "weaker-token",
       "openid https://www.googleapis.com/auth/drive.readonly",
+      { keepExistingSharingAccess: true },
     );
     const after = db.select().from(driveConnections).get()!;
     expect(after.refreshTokenEncrypted).toBe(before.refreshTokenEncrypted);
