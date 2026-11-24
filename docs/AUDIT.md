@@ -65,7 +65,7 @@ Trạng thái dùng trong tài liệu: `ĐÃ XÁC MINH` · `ĐÃ TRIỂN KHAI, C
 | --- | --- | --- | --- | --- |
 | F-06 | P2 | ĐÃ SỬA (chặn) | Hóa đơn chuyển `issued → paid` bằng tay dù đơn còn nợ. Nay chỉ chuyển được khi đơn đã thu đủ (`orders.remaining = 0`) và chưa hủy. Bảng phân bổ khoản thu–hóa đơn vẫn chưa có (B-02) | `updateInvoiceStatus` (`finance-service.ts`) |
 | F-09 | P2 | CHƯA CÓ | Hạn mức gói (nhân sự, chi nhánh, dung lượng, số album) và ngày hết hạn gói không được kiểm tra ở backend; gói chỉ là nhãn | `SUBSCRIPTION_PLANS`, `tenants.planExpiresAt` chỉ được ghi trong `subscription-service.ts`/`platform-actions.ts`, không nơi nào đọc để chặn |
-| F-10 | P2 | CHƯA CÓ | Thiết bị không có luồng mượn/trả: `equipment_usages` chỉ được đọc (`getEquipmentDetail`), không có hàm ghi ngoài seed | `src/lib/services/equipment-service.ts` |
+| F-10 | P2 | CHƯA CÓ · ĐÃ SỬA | Thiết bị không có luồng mượn/trả: `equipment_usages` chỉ được đọc (`getEquipmentDetail`), không có hàm ghi ngoài seed. Nay có `checkOutEquipment`/`checkInEquipment` gắn lịch chụp, thao tác trên trang chi tiết lịch | `src/lib/services/equipment-service.ts` |
 | F-11 | P2 | ĐÃ SỬA (cảnh báo) | Hủy lịch không nhắc gì về trang phục của đơn đang mượn. Phiếu thuê là phiếu đã xuất đồ (không có đặt trước), nên hủy lịch không tự đánh dấu trả; nay người hủy nhận thông báo và trang lịch đã hủy hiện cảnh báo | `cancelAppointment` (`appointment-service.ts`), `updateBooking` (`omnichannel/booking.ts`), `notifyUnreturnedRentals` (`wardrobe-service.ts`) |
 | F-12 | P2 | LỖI LOGIC | Trên R2, bản "gốc" là WebP nén lại và preview không có watermark (local có) | `processImage` (`r2-storage.ts`) |
 | F-13 | P3 | ĐÃ SỬA | Mọi nhân sự đã đăng nhập đều tạo được đơn mua gói cho studio | `createSubscriptionInvoiceAction` |
@@ -80,7 +80,7 @@ Trạng thái dùng trong tài liệu: `ĐÃ XÁC MINH` · `ĐÃ TRIỂN KHAI, C
 | 1 | StudioCore Drive | `/manage/drive`, `/drive/[slug]`, `api/drive/agent/*`, `api/drive/s/[slug]/*` | `drive-service.ts`, `lib/drive/relay.ts`; file nằm trên máy studio, server chỉ relay | Agent xác thực bằng token thiết bị (`authenticateDriveDevice`); link công khai qua `resolveDrivePublicAccess` (thu hồi, PIN, `allowOriginal`) | Lướt · ĐÃ TRIỂN KHAI, CHƯA XÁC MINH ĐỦ (cần máy agent thật) |
 | 2 | Lọc ảnh / Proofing | `/manage/albums/[id]`, `/manage/photos`, `/share/[token]`, `api/uploads/*`, `api/share/[token]/download` | `album-service.ts`, `share-service.ts`, `photo-filter-service.ts`; bảng albums/photos/selections; storage local/R2 | Upload cần actor + same-origin; share kiểm tra thu hồi/hết hạn/mật khẩu; giới hạn chọn và khóa chọn kiểm tra trong transaction (`updateSharePhotoSelection`, `submitShareSelection`) | Sâu · ĐÃ XÁC MINH phần chọn ảnh; F-01 đã sửa; B-01, F-12 còn mở |
 | 3 | Kho trang phục | `/manage/wardrobe`, `/manage/wardrobe/rentals` | `wardrobe-service.ts`; `wardrobe_items`, `wardrobe_rentals` | `schedule.manage`, lọc tenant + chi nhánh; tạo/trả phiếu trong transaction `immediate` | Lướt · ĐÃ TRIỂN KHAI, CHƯA XÁC MINH ĐỦ; F-11 |
-| 4 | Thiết bị | `/manage/equipment` | `equipment-service.ts`; `equipment`, `equipment_usages` | `schedule.view/manage`, lọc tenant + chi nhánh | Sâu · DANG DỞ: chỉ danh mục, chưa có mượn/trả (F-10) |
+| 4 | Thiết bị | `/manage/equipment` | `equipment-service.ts`; `equipment`, `equipment_usages` | `schedule.view/manage`, lọc tenant + chi nhánh | Sâu · ĐÃ XÁC MINH: danh mục và mượn/trả theo lịch chụp (F-10 đã sửa) |
 | 5 | Công việc / Lịch / Booking | `/manage/calendar`, `/manage/tasks`, `/book/[serviceId]`, `api/booking` | `appointment-service.ts` (`findConflict`, `createAppointment` có `idempotency_key` duy nhất), `task-service.ts`, `omnichannel/booking.ts` | `schedule.*`, `tasks.*`, scope chi nhánh | Lướt · ĐÃ TRIỂN KHAI, CHƯA XÁC MINH ĐỦ; F-11 |
 | 6 | Tài liệu / Hợp đồng | `/manage/documents`, in hợp đồng `/manage/orders/[id]/contract`, `api/documents/*` | `document-service.ts`, `contract-service.ts`; `documents`, storage `documents/<key>` | Tải file qua `getDocumentFile` (tenant + chi nhánh); `/api/files` chặn `documents/` | Lướt · ĐÃ XÁC MINH phần tải file |
 | 7 | Nhân sự | `/manage/staff`, `/manage/staff/attendance`, `/manage/staff/leave`, `/manage/settings/users` | `staff-service.ts`, `hr-service.ts`; `staff`, `attendance`, `leave_requests` | `staff.view/manage`, scope chi nhánh | Lướt · ĐÃ TRIỂN KHAI, CHƯA XÁC MINH ĐỦ |
@@ -106,7 +106,7 @@ Các mục cần thay đổi mô hình dữ liệu (F-06, F-09, F-10) không g�
 | B-01 | P2 | URL ký/hết hạn cho thumbnail và preview của link share | F-01 |
 | B-02 | P2 | Phân bổ khoản thu vào hóa đơn; trạng thái hóa đơn suy ra từ khoản thu (F-06) | migration bổ sung |
 | B-03 | P2 | Thực thi hạn mức gói và ngày hết hạn ở backend, có kiểm tra đồng thời (F-09) | quyết định hạn mức từng gói |
-| B-04 | P2 | Mượn/trả thiết bị theo lịch chụp, chống đặt trùng (F-10) | — |
+| B-04 | P2 | ĐÃ SỬA: mượn/trả thiết bị theo lịch chụp, chống xuất trùng (F-10). Chưa có đặt trước thiết bị theo khung giờ | — |
 | B-05 | P2 | Khi hủy lịch/đơn: giải phóng phiếu thuê chưa lấy, cảnh báo phiếu đang mượn (F-11) | — |
 | B-06 | P2 | Giữ file gốc và watermark preview trên R2 (F-12) | dung lượng R2 |
 | B-07 | P3 | F-13, F-14, F-15, F-16 | — |
