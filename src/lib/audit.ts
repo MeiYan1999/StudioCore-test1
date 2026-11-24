@@ -2,21 +2,26 @@ import { eq } from "drizzle-orm";
 import type { AppDb } from "./db/client";
 import {
   activityLogs,
+  aiJobs,
   albums,
   appointments,
   attendance,
   budgets,
   campaigns,
+  commissions,
   conversations,
   customers,
   documents,
   equipment,
   expenses,
+  facebookPages,
   invoices,
   leaveRequests,
   orders,
   payments,
+  photoFilterJobs,
   rooms,
+  serviceAddons,
   services,
   tasks,
   transactions,
@@ -49,6 +54,7 @@ const BRANCH_TABLES = {
   document: documents,
   equipment,
   expense: expenses,
+  facebook_page: facebookPages,
   invoice: invoices,
   leave_request: leaveRequests,
   order: orders,
@@ -77,6 +83,44 @@ export function resolveAuditBranchId(
       .where(eq(payments.id, entityId))
       .get();
     return row?.branchId ?? null;
+  }
+  // Records without their own branch take it from the record they belong to.
+  if (entity === "commission") {
+    const row = db
+      .select({ branchId: orders.branchId })
+      .from(commissions)
+      .innerJoin(orders, eq(commissions.orderId, orders.id))
+      .where(eq(commissions.id, entityId))
+      .get();
+    return row?.branchId ?? null;
+  }
+  if (entity === "service_addon") {
+    const row = db
+      .select({ branchId: services.branchId })
+      .from(serviceAddons)
+      .innerJoin(services, eq(serviceAddons.serviceId, services.id))
+      .where(eq(serviceAddons.id, entityId))
+      .get();
+    return row?.branchId ?? null;
+  }
+  if (entity === "ai_job") {
+    const row = db
+      .select({ branchId: albums.branchId })
+      .from(aiJobs)
+      .innerJoin(albums, eq(aiJobs.albumId, albums.id))
+      .where(eq(aiJobs.id, entityId))
+      .get();
+    return row?.branchId ?? null;
+  }
+  if (entity === "photo_filter_job") {
+    const row = db
+      .select({ albumBranchId: albums.branchId, orderBranchId: orders.branchId })
+      .from(photoFilterJobs)
+      .leftJoin(albums, eq(photoFilterJobs.albumId, albums.id))
+      .leftJoin(orders, eq(photoFilterJobs.orderId, orders.id))
+      .where(eq(photoFilterJobs.id, entityId))
+      .get();
+    return row?.albumBranchId ?? row?.orderBranchId ?? null;
   }
   const table = BRANCH_TABLES[entity as keyof typeof BRANCH_TABLES];
   if (!table) return null;
