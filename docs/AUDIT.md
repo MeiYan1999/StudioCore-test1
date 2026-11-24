@@ -34,7 +34,7 @@ Trạng thái dùng trong tài liệu: `ĐÃ XÁC MINH` · `ĐÃ TRIỂN KHAI, C
 - Ảnh hưởng: khách (hoặc người có link) tải ảnh gốc, bỏ qua `authorizeShareDownload` (mật khẩu, hết hạn, thu hồi, quyền tải); không cần phiên đăng nhập, không phân biệt tenant.
 - Sửa: `resolveFileAccess` (`src/lib/storage/file-access.ts`): chỉ thumbnail/preview và album demo là công khai; key khác cần phiên nhân sự cùng tenant (`<tenantId>/…`) hoặc `tenants.manage`, trả `Cache-Control: private, no-store`.
 - Tiêu chí: ảnh gốc 404 khi chưa đăng nhập hoặc khác tenant. Test: `tests/unit/file-access.test.ts`.
-- Còn lại (P2, B-01): thumbnail/preview vẫn đọc được bằng URL trực tiếp sau khi link share bị thu hồi/hết hạn; cần URL ký hoặc route theo token.
+- B-01 ĐÃ SỬA: thumbnail/preview của link share dùng URL ký (`signedFileUrl`, HMAC theo `AUTH_SECRET`), hết hạn trong tối đa 2 giờ hoặc khi link hết hạn; URL không ký chỉ dành cho nhân sự cùng studio. Sau khi thu hồi link, URL đã phát còn dùng được tối đa 2 giờ.
 
 ### F-07 · P1 · LỖI LOGIC · ĐÃ SỬA — Bấm đúp "Thu tiền" ghi hai khoản thu
 - Bằng chứng: `recordOrderPayment` (`src/lib/services/order-service.ts`) tự sinh `idempotencyKey: crypto.randomUUID()`; chặn duy nhất là `amount <= remaining`, nên hai lần gửi một khoản thu một phần đều hợp lệ.
@@ -103,7 +103,7 @@ Các mục cần thay đổi mô hình dữ liệu (F-06, F-09, F-10) không g�
 ## 5. Backlog đề xuất
 | ID | Mức | Việc | Phụ thuộc |
 | --- | --- | --- | --- |
-| B-01 | P2 | URL ký/hết hạn cho thumbnail và preview của link share | F-01 |
+| B-01 | P2 | ĐÃ SỬA: URL ký/hết hạn cho thumbnail và preview của link share | F-01 |
 | B-02 | P2 | Phân bổ khoản thu vào hóa đơn; trạng thái hóa đơn suy ra từ khoản thu (F-06) | migration bổ sung |
 | B-03 | P2 | Thực thi hạn mức gói và ngày hết hạn ở backend, có kiểm tra đồng thời (F-09) | quyết định hạn mức từng gói |
 | B-04 | P2 | Mượn/trả thiết bị theo lịch chụp, chống đặt trùng (F-10) | — |

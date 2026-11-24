@@ -10,6 +10,7 @@ import {
   looksLikeDerivativeKey,
   resolveFileAccess,
 } from "@/lib/storage/file-access";
+import { signedFileUrlRemainingMs } from "@/lib/storage/signed-url";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,18 +36,37 @@ function isRecordedDerivative(key: string): boolean {
 }
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ key: string[] }> },
 ): Promise<Response> {
   const { key } = await params;
   const storageKey = key.join("/");
-  let access = resolveFileAccess(storageKey, null, isRecordedDerivative(storageKey));
+  // A thumbnail/preview is served without a session only through a URL signed
+  // for a share gallery; the signature expires, so a revoked link stops working.
+  const query = new URL(request.url).searchParams;
+  const signedMs = isSafeStorageKey(storageKey)
+    ? signedFileUrlRemainingMs(storageKey, query.get("exp"), query.get("sig"))
+    : 0;
+  let access = resolveFileAccess(
+    storageKey,
+    null,
+    signedMs > 0 && isRecordedDerivative(storageKey),
+  );
+  const isDemo = access === "public" && signedMs === 0;
   if (access === "denied" && isSafeStorageKey(storageKey)) {
     access = resolveFileAccess(storageKey, await getActorContext());
   }
   if (access === "denied") {
     return new Response("Not found", { status: 404 });
   }
+  const cacheControl =
+    access === "private"
+      ? looksLikeDerivativeKey(storageKey)
+        ? "private, max-age=3600"
+        : "private, no-store"
+      : isDemo
+        ? "public, max-age=3600"
+        : `private, max-age=${Math.min(3600, Math.floor(signedMs / 1000))}`;
   try {
     const buffer = await getStorageAdapter().read(storageKey);
     const filename = key.at(-1) ?? "image";
@@ -54,8 +74,7 @@ export async function GET(
       headers: {
         "Content-Type": mimeForFilename(filename),
         "Content-Length": String(buffer.length),
-        "Cache-Control":
-          access === "public" ? "public, max-age=3600" : "private, no-store",
+        "Cache-Control": cacheControl,
         "Content-Disposition": attachmentHeader(filename).replace(
           "attachment;",
           "inline;",

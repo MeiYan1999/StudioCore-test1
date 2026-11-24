@@ -17,7 +17,7 @@ import {
 import { AuthorizationError, NotFoundError, ValidationError } from "../errors";
 import { writeAudit } from "../audit";
 import { verifySecret } from "../auth/password";
-import { publicUploadUrl } from "../storage/local-storage";
+import { signedFileUrl } from "../storage/signed-url";
 import { hashShareToken } from "../share/token";
 import { canTransitionOrder } from "../orders/status";
 import {
@@ -360,8 +360,8 @@ export function getShareGalleryPage(
       folderName: row.photo.folderId
         ? folders.find((folder) => folder.id === row.photo.folderId)?.name ?? null
         : null,
-      thumbnailUrl: publicUploadUrl(row.photo.thumbnailKey),
-      previewUrl: publicUploadUrl(row.photo.previewKey),
+      thumbnailUrl: signedFileUrl(row.photo.thumbnailKey, { notAfter: album.expiresAt }),
+      previewUrl: signedFileUrl(row.photo.previewKey, { notAfter: album.expiresAt }),
       width: row.photo.width,
       height: row.photo.height,
       isRaw: row.photo.isRaw,

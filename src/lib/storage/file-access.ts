@@ -18,19 +18,20 @@ export function isSafeStorageKey(key: string): boolean {
 }
 
 /**
- * Recorded thumbnails/previews and the demo album are served without a session because
- * share galleries embed them. Every other key (original uploads) is only
- * readable by staff of the tenant that owns it: keys are `<tenantId>/<albumId>/…`.
- * Customers get originals through the share download route, which enforces
- * token, password, expiry and download permission.
+ * The demo album is public. Recorded thumbnails/previews are served without a
+ * session only through a signed, expiring URL issued to a share gallery. Every
+ * other request is only readable by staff of the tenant that owns the key:
+ * keys are `<tenantId>/<albumId>/…`. Customers get originals through the share
+ * download route, which enforces token, password, expiry and download permission.
  */
 export function looksLikeDerivativeKey(key: string): boolean {
   return DERIVATIVE_PATTERN.test(key);
 }
 
 /**
- * `isDerivative` must come from the photos table: an original uploaded as
- * `x-thumb.jpg` also matches the name pattern, so the name alone proves nothing.
+ * `isDerivative` means "recorded in the photos table as a thumbnail/preview and
+ * requested with a valid signature": an original uploaded as `x-thumb.jpg` also
+ * matches the name pattern, so the name alone proves nothing.
  */
 export function resolveFileAccess(
   key: string,
