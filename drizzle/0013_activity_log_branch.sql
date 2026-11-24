@@ -54,3 +54,6 @@ UPDATE `activity_logs` SET `branch_id` = (SELECT `services`.`branch_id` FROM `se
 UPDATE `activity_logs` SET `branch_id` = (SELECT `albums`.`branch_id` FROM `ai_jobs` INNER JOIN `albums` ON `albums`.`id` = `ai_jobs`.`album_id` WHERE `ai_jobs`.`id` = `activity_logs`.`entity_id`) WHERE `entity` = 'ai_job' AND `entity_id` IS NOT NULL;
 --> statement-breakpoint
 UPDATE `activity_logs` SET `branch_id` = (SELECT COALESCE(`albums`.`branch_id`, `orders`.`branch_id`) FROM `photo_filter_jobs` LEFT JOIN `albums` ON `albums`.`id` = `photo_filter_jobs`.`album_id` LEFT JOIN `orders` ON `orders`.`id` = `photo_filter_jobs`.`order_id` WHERE `photo_filter_jobs`.`id` = `activity_logs`.`entity_id`) WHERE `entity` = 'photo_filter_job' AND `entity_id` IS NOT NULL;
+
+--> statement-breakpoint
+UPDATE `activity_logs` SET `branch_id` = json_extract(`metadata`, '$.branchId') WHERE json_valid(`metadata`) AND EXISTS (SELECT 1 FROM `branches` WHERE `branches`.`id` = json_extract(`activity_logs`.`metadata`, '$.branchId') AND `branches`.`tenant_id` = `activity_logs`.`tenant_id`);
