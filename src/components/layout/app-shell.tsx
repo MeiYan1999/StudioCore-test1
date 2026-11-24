@@ -393,7 +393,7 @@ function NotificationsMenu({
   );
 }
 
-function UserMenu({ actor }: { actor: ShellActor }) {
+function UserMenu({ actor, pathname }: { actor: ShellActor; pathname: string }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -422,7 +422,7 @@ function UserMenu({ actor }: { actor: ShellActor }) {
         <DropdownMenuSeparator />
         {actor.canChangePassword ? (
           <DropdownMenuItem asChild>
-            <Link href="/change-password">
+            <Link href={{ pathname: "/change-password", query: { returnTo: pathname } }}>
               <KeyRound className="h-4 w-4" aria-hidden="true" />
               Đổi mật khẩu
             </Link>
@@ -602,7 +602,7 @@ export function AppShell({
                 notifications={notifications}
                 unreadCount={unreadCount}
               />
-              <UserMenu actor={actor} />
+              <UserMenu actor={actor} pathname={pathname} />
             </div>
           </header>
 

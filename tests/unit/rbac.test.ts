@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { passwordChangeReturnTo } from "@/lib/auth/password-change-navigation";
 import {
   DEFAULT_ROLE_PERMISSIONS,
 } from "@/lib/auth/roles";
@@ -32,6 +33,21 @@ function actor(overrides: Partial<ActorContext> = {}): ActorContext {
     ...overrides,
   };
 }
+
+describe("đường dẫn quay lại từ trang đổi mật khẩu", () => {
+  const receptionist = actor({ role: "receptionist", permissions: ["customers.view"] });
+
+  it("giữ đường dẫn nội bộ khi mở từ menu tài khoản", () => {
+    expect(passwordChangeReturnTo(receptionist, "/manage/customers/123?tab=notes")).toBe("/manage/customers/123?tab=notes");
+  });
+
+  it("chọn trang được phép khi mở trực tiếp hoặc đường dẫn quay lại không hợp lệ", () => {
+    expect(passwordChangeReturnTo(receptionist)).toBe("/manage/customers");
+    expect(passwordChangeReturnTo(receptionist, "//other.example")).toBe("/manage/customers");
+    expect(passwordChangeReturnTo(receptionist, "/manage/../login")).toBe("/manage/customers");
+    expect(passwordChangeReturnTo(actor({ permissions: [] }))).toBe("/");
+  });
+});
 
 describe("RBAC", () => {
   it("owner có quyền quản trị nhưng không có quyền tenant nền tảng", () => {

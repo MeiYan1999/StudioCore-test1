@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ChangePasswordForm } from "@/components/auth/change-password-form";
 import { Alert } from "@/components/ui/alert";
+import { passwordChangeReturnTo } from "@/lib/auth/password-change-navigation";
 import { requireActor } from "@/lib/auth/session";
 
 export const metadata = {
@@ -8,9 +9,14 @@ export const metadata = {
   robots: { index: false, follow: false },
 };
 
-export default async function ChangePasswordPage() {
+export default async function ChangePasswordPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ returnTo?: string | string[] }>;
+}) {
   const actor = await requireActor();
-  const backUrl = actor.role === "platform_admin" ? "/platform" : "/manage/dashboard";
+  const { returnTo } = await searchParams;
+  const backUrl = passwordChangeReturnTo(actor, typeof returnTo === "string" ? returnTo : undefined);
 
   return (
     <div>
