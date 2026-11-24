@@ -18,11 +18,12 @@ function getSecret(): Uint8Array {
 export async function signSessionToken(
   sessionId: string,
   expiresAt: Date,
-  extra?: { staffId?: string; tenantId?: string },
+  extra?: { staffId?: string; tenantId?: string; issuedAtMs?: number },
 ): Promise<string> {
   const payload: Record<string, unknown> = { sid: sessionId };
   if (extra?.staffId) payload.uid = extra.staffId;
   if (extra?.tenantId) payload.tid = extra.tenantId;
+  if (extra?.issuedAtMs !== undefined) payload.iatMs = extra.issuedAtMs;
 
   return new SignJWT(payload)
     .setProtectedHeader({ alg: "HS256" })
@@ -44,7 +45,7 @@ export type SessionTokenPayload = {
   sessionId: string;
   staffId?: string;
   tenantId?: string;
-  issuedAt?: number;
+  issuedAtMs?: number;
 };
 
 export async function decodeSessionToken(token: string): Promise<SessionTokenPayload | null> {
@@ -55,7 +56,9 @@ export async function decodeSessionToken(token: string): Promise<SessionTokenPay
       sessionId: payload.sid,
       staffId: typeof payload.uid === "string" ? payload.uid : undefined,
       tenantId: typeof payload.tid === "string" ? payload.tid : undefined,
-      issuedAt: payload.iat,
+      issuedAtMs: typeof payload.iatMs === "number"
+        ? payload.iatMs
+        : payload.iat === undefined ? undefined : payload.iat * 1000,
     };
   } catch {
     return null;
@@ -82,7 +85,8 @@ export async function createSession(
 ): Promise<SessionCreation> {
   const ttlMinutes = input.ttlMinutes ?? getEnv().SESSION_TTL_HOURS * 60;
   const sessionId = crypto.randomUUID();
-  const expiresAt = new Date(Date.now() + ttlMinutes * 60 * 1000);
+  const issuedAtMs = Date.now();
+  const expiresAt = new Date(issuedAtMs + ttlMinutes * 60 * 1000);
 
   db.insert(sessions)
     .values({
@@ -100,6 +104,7 @@ export async function createSession(
   const token = await signSessionToken(sessionId, expiresAt, input.readOnly ? undefined : {
     staffId: input.staffId,
     tenantId: input.tenantId,
+    issuedAtMs,
   });
 
   return { sessionId, token, expiresAt };
@@ -164,14 +169,14 @@ export async function getActorFromToken(
     .get();
 
   // Tự động khôi phục session nếu container vừa khởi động lại nhưng SQLite chưa kịp sync session
-  if (!row && decoded.staffId && decoded.tenantId && decoded.issuedAt !== undefined) {
+  if (!row && decoded.staffId && decoded.tenantId && decoded.issuedAtMs !== undefined) {
     // A backup may have the password change but not the original session row.
     const changedSinceIssue = db.select({ id: activityLogs.id }).from(activityLogs)
       .where(and(
         eq(activityLogs.tenantId, decoded.tenantId),
         eq(activityLogs.actorId, decoded.staffId),
         eq(activityLogs.action, PASSWORD_CHANGED),
-        gte(activityLogs.createdAt, new Date(decoded.issuedAt * 1000)),
+        gte(activityLogs.createdAt, new Date(decoded.issuedAtMs)),
       ))
       .get();
     if (changedSinceIssue) return null;

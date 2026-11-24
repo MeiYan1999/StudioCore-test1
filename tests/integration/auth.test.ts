@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { PASSWORD_CHANGED } from "@/lib/audit";
 import { authenticate, isLoginLocked } from "@/lib/auth/login-service";
@@ -299,6 +299,24 @@ describe("đổi mật khẩu khi đã đăng nhập", () => {
     }
     expect(await getActorFromToken(passwordDb, token)).not.toBeNull();
     expect((await signIn(email)).actor.staffId).toBe(actor.staffId);
+  });
+
+  it("phục hồi phiên được cấp sau lần đổi mật khẩu trong cùng một giây", async () => {
+    const email = createPrivateAccount("photo@studiocore.demo");
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      const second = Math.floor(Date.now() / 1000) * 1000;
+      vi.setSystemTime(second);
+      const { actor } = await signIn(email);
+      vi.setSystemTime(second + 200);
+      expect(changeOwnPassword(passwordDb, actor, validChange)).toEqual({ ok: true });
+      vi.setSystemTime(second + 400);
+      const fresh = await signIn(email, validChange.newPassword);
+      passwordDb.delete(sessions).where(eq(sessions.id, fresh.sessionId)).run();
+      expect(await getActorFromToken(passwordDb, fresh.token)).toMatchObject({ staffId: actor.staffId });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("giới hạn thử mật khẩu hiện tại theo tài khoản, kể cả qua nhiều phiên", async () => {
