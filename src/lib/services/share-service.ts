@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { and, asc, count, eq, gte, sql } from "drizzle-orm";
+import { and, asc, count, eq, gt, gte, isNull, ne, or, sql } from "drizzle-orm";
 import type { AppDb } from "../db/client";
 import {
   albumFolders,
@@ -17,6 +17,7 @@ import {
 import { AuthorizationError, NotFoundError, ValidationError } from "../errors";
 import { writeAudit } from "../audit";
 import { verifySecret } from "../auth/password";
+import { looksLikeDerivativeKey } from "../storage/file-access";
 import { signedFileUrl } from "../storage/signed-url";
 import { hashShareToken } from "../share/token";
 import { canTransitionOrder } from "../orders/status";
@@ -88,6 +89,31 @@ export type ShareGalleryPage = {
   pageSize: number;
   hasMore: boolean;
 };
+
+/** A thumbnail/preview recorded for an album whose share link is live now. */
+export function isLiveShareDerivative(db: AppDb, key: string, now: Date = new Date()): boolean {
+  if (!looksLikeDerivativeKey(key)) return false;
+  // Keys are `<tenantId>/<albumId>/<file>`; filtering by album uses its index.
+  const [tenantId, albumId] = key.split("/");
+  if (!tenantId || !albumId) return false;
+  const row = db
+    .select({ id: photos.id })
+    .from(photos)
+    .innerJoin(albums, eq(albums.id, photos.albumId))
+    .where(
+      and(
+        eq(photos.albumId, albumId),
+        eq(photos.tenantId, tenantId),
+        or(eq(photos.thumbnailKey, key), eq(photos.previewKey, key)),
+        ne(photos.storageKey, key),
+        isNull(albums.shareRevokedAt),
+        ne(albums.status, "archived"),
+        or(isNull(albums.expiresAt), gt(albums.expiresAt, now)),
+      ),
+    )
+    .get();
+  return Boolean(row);
+}
 
 export type ShareCodeItem = {
   code: string;

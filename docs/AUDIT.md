@@ -34,7 +34,7 @@ Trạng thái dùng trong tài liệu: `ĐÃ XÁC MINH` · `ĐÃ TRIỂN KHAI, C
 - Ảnh hưởng: khách (hoặc người có link) tải ảnh gốc, bỏ qua `authorizeShareDownload` (mật khẩu, hết hạn, thu hồi, quyền tải); không cần phiên đăng nhập, không phân biệt tenant.
 - Sửa: `resolveFileAccess` (`src/lib/storage/file-access.ts`): chỉ thumbnail/preview và album demo là công khai; key khác cần phiên nhân sự cùng tenant (`<tenantId>/…`) hoặc `tenants.manage`, trả `Cache-Control: private, no-store`.
 - Tiêu chí: ảnh gốc 404 khi chưa đăng nhập hoặc khác tenant. Test: `tests/unit/file-access.test.ts`.
-- B-01 ĐÃ SỬA: thumbnail/preview của link share dùng URL ký (`signedFileUrl`, HMAC theo `AUTH_SECRET`), hết hạn trong tối đa 2 giờ hoặc khi link hết hạn; URL không ký chỉ dành cho nhân sự cùng studio. Sau khi thu hồi link, URL đã phát còn dùng được tối đa 2 giờ.
+- B-01 ĐÃ SỬA: thumbnail/preview của link share dùng URL ký (`signedFileUrl`, HMAC theo `AUTH_SECRET`), hết hạn trong tối đa 2 giờ; `/api/files` còn kiểm tra link của album chưa bị thu hồi, chưa hết hạn, album chưa lưu trữ, nên thu hồi có hiệu lực ngay (trừ bản trình duyệt đã cache). URL không ký chỉ dành cho nhân sự cùng studio. Chỉ áp dụng cho album tạo bằng "Tải thư mục/ZIP"; album từ link Drive lưu thẳng URL Google Drive (`prepareGoogleImport`, `album-service.ts`), ảnh do Google phát theo quyền chia sẻ trên Drive nên thu hồi link trong StudioCore không chặn được URL ảnh Google đã phát.
 
 ### F-07 · P1 · LỖI LOGIC · ĐÃ SỬA — Bấm đúp "Thu tiền" ghi hai khoản thu
 - Bằng chứng: `recordOrderPayment` (`src/lib/services/order-service.ts`) tự sinh `idempotencyKey: crypto.randomUUID()`; chặn duy nhất là `amount <= remaining`, nên hai lần gửi một khoản thu một phần đều hợp lệ.
@@ -67,7 +67,7 @@ Trạng thái dùng trong tài liệu: `ĐÃ XÁC MINH` · `ĐÃ TRIỂN KHAI, C
 | F-09 | P2 | CHƯA CÓ | Hạn mức gói (nhân sự, chi nhánh, dung lượng, số album) và ngày hết hạn gói không được kiểm tra ở backend; gói chỉ là nhãn | `SUBSCRIPTION_PLANS`, `tenants.planExpiresAt` chỉ được ghi trong `subscription-service.ts`/`platform-actions.ts`, không nơi nào đọc để chặn |
 | F-10 | P2 | CHƯA CÓ | Thiết bị không có luồng mượn/trả: `equipment_usages` chỉ được đọc (`getEquipmentDetail`), không có hàm ghi ngoài seed | `src/lib/services/equipment-service.ts` |
 | F-11 | P2 | ĐÃ SỬA (cảnh báo) | Hủy lịch không nhắc gì về trang phục của đơn đang mượn. Phiếu thuê là phiếu đã xuất đồ (không có đặt trước), nên hủy lịch không tự đánh dấu trả; nay người hủy nhận thông báo và trang lịch đã hủy hiện cảnh báo | `cancelAppointment` (`appointment-service.ts`), `updateBooking` (`omnichannel/booking.ts`), `notifyUnreturnedRentals` (`wardrobe-service.ts`) |
-| F-12 | P2 | LỖI LOGIC | Trên R2, bản "gốc" là WebP nén lại và preview không có watermark (local có) | `processImage` (`r2-storage.ts`) |
+| F-12 | P2 | LỖI LOGIC | Chỉ với album tạo bằng "Tải thư mục/ZIP" lưu trên R2: bản "gốc" là WebP nén lại và preview không có watermark (local có). Album từ link Drive không qua R2, ảnh gốc là file thật trên Google Drive | `processImage` (`r2-storage.ts`) |
 | F-13 | P3 | ĐÃ SỬA | Mọi nhân sự đã đăng nhập đều tạo được đơn mua gói cho studio | `createSubscriptionInvoiceAction` |
 | F-14 | P3 | LỖI LOGIC | Nhật ký hoạt động không lọc theo chi nhánh; quản lý chi nhánh có `audit.view` thấy toàn tenant | `listActivityLogs` (`audit-service.ts`) |
 | F-15 | P3 | LỖI LOGIC | `getPlatformBillingConfig` đọc setting `platform.*` không lọc tenant | `subscription-service.ts` |
@@ -108,7 +108,7 @@ Các mục cần thay đổi mô hình dữ liệu (F-06, F-09, F-10) không g�
 | B-03 | P2 | Thực thi hạn mức gói và ngày hết hạn ở backend, có kiểm tra đồng thời (F-09) | quyết định hạn mức từng gói |
 | B-04 | P2 | Mượn/trả thiết bị theo lịch chụp, chống đặt trùng (F-10) | — |
 | B-05 | P2 | Khi hủy lịch/đơn: giải phóng phiếu thuê chưa lấy, cảnh báo phiếu đang mượn (F-11) | — |
-| B-06 | P2 | Giữ file gốc và watermark preview trên R2 (F-12) | dung lượng R2 |
+| B-06 | P2 | ĐÃ BỎ theo mặc định (chỉ ảnh hưởng album tải thư mục/ZIP; mở lại nếu studio giao ảnh qua luồng này): giữ file gốc và watermark preview trên R2 (F-12) | dung lượng R2 |
 | B-07 | P3 | F-13, F-14, F-15, F-16 | — |
 | B-08 | P3 | Test tích hợp cô lập tenant qua route handler (gọi API trực tiếp bằng phiên tenant khác) cho các phân hệ đánh dấu "Lướt" | — |
 
