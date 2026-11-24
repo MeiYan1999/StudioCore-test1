@@ -4,7 +4,7 @@ async function login(page: import("@playwright/test").Page, email: string) {
   await page.goto("/login");
   await page.locator("#email").fill(email);
   await page.locator("#password").fill("Demo@123");
-  await page.getByRole("button", { name: "Đăng nhập với Email", exact: true }).click();
+  await page.getByRole("button", { name: "Đăng nhập với mật khẩu", exact: true }).click();
 }
 
 test.describe("app thật và vai trò", () => {

@@ -14,6 +14,7 @@ node --import tsx scripts/restore-db.ts
 
 # 2. Áp dụng migrations mới nhất
 npm run db:migrate
+node --env-file-if-exists=.env.local --import tsx scripts/bootstrap-platform-admin.ts
 
 # 3. Seed dữ liệu ban đầu nếu chưa có dữ liệu và chưa từng được seed
 if [ ! -f "/app/data/.seeded" ]; then

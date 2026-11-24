@@ -135,6 +135,8 @@ Mật khẩu chung: `Demo@123`; PIN dùng tab “Mã nhân viên & PIN”.
 
 Tenant phụ: `owner@studiobinhminh.demo` / `BM-OWNER` / PIN `999999` / `Demo@123`.
 
+Trên Render, đặt `PLATFORM_ADMIN_LOGIN=admin` và `PLATFORM_ADMIN_PASSWORD_HASH` để khởi tạo quản trị riêng sau khi phục hồi và migrate SQLite. Chỉ lưu hash scrypt từ `hashSecret` (xem README), không bật seed demo. Đăng nhập bằng tên quản trị tại `/login`. Lần khởi động sau không đổi mật khẩu tài khoản đã tạo.
+
 ---
 
 ## 7. GIỚI HẠN / CHƯA KIỂM CHỨNG

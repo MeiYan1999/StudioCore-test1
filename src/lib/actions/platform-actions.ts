@@ -7,9 +7,12 @@ import { hasPermission } from "@/lib/auth/permissions";
 import { getDb } from "@/lib/db/client";
 import { contactRequests, platformSubscriptions, staff, tenants } from "@/lib/db/schema";
 import { hashSecret } from "@/lib/auth/password";
+import { INTERNAL_PLATFORM_TENANT_ID } from "@/lib/auth/platform-admin";
 import { AuthorizationError } from "@/lib/errors";
 import { registerTenant } from "@/lib/services/onboarding-service";
 import { SUBSCRIPTION_PLANS, type SubscriptionPlanKey } from "@/lib/services/subscription-service";
+
+const INTERNAL_TENANT_ERROR = "Không thể thay đổi studio nội bộ của nền tảng.";
 
 export async function updateTenantPlanAction(formData: FormData): Promise<void> {
   const actor = await requireActor();
@@ -19,6 +22,7 @@ export async function updateTenantPlanAction(formData: FormData): Promise<void> 
   const tenantId = String(formData.get("tenantId") ?? "");
   const plan = String(formData.get("plan") ?? "");
   if (!tenantId || !plan) return;
+  if (tenantId === INTERNAL_PLATFORM_TENANT_ID) throw new AuthorizationError(INTERNAL_TENANT_ERROR);
 
   const db = getDb();
   db.update(tenants)
@@ -37,6 +41,7 @@ export async function updateTenantStatusAction(formData: FormData): Promise<void
   const tenantId = String(formData.get("tenantId") ?? "");
   const status = String(formData.get("status") ?? "");
   if (!tenantId || !status) return;
+  if (tenantId === INTERNAL_PLATFORM_TENANT_ID) throw new AuthorizationError(INTERNAL_TENANT_ERROR);
 
   const db = getDb();
   db.update(tenants)
@@ -73,6 +78,7 @@ export async function resetTenantOwnerPasswordAction(formData: FormData): Promis
   const tenantId = String(formData.get("tenantId") ?? "");
   const newPassword = String(formData.get("newPassword") ?? "Studio@123456");
   if (!tenantId) return;
+  if (tenantId === INTERNAL_PLATFORM_TENANT_ID) throw new AuthorizationError(INTERNAL_TENANT_ERROR);
 
   const db = getDb();
   const passwordHash = hashSecret(newPassword);
@@ -158,6 +164,7 @@ export async function extendTenantPlanAction(formData: FormData): Promise<{
   const plan = String(formData.get("plan") ?? "").trim();
 
   if (!tenantId) return { success: false, error: "Thiếu tenantId." };
+  if (tenantId === INTERNAL_PLATFORM_TENANT_ID) return { success: false, error: INTERNAL_TENANT_ERROR };
 
   const db = getDb();
   const tenant = db.select().from(tenants).where(eq(tenants.id, tenantId)).get();
@@ -223,6 +230,7 @@ export async function deleteTenantFromPlatformAction(formData: FormData): Promis
 
   const tenantId = String(formData.get("tenantId") ?? "").trim();
   if (!tenantId) return { success: false, error: "Thiếu tenantId." };
+  if (tenantId === INTERNAL_PLATFORM_TENANT_ID) return { success: false, error: INTERNAL_TENANT_ERROR };
 
   const db = getDb();
   const tenant = db.select().from(tenants).where(eq(tenants.id, tenantId)).get();
