@@ -238,13 +238,13 @@ export async function syncAlbumDriveSharing(
       reasons.add(outcome.reason);
       continue;
     }
-    if (outcome.changed) result.changed += 1;
+    if (!outcome.changed) continue;
+    result.changed += 1;
     // Chỉ đánh dấu thư mục StudioCore thực sự gỡ quyền, để lúc mở lại link
     // không tự công khai thư mục vốn đang riêng tư.
     db.update(albumSources)
       .set({
-        driveAccessRevokedAt:
-          target === "private" && outcome.changed ? new Date() : null,
+        driveAccessRevokedAt: target === "private" ? new Date() : null,
         updatedAt: new Date(),
       })
       .where(
