@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useRef, useState } from "react";
 import {
   Banknote,
@@ -394,6 +394,9 @@ function NotificationsMenu({
 }
 
 function UserMenu({ actor, pathname }: { actor: ShellActor; pathname: string }) {
+  const query = useSearchParams().toString();
+  const returnTo = query ? `${pathname}?${query}` : pathname;
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -422,7 +425,7 @@ function UserMenu({ actor, pathname }: { actor: ShellActor; pathname: string }) 
         <DropdownMenuSeparator />
         {actor.canChangePassword ? (
           <DropdownMenuItem asChild>
-            <Link href={{ pathname: "/change-password", query: { returnTo: pathname } }}>
+            <Link href={{ pathname: "/change-password", query: { returnTo } }}>
               <KeyRound className="h-4 w-4" aria-hidden="true" />
               Đổi mật khẩu
             </Link>

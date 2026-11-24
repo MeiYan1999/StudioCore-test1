@@ -137,6 +137,12 @@ test.describe("app thật và vai trò", () => {
     await page.getByRole("button", { name: "Tạo tài khoản dùng thử" }).click();
     await page.waitForURL("**/manage/dashboard?welcome=1");
 
+    await page.goto("/manage/customers?q=Studio");
+    await page.getByRole("button", { name: "Mở menu tài khoản" }).click();
+    await page.getByRole("menuitem", { name: "Đổi mật khẩu" }).click();
+    await page.getByRole("link", { name: "Quay lại" }).click();
+    await expect(page).toHaveURL(/\/manage\/customers\?q=Studio$/);
+
     await page.getByRole("button", { name: "Mở menu tài khoản" }).click();
     await page.getByRole("menuitem", { name: "Đổi mật khẩu" }).click();
     await page.getByLabel("Mật khẩu hiện tại").fill(currentPassword);
