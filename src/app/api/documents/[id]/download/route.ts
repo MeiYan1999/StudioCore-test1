@@ -1,4 +1,3 @@
-import fs from "node:fs";
 import { getActorContext } from "@/lib/auth/session";
 import { getDb } from "@/lib/db/client";
 import { AuthorizationError, NotFoundError, ValidationError } from "@/lib/errors";
@@ -18,8 +17,8 @@ export async function GET(
   }
   const { id } = await params;
   try {
-    const result = getDocumentFile(getDb(), actor, id);
-    const buffer = fs.readFileSync(result.absolutePath);
+    const result = await getDocumentFile(getDb(), actor, id);
+    const { buffer } = result;
     return new Response(new Uint8Array(buffer), {
       headers: {
         "Content-Type": mimeForFilename(result.document.name),

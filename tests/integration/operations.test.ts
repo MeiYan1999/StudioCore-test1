@@ -1,5 +1,6 @@
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import fs from "node:fs";
+import path from "node:path";
 import { and, count, eq } from "drizzle-orm";
 import { authenticate } from "@/lib/auth/login-service";
 import { getActorFromToken } from "@/lib/auth/session-core";
@@ -37,6 +38,7 @@ import {
   listDocuments,
 } from "@/lib/services/document-service";
 import { getDashboardOverview } from "@/lib/services/report-service";
+import * as storage from "@/lib/adapters/storage";
 import { createTestDb } from "../helpers/test-db";
 
 let db: AppDb;
@@ -252,7 +254,7 @@ describe("vận hành: tasks, HR, inbox, settings", () => {
     ).toThrow();
   });
 
-  it("campaign ROAS/CPL và tài liệu link/file", () => {
+  it("campaign ROAS/CPL và tài liệu link/file", async () => {
     const campaignId = saveCampaign(db, owner, {
       name: "Campaign test",
       source: "facebook",
@@ -279,7 +281,7 @@ describe("vận hành: tasks, HR, inbox, settings", () => {
       branchId: "branch-demo-q1",
       notes: "",
     });
-    const fileId = createUploadedDocument(db, owner, {
+    const fileId = await createUploadedDocument(db, owner, {
       name: "file-test.pdf",
       category: "finance",
       visibility: "internal",
@@ -288,10 +290,43 @@ describe("vận hành: tasks, HR, inbox, settings", () => {
       filename: "file-test.pdf",
       buffer: Buffer.from("%PDF-1.4 test"),
     });
-    const file = getDocumentFile(db, owner, fileId);
-    expect(fs.existsSync(file.absolutePath)).toBe(true);
-    fs.rmSync(file.absolutePath, { force: true });
+    const file = await getDocumentFile(db, owner, fileId);
+    const absolutePath = path.join(process.cwd(), "data", "documents", file.document.storageKey!);
+    expect(fs.existsSync(absolutePath)).toBe(true);
+    fs.rmSync(absolutePath, { force: true });
+    expect(file.buffer).toEqual(Buffer.from("%PDF-1.4 test"));
     expect(listDocuments(db, owner, { category: "guide" }).length).toBeGreaterThan(0);
+  });
+
+  it("ghi và đọc tài liệu qua R2 khi chạy không có ổ lưu trữ", async () => {
+    const put = vi.fn().mockResolvedValue(undefined);
+    const buffer = Buffer.from("%PDF-1.4 R2");
+    const read = vi.fn().mockResolvedValue(buffer);
+    const adapter = vi.spyOn(storage, "getStorageAdapter").mockReturnValue({
+      ...storage.getStorageAdapter(),
+      put,
+      read,
+    });
+    vi.stubEnv("STORAGE_PROVIDER", "r2");
+    try {
+      const id = await createUploadedDocument(db, owner, {
+        name: "R2 test",
+        category: "finance",
+        visibility: "internal",
+        branchId: "branch-demo-q1",
+        notes: "",
+        filename: "test.pdf",
+        buffer,
+      });
+      const file = await getDocumentFile(db, owner, id);
+      const key = `documents/${file.document.storageKey}`;
+      expect(put).toHaveBeenCalledWith(key, buffer);
+      expect(read).toHaveBeenCalledWith(key);
+      expect(file.buffer).toEqual(buffer);
+    } finally {
+      vi.unstubAllEnvs();
+      adapter.mockRestore();
+    }
   });
 
   it("dashboard receptionist không lộ số liệu tài chính", () => {

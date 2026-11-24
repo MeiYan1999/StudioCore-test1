@@ -6,7 +6,6 @@ import { branches, rolePermissions, sessions, staff, staffBranches, tenants } fr
 import type { ActorBranch, ActorContext } from "./types";
 import { PERMISSIONS, type Role } from "./roles";
 import { AuthorizationError } from "../errors";
-import { triggerDbBackupDebounced } from "../db/r2-backup";
 
 function getSecret(): Uint8Array {
   return new TextEncoder().encode(getEnv().AUTH_SECRET);
@@ -96,8 +95,6 @@ export async function createSession(
     staffId: input.staffId,
     tenantId: input.tenantId,
   });
-
-  triggerDbBackupDebounced(1500);
 
   return { sessionId, token, expiresAt };
 }

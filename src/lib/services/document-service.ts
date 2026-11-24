@@ -8,6 +8,7 @@ import type { ActorContext } from "../auth/types";
 import { assertBranchAccess, assertPermission, getBranchScope } from "../auth/permissions";
 import { NotFoundError, ValidationError } from "../errors";
 import { writeAudit } from "../audit";
+import { getStorageAdapter, getStorageProvider } from "../adapters/storage";
 import {
   DOCUMENT_ALLOWED_EXTENSIONS,
   DOCUMENT_CATEGORIES,
@@ -153,7 +154,7 @@ export function createLinkDocument(
   return id;
 }
 
-export function createUploadedDocument(
+export async function createUploadedDocument(
   db: AppDb,
   actor: ActorContext,
   input: {
@@ -165,7 +166,7 @@ export function createUploadedDocument(
     filename: string;
     buffer: Buffer;
   },
-): string {
+): Promise<string> {
   assertPermission(actor, "tasks.manage");
   if (!input.name.trim()) throw new ValidationError("Tên tài liệu là bắt buộc.");
   if (input.buffer.length === 0) throw new ValidationError("File rỗng.");
@@ -178,9 +179,13 @@ export function createUploadedDocument(
   if (input.branchId) assertBranchAccess(actor, input.branchId);
   const extension = safeExtension(input.filename);
   const key = `${actor.tenantId}/${crypto.randomUUID()}.${extension}`;
-  const full = storagePath(key);
-  fs.mkdirSync(path.dirname(full), { recursive: true });
-  fs.writeFileSync(full, input.buffer);
+  if (getStorageProvider() === "r2") {
+    await getStorageAdapter().put(`documents/${key}`, input.buffer);
+  } else {
+    const full = storagePath(key);
+    fs.mkdirSync(path.dirname(full), { recursive: true });
+    fs.writeFileSync(full, input.buffer);
+  }
   const previous = db
     .select({ version: documents.version })
     .from(documents)
@@ -219,11 +224,11 @@ export function createUploadedDocument(
   return id;
 }
 
-export function getDocumentFile(
+export async function getDocumentFile(
   db: AppDb,
   actor: ActorContext,
   documentId: string,
-): { document: typeof documents.$inferSelect; absolutePath: string } {
+): Promise<{ document: typeof documents.$inferSelect; buffer: Buffer }> {
   assertPermission(actor, "tasks.view");
   const row = db
     .select()
@@ -236,8 +241,15 @@ export function getDocumentFile(
     throw new ValidationError("Tài liệu này là link, không có file tải.");
   }
   const absolutePath = storagePath(row.storageKey);
-  if (!fs.existsSync(absolutePath)) {
-    throw new NotFoundError("File tài liệu không còn trên storage.");
+  if (fs.existsSync(absolutePath)) {
+    return { document: row, buffer: fs.readFileSync(absolutePath) };
   }
-  return { document: row, absolutePath };
+  if (getStorageProvider() === "r2") {
+    try {
+      return { document: row, buffer: await getStorageAdapter().read(`documents/${row.storageKey}`) };
+    } catch (error) {
+      if (!(error instanceof Error) || error.name !== "NoSuchKey") throw error;
+    }
+  }
+  throw new NotFoundError("File tài liệu không còn trên storage.");
 }

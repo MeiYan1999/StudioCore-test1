@@ -13,7 +13,6 @@ import { DEFAULT_ROLE_PERMISSIONS, TENANT_ROLES } from "../auth/roles";
 import { hashSecret } from "../auth/password";
 import { normalizeVietnamesePhone } from "../utils/phone";
 import { writeAudit } from "../audit";
-import { triggerDbBackupDebounced } from "../db/r2-backup";
 import { AuthorizationError, ValidationError } from "../errors";
 
 export type RegisterInput = {
@@ -199,8 +198,6 @@ export function registerTenant(
     entityId: tenantId,
     metadata: { studioName, branchName, plan: "trial" },
   });
-
-  triggerDbBackupDebounced(500);
 
   return { tenantId, tenantSlug: slug, staffId, branchId };
 }

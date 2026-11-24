@@ -11,6 +11,7 @@ import Database from "better-sqlite3";
 import {
   backupDbToR2,
   restoreDbFromR2IfMissing,
+  watchDbBackups,
 } from "@/lib/db/r2-backup";
 
 const mocks = vi.hoisted(() => ({
@@ -54,9 +55,21 @@ function makeDbPath() {
   return path.join(dir, "studiocore.db");
 }
 
+function restoreObject(bytes: Buffer, etag: string) {
+  return { ETag: etag, Body: { transformToByteArray: async () => bytes } };
+}
+
+function makeSnapshot() {
+  const dbPath = makeDbPath();
+  const db = new Database(dbPath);
+  db.exec("CREATE TABLE records (value TEXT); INSERT INTO records VALUES ('restored')");
+  db.close();
+  return fs.readFileSync(dbPath);
+}
+
 describe("R2 database backups", () => {
   beforeEach(() => {
-    mocks.send.mockReset().mockResolvedValue({});
+    mocks.send.mockReset().mockResolvedValue({ ETag: '"uploaded"' });
     mocks.getDb.mockReset();
     mocks.resolveDbFilename.mockReset().mockReturnValue(
       path.resolve("data/studiocore.db"),
@@ -80,10 +93,53 @@ describe("R2 database backups", () => {
     const dbPath = makeDbPath();
     const contents = Buffer.from("current database");
     fs.writeFileSync(dbPath, contents);
+    mocks.getR2Config.mockReturnValueOnce(null);
 
     await expect(restoreDbFromR2IfMissing(dbPath)).resolves.toBe("kept");
     expect(mocks.send).not.toHaveBeenCalled();
     expect(fs.readFileSync(dbPath)).toEqual(contents);
+  });
+
+  it("establishes an ETag for a retained database only when the snapshots agree", async () => {
+    const dbPath = makeDbPath();
+    const bytes = makeSnapshot();
+    fs.writeFileSync(dbPath, bytes);
+    mocks.send
+      .mockResolvedValueOnce({ ETag: '"retained"' })
+      .mockResolvedValueOnce(restoreObject(bytes, '"retained"'));
+    await expect(restoreDbFromR2IfMissing(dbPath)).resolves.toBe("kept");
+    expect(mocks.send.mock.calls[0][0]).toBeInstanceOf(HeadObjectCommand);
+    expect(mocks.send.mock.calls[1][0].input.IfMatch).toBe('"retained"');
+    const db = new Database(dbPath);
+    try {
+      db.exec("INSERT INTO records VALUES ('subsequent commit')");
+      await expect(backupDbToR2(dbPath)).resolves.toBe(true);
+      expect(mocks.send.mock.calls[2][0].input.IfMatch).toBe('"retained"');
+    } finally {
+      db.close();
+    }
+  });
+
+  it("keeps a divergent local database and does not adopt the remote ETag", async () => {
+    const dbPath = makeDbPath();
+    const bytes = makeSnapshot();
+    fs.writeFileSync(dbPath, bytes);
+    const db = new Database(dbPath);
+    db.exec("INSERT INTO records VALUES ('local only')");
+    db.close();
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      mocks.send
+        .mockResolvedValueOnce({ ETag: '"remote"' })
+        .mockResolvedValueOnce(restoreObject(bytes, '"remote"'));
+      const local = fs.readFileSync(dbPath);
+      await expect(restoreDbFromR2IfMissing(dbPath)).resolves.toBe("kept");
+      expect(fs.readFileSync(dbPath)).toEqual(local);
+      expect(fs.existsSync(`${dbPath}.r2-state.json`)).toBe(false);
+      expect(log).toHaveBeenCalledWith(expect.stringContaining("XUNG ĐỘT"));
+    } finally {
+      log.mockRestore();
+    }
   });
 
   it("returns none when R2 is unconfigured and no local database exists", async () => {
@@ -95,16 +151,21 @@ describe("R2 database backups", () => {
     expect(fs.existsSync(dbPath)).toBe(false);
   });
 
+  it("does not initialize an empty database when R2 is selected but unconfigured", async () => {
+    const dbPath = makeDbPath();
+    vi.stubEnv("STORAGE_PROVIDER", "r2");
+    mocks.getR2Config.mockReturnValueOnce(null);
+
+    await expect(restoreDbFromR2IfMissing(dbPath)).rejects.toThrow("Cloudflare R2");
+    expect(fs.existsSync(dbPath)).toBe(false);
+  });
+
   it("restores a missing database and removes stale SQLite sidecars", async () => {
     const dbPath = makeDbPath();
     fs.writeFileSync(`${dbPath}-wal`, "stale wal");
     fs.writeFileSync(`${dbPath}-shm`, "stale shm");
-    const restoredBytes = Buffer.from("restored database");
-    mocks.send.mockResolvedValueOnce({
-      Body: {
-        transformToByteArray: async () => restoredBytes,
-      },
-    });
+    const restoredBytes = makeSnapshot();
+    mocks.send.mockResolvedValueOnce(restoreObject(restoredBytes, '"restored"'));
 
     await expect(restoreDbFromR2IfMissing(dbPath)).resolves.toBe("restored");
     expect(mocks.send.mock.calls[0][0]).toBeInstanceOf(GetObjectCommand);
@@ -141,6 +202,18 @@ describe("R2 database backups", () => {
     expect(fs.existsSync(`${dbPath}.restore-tmp`)).toBe(false);
   });
 
+  it("does not treat a missing bucket as an empty bucket", async () => {
+    const dbPath = makeDbPath();
+    const missingBucket = Object.assign(new Error("Missing bucket"), {
+      name: "NoSuchBucket",
+      $metadata: { httpStatusCode: 404 },
+    });
+    mocks.send.mockRejectedValueOnce(missingBucket);
+
+    await expect(restoreDbFromR2IfMissing(dbPath)).rejects.toBe(missingBucket);
+    expect(fs.existsSync(dbPath)).toBe(false);
+  });
+
   it("skips a second upload when the database has not changed", async () => {
     const dbPath = makeDbPath();
     mocks.resolveDbFilename.mockReturnValue(path.resolve(dbPath));
@@ -154,12 +227,167 @@ describe("R2 database backups", () => {
     const firstCommand = mocks.send.mock.calls[0][0] as PutObjectCommand;
     expect(firstCommand).toBeInstanceOf(PutObjectCommand);
     expect(firstCommand.input.Body).toEqual(Buffer.from("consistent snapshot"));
+    expect(firstCommand.input.IfNoneMatch).toBe("*");
     expect(backup).toHaveBeenCalledTimes(1);
     expect(fs.existsSync(backup.mock.calls[0][0])).toBe(false);
 
     await expect(backupDbToR2(dbPath)).resolves.toBe(true);
     expect(mocks.send).toHaveBeenCalledTimes(1);
     expect(backup).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not upload a clean restored snapshot even after opening and checkpointing it in WAL mode", async () => {
+    const dbPath = makeDbPath();
+    mocks.send.mockResolvedValueOnce(restoreObject(makeSnapshot(), '"before-rollout"'));
+    await expect(restoreDbFromR2IfMissing(dbPath)).resolves.toBe("restored");
+    const db = new Database(dbPath);
+    try {
+      db.pragma("journal_mode = WAL");
+      db.pragma("wal_checkpoint(TRUNCATE)");
+      await expect(backupDbToR2(dbPath)).resolves.toBe(true);
+      db.close();
+      await expect(backupDbToR2(dbPath)).resolves.toBe(true);
+      expect(mocks.send).toHaveBeenCalledTimes(1);
+    } finally {
+      if (db.open) db.close();
+    }
+  });
+
+  it("uses the restored ETag, then the last uploaded ETag, for different local commits", async () => {
+    const dbPath = makeDbPath();
+    mocks.send.mockResolvedValueOnce(restoreObject(makeSnapshot(), '"restored"'));
+    await expect(restoreDbFromR2IfMissing(dbPath)).resolves.toBe("restored");
+    const db = new Database(dbPath);
+    try {
+      db.exec("INSERT INTO records VALUES ('first commit')");
+      mocks.send.mockResolvedValueOnce({ ETag: '"first-upload"' });
+      await expect(backupDbToR2(dbPath)).resolves.toBe(true);
+      db.exec("INSERT INTO records VALUES ('second commit')");
+      await expect(backupDbToR2(dbPath)).resolves.toBe(true);
+      expect(mocks.send.mock.calls[1][0].input.IfMatch).toBe('"restored"');
+      expect(mocks.send.mock.calls[2][0].input.IfMatch).toBe('"first-upload"');
+    } finally {
+      db.close();
+    }
+  });
+
+  it("does not adopt a newer remote ETag or overwrite a concurrent rollout's snapshot", async () => {
+    const dbPath = makeDbPath();
+    mocks.send.mockResolvedValueOnce(restoreObject(makeSnapshot(), '"restored"'));
+    await expect(restoreDbFromR2IfMissing(dbPath)).resolves.toBe("restored");
+    const db = new Database(dbPath);
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      vi.stubEnv("DB_BACKUP_GENERATION", "10");
+      db.exec("INSERT INTO records VALUES ('new local commit')");
+      mocks.send.mockImplementation(async (command) => {
+        if (command instanceof HeadObjectCommand) {
+          return { ETag: '"previous-instance-final-upload"', Metadata: { generation: "9" } };
+        }
+        expect(command).toBeInstanceOf(PutObjectCommand);
+        expect(command.input.IfMatch).toBe('"restored"');
+        throw Object.assign(new Error("Precondition failed"), { $metadata: { httpStatusCode: 412 } });
+      });
+      await expect(backupDbToR2(dbPath)).resolves.toBe(false);
+      await expect(backupDbToR2(dbPath)).resolves.toBe(false);
+      expect(log).toHaveBeenCalledWith(expect.stringContaining("XUNG ĐỘT"));
+      expect(mocks.send.mock.calls.filter(([command]) => command instanceof PutObjectCommand)).toHaveLength(1);
+    } finally {
+      log.mockRestore();
+      db.close();
+    }
+  });
+
+  it.each(["connection reset", "precondition failed"])(
+    "confirms a stored snapshot by metadata after %s",
+    async (failure) => {
+      const dbPath = makeDbPath();
+      fs.writeFileSync(dbPath, makeSnapshot());
+      let digest: string | undefined;
+      let writerId: string | undefined;
+      mocks.send.mockImplementation(async (command) => {
+        if (command instanceof HeadObjectCommand) {
+          return {
+            ETag: '"confirmed"',
+            Metadata: { "snapshot-sha256": digest, "snapshot-writer": writerId },
+          };
+        }
+        expect(command).toBeInstanceOf(PutObjectCommand);
+        expect(command.input.IfNoneMatch).toBe("*");
+        digest = command.input.Metadata["snapshot-sha256"];
+        writerId = command.input.Metadata["snapshot-writer"];
+        expect(digest).toMatch(/^[a-f0-9]{64}$/);
+        expect(writerId).toMatch(/^[0-9a-f-]{36}$/);
+        throw Object.assign(new Error(failure), {
+          $metadata: { httpStatusCode: failure === "precondition failed" ? 412 : undefined },
+        });
+      });
+
+      await expect(backupDbToR2(dbPath)).resolves.toBe(true);
+      expect(mocks.send.mock.calls[1][0]).toBeInstanceOf(HeadObjectCommand);
+      expect(JSON.parse(fs.readFileSync(`${dbPath}.r2-state.json`, "utf8"))).toEqual({
+        etag: '"confirmed"', digest, writerId,
+      });
+    },
+  );
+
+  it("recovers a pending upload on a later attempt even after more local commits", async () => {
+    const dbPath = makeDbPath();
+    fs.writeFileSync(dbPath, makeSnapshot());
+    mocks.send
+      .mockRejectedValueOnce(new Error("PUT response lost"))
+      .mockRejectedValueOnce(new Error("HEAD temporarily unavailable"));
+    await expect(backupDbToR2(dbPath)).resolves.toBe(false);
+    const firstPut = mocks.send.mock.calls[0][0] as PutObjectCommand;
+    const db = new Database(dbPath);
+    try {
+      db.exec("INSERT INTO records VALUES ('additional commit')");
+      mocks.send.mockResolvedValueOnce({ ETag: '"confirmed"', Metadata: firstPut.input.Metadata });
+      await expect(backupDbToR2(dbPath)).resolves.toBe(true);
+      expect(mocks.send.mock.calls[2][0]).toBeInstanceOf(HeadObjectCommand);
+      const nextPut = mocks.send.mock.calls[3][0] as PutObjectCommand;
+      expect(nextPut).toBeInstanceOf(PutObjectCommand);
+      expect(nextPut.input.IfMatch).toBe('"confirmed"');
+      expect(nextPut.input.Metadata?.["snapshot-writer"]).toBe(firstPut.input.Metadata?.["snapshot-writer"]);
+      expect(nextPut.input.Metadata?.["snapshot-sha256"]).not.toBe(firstPut.input.Metadata?.["snapshot-sha256"]);
+    } finally {
+      db.close();
+    }
+  });
+
+  it.each([
+    { name: "different writer", sameWriter: false, remoteGeneration: "10" },
+    { name: "newer generation", sameWriter: true, remoteGeneration: "11" },
+  ])("rejects a matching digest from a $name after the generation preflight", async ({ sameWriter, remoteGeneration }) => {
+    const dbPath = makeDbPath();
+    mocks.send.mockResolvedValueOnce(restoreObject(makeSnapshot(), '"restored"'));
+    await expect(restoreDbFromR2IfMissing(dbPath)).resolves.toBe("restored");
+    vi.stubEnv("DB_BACKUP_GENERATION", "10");
+    const db = new Database(dbPath);
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      db.exec("INSERT INTO records VALUES ('overlapping commit')");
+      mocks.send.mockResolvedValueOnce({ ETag: '"restored"', Metadata: { generation: "9" } });
+      mocks.send.mockImplementationOnce(async (command) => {
+        expect(command).toBeInstanceOf(PutObjectCommand);
+        expect(command.input.IfMatch).toBe('"restored"');
+        mocks.send.mockResolvedValueOnce({
+          ETag: '"foreign"',
+          Metadata: {
+            ...command.input.Metadata,
+            generation: remoteGeneration,
+            "snapshot-writer": sameWriter ? command.input.Metadata["snapshot-writer"] : "another-instance",
+          },
+        });
+        throw Object.assign(new Error("precondition failed"), { $metadata: { httpStatusCode: 412 } });
+      });
+      await expect(backupDbToR2(dbPath)).resolves.toBe(false);
+      expect(JSON.parse(fs.readFileSync(`${dbPath}.r2-state.json`, "utf8")).etag).toBe('"restored"');
+      expect(log).toHaveBeenCalledWith(expect.stringContaining("XUNG ĐỘT"));
+    } finally {
+      log.mockRestore();
+      db.close();
+    }
   });
 
   it("snapshots an explicit database path instead of the live database", async () => {
@@ -228,14 +456,14 @@ describe("R2 database backups", () => {
         .mockResolvedValueOnce({
           Metadata: { generation: remoteGeneration },
         })
-        .mockResolvedValueOnce({});
+        .mockResolvedValueOnce({ ETag: '"uploaded"' });
 
       await expect(backupDbToR2(dbPath)).resolves.toBe(true);
       expect(mocks.send).toHaveBeenCalledTimes(2);
       expect(mocks.send.mock.calls[0][0]).toBeInstanceOf(HeadObjectCommand);
       const putCommand = mocks.send.mock.calls[1][0] as PutObjectCommand;
       expect(putCommand).toBeInstanceOf(PutObjectCommand);
-      expect(putCommand.input.Metadata).toEqual({ generation });
+      expect(putCommand.input.Metadata).toMatchObject({ generation });
       expect(backup).toHaveBeenCalledTimes(1);
     },
   );
@@ -260,7 +488,7 @@ describe("R2 database backups", () => {
     expect(mocks.send).toHaveBeenCalledTimes(2);
     expect(mocks.send.mock.calls[0][0]).toBeInstanceOf(HeadObjectCommand);
     const putCommand = mocks.send.mock.calls[1][0] as PutObjectCommand;
-    expect(putCommand.input.Metadata).toEqual({ generation: "10" });
+    expect(putCommand.input.Metadata).toMatchObject({ generation: "10" });
     expect(backup).toHaveBeenCalledTimes(1);
   });
 
@@ -284,5 +512,52 @@ describe("R2 database backups", () => {
     expect(mocks.send).toHaveBeenCalledTimes(1);
     expect(mocks.send.mock.calls[0][0]).toBeInstanceOf(HeadObjectCommand);
     expect(backup).not.toHaveBeenCalled();
+  });
+
+  it("coalesces commits and follows up on changes made during an upload", async () => {
+    const dbPath = makeDbPath();
+    const writer = new Database(dbPath);
+    writer.pragma("journal_mode = WAL");
+    writer.exec("CREATE TABLE records (value TEXT)");
+    mocks.resolveDbFilename.mockReturnValue(dbPath);
+    mocks.getDb.mockReturnValue({
+      $client: {
+        async backup(target: string) {
+          const rows = writer.prepare("SELECT value FROM records").pluck().all();
+          fs.writeFileSync(target, JSON.stringify(rows));
+        },
+      },
+    });
+    vi.useFakeTimers();
+    const stop = watchDbBackups(dbPath);
+    const pending = Promise.withResolvers<unknown>();
+    try {
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(mocks.send).toHaveBeenCalledTimes(1);
+      writer.exec("BEGIN; INSERT INTO records VALUES ('rolled back'); ROLLBACK");
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(mocks.send).toHaveBeenCalledTimes(1);
+
+      mocks.send.mockReturnValueOnce(pending.promise);
+      writer.exec("INSERT INTO records VALUES ('one'), ('two')");
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(mocks.send).toHaveBeenCalledTimes(2);
+      expect(mocks.send.mock.calls[1][0].input.Body.toString()).toBe('["one","two"]');
+      writer.exec("INSERT INTO records VALUES ('three')");
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(mocks.send).toHaveBeenCalledTimes(2);
+
+      pending.resolve({ ETag: '"second-upload"' });
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(mocks.send).toHaveBeenCalledTimes(3);
+      expect(mocks.send.mock.calls[2][0].input.Body.toString()).toBe('["one","two","three"]');
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(mocks.send).toHaveBeenCalledTimes(3);
+    } finally {
+      pending.resolve({});
+      stop();
+      vi.useRealTimers();
+      writer.close();
+    }
   });
 });

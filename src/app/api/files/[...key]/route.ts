@@ -12,6 +12,8 @@ export async function GET(
   const storageKey = key.join("/");
   if (
     !storageKey ||
+    storageKey.startsWith("db/") ||
+    storageKey.startsWith("documents/") ||
     storageKey.includes("..") ||
     storageKey.startsWith("/") ||
     storageKey.includes("\\")
