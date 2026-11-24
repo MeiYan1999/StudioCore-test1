@@ -236,8 +236,21 @@ describe("đổi mật khẩu khi đã đăng nhập", () => {
     return { ...result, actor };
   }
 
+  function createPrivateAccount(seedEmail: string) {
+    const seedAccount = passwordDb.select().from(staff).where(eq(staff.email, seedEmail)).get();
+    if (!seedAccount) throw new Error("Không tìm thấy tài khoản mẫu.");
+    const email = `private-${seedEmail}`;
+    passwordDb.insert(staff).values({
+      ...seedAccount,
+      id: `private-${seedAccount.id}`,
+      code: `PRIVATE-${seedAccount.code}`,
+      email,
+    }).run();
+    return email;
+  }
+
   it("đổi mật khẩu của platform admin và thu hồi phiên, token đặt lại của riêng tài khoản", async () => {
-    const email = "platform@studiocore.demo";
+    const email = createPrivateAccount("platform@studiocore.demo");
     const { actor, token } = await signIn(email);
     const otherSession = await signIn(email);
     const missingSession = await signIn(email);
@@ -270,7 +283,8 @@ describe("đổi mật khẩu khi đã đăng nhập", () => {
   });
 
   it("từ chối sai mật khẩu, xác nhận không khớp, độ dài sai và mật khẩu không đổi", async () => {
-    const { actor, token } = await signIn("manager@studiocore.demo");
+    const email = createPrivateAccount("manager@studiocore.demo");
+    const { actor, token } = await signIn(email);
     for (const [overrides, error] of [
       [{ currentPassword: "wrong-password" }, "không đúng"],
       [{ confirmation: "mismatch!" }, "không khớp"],
@@ -284,12 +298,13 @@ describe("đổi mật khẩu khi đã đăng nhập", () => {
       });
     }
     expect(await getActorFromToken(passwordDb, token)).not.toBeNull();
-    expect((await signIn("manager@studiocore.demo")).actor.staffId).toBe(actor.staffId);
+    expect((await signIn(email)).actor.staffId).toBe(actor.staffId);
   });
 
   it("giới hạn thử mật khẩu hiện tại theo tài khoản, kể cả qua nhiều phiên", async () => {
-    const { actor } = await signIn("ketoan@studiocore.demo");
-    const secondSession = await signIn("ketoan@studiocore.demo");
+    const email = createPrivateAccount("ketoan@studiocore.demo");
+    const { actor } = await signIn(email);
+    const secondSession = await signIn(email);
     for (let index = 0; index < 5; index += 1) {
       expect(changeOwnPassword(passwordDb, actor, { ...validChange, currentPassword: "wrong-password" })).toMatchObject({
         ok: false,
@@ -302,8 +317,18 @@ describe("đổi mật khẩu khi đã đăng nhập", () => {
     });
   });
 
-  it("không đổi mật khẩu từ phiên demo, phiên phục hồi hoặc tài khoản không có mật khẩu", async () => {
-    const { actor, sessionId, token } = await signIn("owner@studiocore.demo");
+  it("không đổi mật khẩu từ phiên demo, tài khoản demo dùng chung, phiên phục hồi hay tài khoản không có mật khẩu", async () => {
+    const { actor: sharedOwner } = await signIn("owner@studiocore.demo");
+    const { actor: sharedPlatformAdmin } = await signIn("platform@studiocore.demo");
+    for (const actor of [sharedOwner, sharedPlatformAdmin]) {
+      expect(actor.canChangePassword).toBe(false);
+      expect(changeOwnPassword(passwordDb, actor, validChange)).toMatchObject({
+        ok: false,
+        error: expect.stringContaining("demo dùng chung"),
+      });
+    }
+
+    const { actor, sessionId, token } = await signIn(createPrivateAccount("owner@studiocore.demo"));
     const demo = await createSession(passwordDb, {
       tenantId: actor.tenantId,
       staffId: actor.staffId,
@@ -323,7 +348,7 @@ describe("đổi mật khẩu khi đã đăng nhập", () => {
     expect(recoveredActor).toMatchObject({ canChangePassword: false });
     expect(changeOwnPassword(passwordDb, actor, validChange).ok).toBe(false);
 
-    const { actor: pinActor, token: pinToken } = await signIn("letan@studiocore.demo");
+    const { actor: pinActor, token: pinToken } = await signIn(createPrivateAccount("letan@studiocore.demo"));
     passwordDb.update(staff).set({ passwordHash: null }).where(eq(staff.id, pinActor.staffId)).run();
     expect(await getActorFromToken(passwordDb, pinToken)).toMatchObject({ canChangePassword: false });
     expect(changeOwnPassword(passwordDb, pinActor, validChange)).toMatchObject({

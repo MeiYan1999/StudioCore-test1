@@ -3,6 +3,7 @@ import { ChangePasswordForm } from "@/components/auth/change-password-form";
 import { Alert } from "@/components/ui/alert";
 import { passwordChangeReturnTo } from "@/lib/auth/password-change-navigation";
 import { requireActor } from "@/lib/auth/session";
+import { isSharedDemoStaff } from "@/lib/demo-accounts";
 
 export const metadata = {
   title: "Đổi mật khẩu — StudioCore",
@@ -34,7 +35,9 @@ export default async function ChangePasswordPage({
         <Alert tone="warning" className="mt-6">
           {actor.readOnly
             ? "Không thể đổi mật khẩu trong phiên demo chỉ xem."
-            : "Tài khoản hoặc phiên đăng nhập hiện tại không hỗ trợ đổi mật khẩu."}
+            : isSharedDemoStaff(actor.staffId)
+              ? "Không thể đổi mật khẩu của tài khoản demo dùng chung."
+              : "Tài khoản hoặc phiên đăng nhập hiện tại không hỗ trợ đổi mật khẩu."}
         </Alert>
       )}
       <Link href={backUrl} className="mt-4 inline-block text-sm text-primary hover:underline">

@@ -2,6 +2,7 @@ import { and, count, eq, gt, gte, isNull, ne } from "drizzle-orm";
 import { PASSWORD_CHANGED, writeAudit } from "../audit";
 import type { AppDb } from "../db/client";
 import { activityLogs, passwordResetTokens, sessions, staff, tenants } from "../db/schema";
+import { isSharedDemoStaff } from "../demo-accounts";
 import { hashSecret, verifySecret } from "./password";
 import { RECOVERED_SESSION_USER_AGENT } from "./session-core";
 import type { ActorContext } from "./types";
@@ -19,6 +20,9 @@ export function changeOwnPassword(
 ): PasswordChangeResult {
   if (actor.readOnly) {
     return { ok: false, error: "Không thể đổi mật khẩu trong phiên demo chỉ xem." };
+  }
+  if (isSharedDemoStaff(actor.staffId)) {
+    return { ok: false, error: "Không thể đổi mật khẩu của tài khoản demo dùng chung." };
   }
   if (!input.currentPassword || input.currentPassword.length > 128) {
     return { ok: false, error: "Vui lòng nhập mật khẩu hiện tại hợp lệ." };

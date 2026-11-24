@@ -111,8 +111,9 @@ test.describe("app thật và vai trò", () => {
     await login(page, "platform@studiocore.demo");
     await page.waitForURL("**/platform");
     await expect(page.getByRole("heading", { name: "Quản lý Studio Khách hàng & Gói cước" })).toBeVisible();
-    await page.getByRole("link", { name: "Đổi mật khẩu" }).click();
-    await expect(page.getByLabel("Mật khẩu hiện tại")).toBeVisible();
+    await expect(page.getByRole("link", { name: "Đổi mật khẩu" })).toHaveCount(0);
+    await page.goto("/change-password");
+    await expect(page.getByText("Không thể đổi mật khẩu của tài khoản demo dùng chung.")).toBeVisible();
     await page.getByRole("link", { name: "Quay lại" }).click();
     await page.waitForURL("**/platform");
     await page.goto("/manage/customers");

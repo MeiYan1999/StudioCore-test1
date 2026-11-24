@@ -4,6 +4,7 @@ import { PASSWORD_CHANGED } from "../audit";
 import { getEnv } from "../env";
 import type { AppDb } from "../db/client";
 import { activityLogs, branches, rolePermissions, sessions, staff, staffBranches, tenants } from "../db/schema";
+import { isSharedDemoStaff } from "../demo-accounts";
 import type { ActorBranch, ActorContext } from "./types";
 import { PERMISSIONS, type Role } from "./roles";
 import { AuthorizationError } from "../errors";
@@ -268,7 +269,8 @@ export async function getActorFromToken(
     activeBranchId,
     readOnly,
     canChangePassword: Boolean(
-      !readOnly && row.session.userAgent !== RECOVERED_SESSION_USER_AGENT && row.staff.passwordHash,
+      !readOnly && !isSharedDemoStaff(row.staff.id) &&
+      row.session.userAgent !== RECOVERED_SESSION_USER_AGENT && row.staff.passwordHash,
     ),
   };
 }
