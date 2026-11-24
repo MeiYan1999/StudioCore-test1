@@ -269,6 +269,7 @@ export async function deleteTenantFromPlatformAction(formData: FormData): Promis
     "album_sources",
     "albums",
     "drive_connections",
+    "google_calendar_connections",
     "payment_requests",
     "photo_filter_items",
     "photo_filter_jobs",

@@ -1060,6 +1060,13 @@ export const driveConnections = sqliteTable(
   ],
 );
 
+export const googleCalendarConnections = sqliteTable("google_calendar_connections", {
+  tenantId: text("tenant_id").primaryKey().notNull().references(() => tenants.id),
+  branchId: text("branch_id").notNull().references(() => branches.id),
+  calendarId: text("calendar_id").notNull(),
+  refreshTokenEncrypted: text("refresh_token_encrypted").notNull(),
+});
+
 export const photoFilterJobs = sqliteTable(
   "photo_filter_jobs",
   {
