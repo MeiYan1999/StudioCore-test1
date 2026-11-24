@@ -24,6 +24,7 @@ import {
 import { formatDateKey, getVietnamDateKey } from "@/lib/scheduling/time";
 import { formatDateTime } from "@/lib/utils";
 import { getAppointmentDetail } from "@/lib/services/appointment-service";
+import { listUnreturnedRentalItems } from "@/lib/services/wardrobe-service";
 import { buildGoogleCalendarEventUrl } from "@/lib/services/ical-service";
 import { listOrderOptions, orderAssigneeOptions } from "@/lib/services/order-service";
 import { listRooms } from "@/lib/services/room-service";
@@ -53,6 +54,11 @@ export default async function AppointmentDetailPage({
   const messages = await searchParams;
   const appointment = getAppointmentDetail(getDb(), actor, id);
   if (!appointment) notFound();
+
+  const unreturnedItems =
+    appointment.status === "cancelled"
+      ? listUnreturnedRentalItems(getDb(), actor, appointment.orderId)
+      : [];
 
   const canManage = hasPermission(actor.permissions, "schedule.manage");
   const canCheck =
@@ -124,6 +130,15 @@ export default async function AppointmentDetailPage({
       ) : null}
       {messages.cancelled ? (
         <Alert tone="success" className="mb-4">Đã hủy lịch chụp.</Alert>
+      ) : null}
+      {unreturnedItems.length > 0 ? (
+        <Alert tone="warning" className="mb-4">
+          Lịch đã hủy nhưng đơn còn {unreturnedItems.length} trang phục đang mượn chưa trả:{" "}
+          {unreturnedItems.join(", ")}.{" "}
+          <Link href="/manage/wardrobe/rentals" className="font-medium underline">
+            Mở phiếu thuê
+          </Link>
+        </Alert>
       ) : null}
 
       <div className="grid gap-6 xl:grid-cols-[1.4fr_0.6fr]">

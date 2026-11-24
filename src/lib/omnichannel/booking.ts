@@ -16,6 +16,7 @@ import type { ActorContext } from "../auth/types";
 import { assertBranchAccess, assertPermission } from "../auth/permissions";
 import { createContractWithAppointments } from "../services/contract-service";
 import { recordOrderPayment } from "../services/order-service";
+import { notifyUnreturnedRentals } from "../services/wardrobe-service";
 import { writeAudit } from "../audit";
 import { digest } from "./meta";
 
@@ -423,6 +424,10 @@ export function updateBooking(
           })
           .where(eq(orders.id, order.id))
           .run();
+        notifyUnreturnedRentals(tx, actor, {
+          appointmentId: b.appointmentId,
+          orderId: order.id,
+        });
       } else if (input.action === "complete") {
         if (b.status !== "confirmed")
           throw new Error("Chỉ hoàn thành lịch đã xác nhận.");

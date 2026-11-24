@@ -71,6 +71,7 @@ import {
   ValidationError,
 } from "../errors";
 import { writeAudit } from "../audit";
+import { notifyUnreturnedRentals } from "./wardrobe-service";
 import { formatDateTime } from "../utils";
 
 function notifyAppointmentStaff(
@@ -942,6 +943,9 @@ export function cancelAppointment(
     title: "Lịch chụp đã hủy",
     content: `Lịch chụp ${formatDateTime(current.startAt)} đã bị hủy. Lý do: ${reason.trim()}`,
   });
+
+  // Cancelling never marks a rental returned: the items are physically out.
+  notifyUnreturnedRentals(db, actor, { appointmentId, orderId: current.orderId });
 }
 
 function assertCheckInPermission(actor: ActorContext, appointment: { photographerId: string | null }): void {

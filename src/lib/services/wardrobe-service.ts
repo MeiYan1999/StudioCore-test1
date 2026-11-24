@@ -1,8 +1,9 @@
-import { and, asc, count, desc, eq, like, ne, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, isNull, like, ne, or, sql } from "drizzle-orm";
 import type { AppDb } from "../db/client";
 import {
   branches,
   customers,
+  notifications,
   orderItems,
   orders,
   wardrobeItems,
@@ -763,4 +764,56 @@ export function activeRentalForItem(
     )
     .get();
   return row ? mapRental(row) : null;
+}
+
+/**
+ * Names of wardrobe items still checked out for an order, limited to the
+ * branches the actor is assigned to (not just the one currently selected, so a
+ * cancellation at another assigned branch still gets its warning).
+ */
+export function listUnreturnedRentalItems(
+  db: AppDb,
+  actor: ActorContext,
+  orderId: string,
+): string[] {
+  const conditions = [
+    eq(wardrobeRentals.tenantId, actor.tenantId),
+    eq(wardrobeRentals.orderId, orderId),
+    isNull(wardrobeRentals.returnedAt),
+  ];
+  // An owner viewing all branches also sees inactive ones, which `actor.branches` omits.
+  if (getBranchScope(actor).mode !== "all") {
+    const branchIds = actor.branches.map((branch) => branch.id);
+    if (branchIds.length === 0) return [];
+    conditions.push(inArray(wardrobeRentals.branchId, branchIds));
+  }
+  return db
+    .select({ name: wardrobeItems.name })
+    .from(wardrobeRentals)
+    .innerJoin(wardrobeItems, eq(wardrobeRentals.wardrobeItemId, wardrobeItems.id))
+    .where(and(...conditions))
+    .all()
+    .map((row) => row.name);
+}
+
+/** Tells whoever cancelled an appointment which items of its order are still out. */
+export function notifyUnreturnedRentals(
+  db: AppDb,
+  actor: ActorContext,
+  input: { appointmentId: string; orderId: string },
+): void {
+  const unreturned = listUnreturnedRentalItems(db, actor, input.orderId);
+  if (unreturned.length === 0) return;
+  db.insert(notifications)
+    .values({
+      id: crypto.randomUUID(),
+      tenantId: actor.tenantId,
+      userId: actor.staffId,
+      type: "appointment",
+      title: "Trang phục chưa trả sau khi hủy lịch",
+      content: `Đơn của lịch đã hủy còn ${unreturned.length} trang phục đang mượn: ${unreturned.join(", ")}.`,
+      link: `/manage/calendar/${input.appointmentId}`,
+      createdAt: new Date(),
+    })
+    .run();
 }
