@@ -776,14 +776,17 @@ export function listUnreturnedRentalItems(
   actor: ActorContext,
   orderId: string,
 ): string[] {
-  const branchIds = actor.branches.map((branch) => branch.id);
-  if (branchIds.length === 0) return [];
   const conditions = [
     eq(wardrobeRentals.tenantId, actor.tenantId),
     eq(wardrobeRentals.orderId, orderId),
     isNull(wardrobeRentals.returnedAt),
-    inArray(wardrobeRentals.branchId, branchIds),
   ];
+  // An owner viewing all branches also sees inactive ones, which `actor.branches` omits.
+  if (getBranchScope(actor).mode !== "all") {
+    const branchIds = actor.branches.map((branch) => branch.id);
+    if (branchIds.length === 0) return [];
+    conditions.push(inArray(wardrobeRentals.branchId, branchIds));
+  }
   return db
     .select({ name: wardrobeItems.name })
     .from(wardrobeRentals)
