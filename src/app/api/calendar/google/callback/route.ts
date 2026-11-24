@@ -11,11 +11,11 @@ import {
 } from "@/lib/services/google-calendar-service";
 
 export async function GET(request: NextRequest) {
-  const origin = getEnv().NEXT_PUBLIC_SITE_URL;
+  const config = getGoogleCalendarConfig(request.headers);
+  const origin = config?.redirectUri.origin ?? getEnv().NEXT_PUBLIC_SITE_URL;
   const actor = await getActorContext();
   if (!actor) return NextResponse.redirect(new URL("/login", origin));
   if (!canManageGoogleCalendar(actor)) return NextResponse.redirect(new URL("/manage/calendar", origin));
-  const config = getGoogleCalendarConfig();
   const query = request.nextUrl.searchParams;
   const state = readGoogleCalendarOAuthState(
     actor, request.cookies.get(GOOGLE_CALENDAR_STATE_COOKIE)?.value ?? null, query.get("state"),

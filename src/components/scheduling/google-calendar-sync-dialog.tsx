@@ -38,6 +38,7 @@ const RESULT_MESSAGES = {
   disconnected: "Đã ngắt kết nối Google Calendar.",
   invalid: "Thông tin kết nối không hợp lệ hoặc đã hết hạn. Vui lòng thử lại.",
   unconfigured: "StudioCore chưa được cấu hình kết nối Google Calendar.",
+  host: "Hãy mở Lịch chụp trên tên miền chính của StudioCore để kết nối Google Calendar.",
   error: "Không thể kết nối. Kiểm tra mã lịch, tài khoản có sở hữu lịch và đã cấp quyền đọc sự kiện.",
 } as const;
 

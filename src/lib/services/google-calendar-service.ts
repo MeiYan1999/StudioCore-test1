@@ -22,13 +22,22 @@ export const GOOGLE_CALENDAR_STATE_COOKIE = "studiocore_google_calendar";
 export const GOOGLE_CALENDAR_STATE_TTL = 600;
 const CALLBACK_PATH = "/api/calendar/google/callback";
 
-export function getGoogleCalendarConfig() {
+export function resolveGoogleCalendarOrigin(requestHeaders: Pick<Headers, "get">, allowedUrls: URL[]) {
+  const host = (requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host"))?.toLowerCase();
+  return allowedUrls.find((url) => url.host === host)?.origin ?? null;
+}
+
+export function getGoogleCalendarConfig(requestHeaders?: Pick<Headers, "get">) {
   const env = getEnv();
   const clientId = env.GOOGLE_CALENDAR_CLIENT_ID?.trim();
   const clientSecret = env.GOOGLE_CALENDAR_CLIENT_SECRET?.trim();
-  return clientId && clientSecret
-    ? { clientId, clientSecret, redirectUri: new URL(CALLBACK_PATH, env.NEXT_PUBLIC_SITE_URL) }
-    : null;
+  if (!clientId || !clientSecret) return null;
+  const canonical = new URL(env.NEXT_PUBLIC_SITE_URL);
+  const render = URL.parse(process.env.RENDER_EXTERNAL_URL ?? "");
+  const origin = requestHeaders
+    ? resolveGoogleCalendarOrigin(requestHeaders, render?.protocol === "https:" ? [canonical, render] : [canonical])
+    : canonical.origin;
+  return origin ? { clientId, clientSecret, redirectUri: new URL(CALLBACK_PATH, origin) } : null;
 }
 
 type Config = NonNullable<ReturnType<typeof getGoogleCalendarConfig>>;

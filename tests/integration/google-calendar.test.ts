@@ -11,6 +11,7 @@ import {
   getGoogleCalendarConnection,
   getGoogleCalendarSnapshot,
   readGoogleCalendarOAuthState,
+  resolveGoogleCalendarOrigin,
   startGoogleCalendarOAuth,
 } from "@/lib/services/google-calendar-service";
 import { createTestDb } from "../helpers/test-db";
@@ -62,6 +63,18 @@ afterEach(() => {
 });
 
 describe("Google Calendar inbound", () => {
+  it("keeps the OAuth callback on the requested trusted hostname", () => {
+    const allowed = [new URL("https://www.studiocore.io.vn"), new URL("https://studiocore-test1.onrender.com")];
+    expect(resolveGoogleCalendarOrigin(new Headers({ host: "www.studiocore.io.vn" }), allowed))
+      .toBe("https://www.studiocore.io.vn");
+    expect(resolveGoogleCalendarOrigin(new Headers({
+      host: "localhost:10000", "x-forwarded-host": "studiocore-test1.onrender.com",
+    }), allowed)).toBe("https://studiocore-test1.onrender.com");
+    expect(resolveGoogleCalendarOrigin(new Headers({
+      host: "www.studiocore.io.vn", "x-forwarded-host": "untrusted.example",
+    }), allowed)).toBeNull();
+  });
+
   it("authorizes management and views independently, with tenant and branch checks", () => {
     const connection = mockConnection();
     expect(canManageGoogleCalendar(owner)).toBe(true);

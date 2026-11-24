@@ -1,6 +1,6 @@
 "use server";
 
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getActorContext } from "@/lib/auth/session";
 import { getDb } from "@/lib/db/client";
@@ -16,8 +16,9 @@ import {
 export async function connectGoogleCalendarAction(form: FormData) {
   const actor = await getActorContext();
   if (!canManageGoogleCalendar(actor)) redirect("/manage/calendar");
-  const config = getGoogleCalendarConfig();
-  if (!config) redirect("/manage/calendar?googleCalendar=unconfigured");
+  if (!getGoogleCalendarConfig()) redirect("/manage/calendar?googleCalendar=unconfigured");
+  const config = getGoogleCalendarConfig(await headers());
+  if (!config) redirect("/manage/calendar?googleCalendar=host");
   const flow = startGoogleCalendarOAuth(config, actor, {
     branchId: form.get("branchId"), calendarId: form.get("calendarId"),
   });
