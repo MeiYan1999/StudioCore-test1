@@ -372,6 +372,14 @@ test("không ghi đè danh sách Lightroom khi không còn ảnh chọn nào tro
   const gone = await copyPicks({ folder: dir, files: { k9: "IMG_9.jpg" } }, [{ key: "k9", name: "IMG_9.jpg" }], "Chon");
   assert.deepEqual([gone.copied, gone.missing, gone.codes], [0, 1, []]);
   assert.equal(fs.readFileSync(list, "utf8"), before);
+
+  const noted = await copyPicks(
+    { folder: dir, files: { k9: "IMG_9.jpg" } },
+    [{ key: "k9", name: "IMG_9.jpg", note: "xóa mụn" }],
+    "Chon",
+  );
+  assert.deepEqual(noted.codes, []);
+  assert.ok(fs.readFileSync(list, "utf8").includes("IMG_9.jpg: xóa mụn"));
 });
 
 test("tìm share theo realpath và so sánh không phân biệt hoa thường trên Windows", async () => {

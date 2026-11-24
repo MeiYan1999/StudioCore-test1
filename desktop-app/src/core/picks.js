@@ -235,7 +235,9 @@ async function copyPicks(share, picks, folderName, images = null) {
       return [];
     }
   });
-  if (codes.length === 0) return { dest, copied, missing, codes, markupFailed };
+  if (codes.length === 0 && notes.length === 0 && markupNotes.length === 0) {
+    return { dest, copied, missing, codes, markupFailed };
+  }
   await fs.writeFile(
     path.join(dest, "danh-sach-chon.txt"),
     [
