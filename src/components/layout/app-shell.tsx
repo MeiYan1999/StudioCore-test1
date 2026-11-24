@@ -506,7 +506,6 @@ function SidebarContent({
 
       <div className="border-t border-border px-5 py-4">
         <p className="text-xs font-medium text-foreground">{actor.roleLabel}</p>
-        <p className="mt-0.5 text-[11px] text-muted-foreground">Phase 1 · Nền tảng</p>
       </div>
     </div>
   );
@@ -635,7 +634,7 @@ export function AppShell({
 
           <footer className="border-t border-border px-4 py-4 text-xs text-muted-foreground sm:px-6 lg:px-8">
             <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-2">
-              <span>StudioCore · Hệ điều hành Quản lý Studio chụp ảnh &amp; Áo cưới</span>
+              <span>StudioCore · Hệ điều hành Quản lý Studio</span>
               <span>Asia/Ho_Chi_Minh · VND</span>
             </div>
           </footer>
