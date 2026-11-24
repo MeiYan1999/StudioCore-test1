@@ -30,9 +30,9 @@ const { startKeepAwake } = require("./src/platform/keep-awake");
 const {
   contextActionFromArgv,
   contextActionRouteFromArgv,
+  copyFirstAvailablePicks,
   findSharesForFolder,
   shareOptionsForAction,
-  sharesWithPicks,
 } = require("./src/platform/context-actions");
 const { macBundlePath, removeMacLoginItems } = require("./src/platform/mac-login-cleanup");
 const { installMacQuickActions, removeMacQuickActions } = require("./src/platform/mac-quick-action");
@@ -120,16 +120,14 @@ async function runShareContextAction(action, folder) {
     return;
   }
   if (action === "picks") {
-    for (const share of sharesWithPicks(matches)) {
-      try {
-        const result = await agent.copyPicks(share.id);
-        notifyContextAction(`Đã chép ${result.codes.length} ảnh khách chọn vào ${result.dest}`);
-        return;
-      } catch (error) {
-        if (error.message !== "Khách chưa chọn ảnh nào.") throw error;
-      }
+    const outcome = await copyFirstAvailablePicks(matches, (shareId) => agent.copyPicks(shareId));
+    if (outcome.status === "copied") {
+      notifyContextAction(`Đã chép ${outcome.result.codes.length} ảnh khách chọn vào ${outcome.result.dest}`);
+    } else if (outcome.status === "missing") {
+      notifyContextAction("Không tìm thấy ảnh khách chọn trong thư mục");
+    } else {
+      notifyContextAction("Khách chưa chọn ảnh nào");
     }
-    notifyContextAction("Khách chưa chọn ảnh nào");
     return;
   }
   if (action === "rescan") {

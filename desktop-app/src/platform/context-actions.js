@@ -46,6 +46,24 @@ function sharesWithPicks(shares) {
     );
 }
 
+const NO_PICKS_MESSAGE = "Khách chưa chọn ảnh nào.";
+
+async function copyFirstAvailablePicks(shares, copy) {
+  let onlyMissing = false;
+  for (const share of sharesWithPicks(shares)) {
+    let result;
+    try {
+      result = await copy(share.id);
+    } catch (error) {
+      if (error.message !== NO_PICKS_MESSAGE) throw error;
+      continue;
+    }
+    if (result.codes.length > 0) return { status: "copied", result };
+    onlyMissing = true;
+  }
+  return { status: onlyMissing ? "missing" : "none" };
+}
+
 async function findSharesForFolder(shares, folder, platform = process.platform, realpath = fs.realpath) {
   if (typeof folder !== "string" || !folder) return [];
   let target;
@@ -77,6 +95,7 @@ module.exports = {
   CONTEXT_ACTIONS,
   contextActionFromArgv,
   contextActionRouteFromArgv,
+  copyFirstAvailablePicks,
   findSharesForFolder,
   shareOptionsForAction,
   sharesWithPicks,
