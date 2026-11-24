@@ -1,11 +1,12 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { eq } from "drizzle-orm";
+import { count, eq } from "drizzle-orm";
+import JSZip from "jszip";
 import { authenticate } from "@/lib/auth/login-service";
 import { getActorContext } from "@/lib/auth/session";
 import { getActorFromToken } from "@/lib/auth/session-core";
 import type { ActorContext } from "@/lib/auth/types";
 import { getDb, type AppDb } from "@/lib/db/client";
-import { albums, customers, documents } from "@/lib/db/schema";
+import { albums, customers, documents, photos } from "@/lib/db/schema";
 import { createTestDb } from "../helpers/test-db";
 
 vi.mock("@/lib/auth/session", () => ({ getActorContext: vi.fn() }));
@@ -131,5 +132,59 @@ describe("route handler: cô lập tenant", () => {
     expect((await debt.text()).trim().split("\n").length).toBeGreaterThan(1);
     as(null);
     expect((await GET(new Request(url("debt")))).status).toBe(401);
+  });
+
+  it("tải ảnh hoặc ZIP vào album của studio khác bị từ chối và không thêm ảnh", async () => {
+    const photosRoute = await import("@/app/api/uploads/photos/route");
+    const zipRoute = await import("@/app/api/uploads/zip/route");
+    const photoCount = () =>
+      db.select({ value: count() }).from(photos).where(eq(photos.albumId, demoAlbumId)).get()!.value;
+    const before = photoCount();
+    const jpeg = new File([new Uint8Array([0xff, 0xd8, 0xff, 0xd9])], "a.jpg", { type: "image/jpeg" });
+
+    const photoForm = () => {
+      const form = new FormData();
+      form.set("albumId", demoAlbumId);
+      form.append("files", jpeg);
+      return new Request("http://localhost/api/uploads/photos", { method: "POST", body: form });
+    };
+    const archive = new JSZip();
+    archive.file("a.jpg", new Uint8Array([0xff, 0xd8, 0xff, 0xd9]));
+    const zipBytes = await archive.generateAsync({ type: "blob" });
+    const zipForm = () => {
+      const form = new FormData();
+      form.set("albumId", demoAlbumId);
+      form.set("zip", new File([zipBytes], "a.zip", { type: "application/zip" }));
+      return new Request("http://localhost/api/uploads/zip", { method: "POST", body: form });
+    };
+
+    as(otherOwner);
+    expect((await photosRoute.POST(photoForm())).status).toBe(404);
+    expect((await zipRoute.POST(zipForm())).status).toBe(404);
+    as(null);
+    expect((await photosRoute.POST(photoForm())).status).toBe(401);
+    expect((await zipRoute.POST(zipForm())).status).toBe(401);
+    expect(photoCount()).toBe(before);
+  });
+
+  it("tải tài liệu lên chi nhánh của studio khác bị từ chối và không tạo tài liệu", async () => {
+    const { POST } = await import("@/app/api/documents/upload/route");
+    const documentCount = () => db.select({ value: count() }).from(documents).get()!.value;
+    const before = documentCount();
+    const request = () => {
+      const form = new FormData();
+      form.set("file", new File(["%PDF-1.4 test"], "x.pdf", { type: "application/pdf" }));
+      form.set("name", "x.pdf");
+      form.set("category", "finance");
+      form.set("visibility", "internal");
+      form.set("branchId", "branch-demo-q1");
+      return new Request("http://localhost/api/documents/upload", { method: "POST", body: form });
+    };
+
+    as(otherOwner);
+    expect((await POST(request())).status).toBe(403);
+    as(null);
+    expect((await POST(request())).status).toBe(401);
+    expect(documentCount()).toBe(before);
   });
 });
