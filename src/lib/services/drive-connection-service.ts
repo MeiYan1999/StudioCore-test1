@@ -177,11 +177,13 @@ export function saveGoogleConnectionDirect(
   staffId: string,
   refreshToken: string,
   grantedScopes?: string,
+  options: { keepExistingSharingAccess?: boolean } = {},
 ): void {
   const existing = getGoogleConnection(db, tenantId);
   // Đăng nhập Google chỉ xin quyền đọc Drive: không ghi đè kết nối đang có
   // quyền quản lý chia sẻ bằng một token yếu hơn.
   if (
+    options.keepExistingSharingAccess &&
     existing &&
     existing.status === "connected" &&
     hasDriveSharingScope(existing.scopes) &&
