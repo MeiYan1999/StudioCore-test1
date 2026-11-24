@@ -63,7 +63,7 @@ Trạng thái dùng trong tài liệu: `ĐÃ XÁC MINH` · `ĐÃ TRIỂN KHAI, C
 ### Chưa sửa (đưa vào backlog)
 | ID | Mức | Trạng thái | Phát hiện | Bằng chứng |
 | --- | --- | --- | --- | --- |
-| F-06 | P2 | LỖI LOGIC | Hóa đơn chuyển `issued → paid` bằng tay, không gắn với khoản thu; không có bảng phân bổ thanh toán–hóa đơn | `updateInvoiceStatus`, `createInvoiceForOrder` (`finance-service.ts`) |
+| F-06 | P2 | ĐÃ SỬA (chặn) | Hóa đơn chuyển `issued → paid` bằng tay dù đơn còn nợ. Nay chỉ chuyển được khi đơn đã thu đủ (`orders.remaining = 0`) và chưa hủy. Bảng phân bổ khoản thu–hóa đơn vẫn chưa có (B-02) | `updateInvoiceStatus` (`finance-service.ts`) |
 | F-09 | P2 | CHƯA CÓ | Hạn mức gói (nhân sự, chi nhánh, dung lượng, số album) và ngày hết hạn gói không được kiểm tra ở backend; gói chỉ là nhãn | `SUBSCRIPTION_PLANS`, `tenants.planExpiresAt` chỉ được ghi trong `subscription-service.ts`/`platform-actions.ts`, không nơi nào đọc để chặn |
 | F-10 | P2 | CHƯA CÓ | Thiết bị không có luồng mượn/trả: `equipment_usages` chỉ được đọc (`getEquipmentDetail`), không có hàm ghi ngoài seed | `src/lib/services/equipment-service.ts` |
 | F-11 | P2 | LỖI LOGIC | Hủy lịch chỉ đổi trạng thái lịch; phiếu thuê trang phục của cùng đơn không được nhắc/giải phóng | `cancelAppointment` (`appointment-service.ts`), `createRental` (`wardrobe-service.ts`) |

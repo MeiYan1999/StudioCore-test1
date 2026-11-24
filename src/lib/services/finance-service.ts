@@ -800,6 +800,22 @@ export function updateInvoiceStatus(
   if (!(allowed[invoice.status] ?? []).includes(status)) {
     throw new ValidationError("Không thể chuyển trạng thái hóa đơn.");
   }
+  if (status === "paid") {
+    // Payments are the source of truth: an invoice is paid only once its order is.
+    const order = db
+      .select({ remaining: orders.remaining, status: orders.status })
+      .from(orders)
+      .where(and(eq(orders.id, invoice.orderId), eq(orders.tenantId, actor.tenantId)))
+      .get();
+    if (!order || order.status === "cancelled") {
+      throw new ValidationError("Đơn hàng của hóa đơn đã hủy, không thể đánh dấu đã thanh toán.");
+    }
+    if (order.remaining > 0) {
+      throw new ValidationError(
+        `Đơn hàng còn nợ ${order.remaining.toLocaleString("vi-VN")}đ. Hãy ghi nhận thu tiền trước khi đánh dấu hóa đơn đã thanh toán.`,
+      );
+    }
+  }
   db.update(invoices)
     .set({ status, updatedAt: new Date() })
     .where(eq(invoices.id, invoiceId))
