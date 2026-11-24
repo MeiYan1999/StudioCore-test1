@@ -19,13 +19,14 @@ import { hashSecret, verifySecret } from "@/lib/auth/password";
 import { bootstrapPlatformAdmin, INTERNAL_PLATFORM_TENANT_ID, PlatformAdminConflictError } from "@/lib/auth/platform-admin";
 import { getActorFromToken } from "@/lib/auth/session-core";
 import { createDb, getDb } from "@/lib/db/client";
-import { staff, tenants } from "@/lib/db/schema";
+import { branches, googleCalendarConnections, staff, tenants } from "@/lib/db/schema";
 import { formatVnd } from "@/lib/utils";
 import { passwordLoginSchema } from "@/lib/validators/staff";
 
 vi.mock("@/lib/auth/session", () => ({
   requireActor: async () => ({ permissions: ["tenants.manage"] }),
 }));
+vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/db/client", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/lib/db/client")>(),
   getDb: vi.fn(),
@@ -153,6 +154,28 @@ describe("khởi tạo tài khoản quản trị nền tảng", () => {
     await expect(resetTenantOwnerPasswordAction(input)).rejects.toThrow(message);
     await expect(extendTenantPlanAction(input)).resolves.toMatchObject({ success: false, error: message });
     await expect(deleteTenantFromPlatformAction(input)).resolves.toMatchObject({ success: false, error: message });
+  });
+
+  it("xóa kết nối Google Calendar của đúng studio khi xóa studio vĩnh viễn", async () => {
+    const db = createMigratedDb();
+    for (const id of ["deleted", "preserved"]) {
+      db.insert(tenants).values({ id, name: id, slug: id }).run();
+      db.insert(branches).values({
+        id: `branch-${id}`, tenantId: id, name: "Chi nhánh", address: "", phone: "",
+      }).run();
+      db.insert(googleCalendarConnections).values({
+        tenantId: id,
+        branchId: `branch-${id}`,
+        calendarId: `${id}@group.calendar.google.com`,
+        refreshTokenEncrypted: "encrypted-fixture",
+      }).run();
+    }
+    vi.mocked(getDb).mockReturnValueOnce(db);
+    const input = new FormData();
+    input.set("tenantId", "deleted");
+    await expect(deleteTenantFromPlatformAction(input)).resolves.toMatchObject({ success: true });
+    expect(db.select().from(tenants).all()).toMatchObject([{ id: "preserved" }]);
+    expect(db.select().from(googleCalendarConnections).all()).toMatchObject([{ tenantId: "preserved" }]);
   });
 
   it("chỉ in hash khi mật khẩu stdin đạt chính sách 8–128 ký tự", () => {
