@@ -8,7 +8,7 @@ test.describe("landing và public website", () => {
     for (const text of [
       "Từ thủ công rời rạc đến hệ thống tự động thông minh.",
       "Bắt đầu vận hành trong 4 bước đơn giản.",
-      "Thiết kế chuẩn mực cho Studio & Áo cưới Việt Nam.",
+      "Thiết kế chuẩn mực cho Studio Việt Nam.",
       "Một nền tảng. Mọi hoạt động.",
       "Trực quan, tinh gọn & dễ làm quen.",
       "Gói cước linh hoạt cho mọi quy mô studio.",
