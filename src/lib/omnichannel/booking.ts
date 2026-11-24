@@ -27,7 +27,7 @@ export function authorizeThread(
   write = false,
 ) {
   assertPermission(actor, write ? "customers.manage" : "customers.view");
-  if (write && actor.readOnly)
+  if (write && (actor.readOnly || actor.planLapsed))
     throw new Error("Tài khoản đang ở chế độ chỉ đọc.");
   const row = db
     .select()

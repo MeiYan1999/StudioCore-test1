@@ -6,7 +6,7 @@ import { digest, metaConfig } from "@/lib/omnichannel/meta";
 import { assertBranchAccess } from "@/lib/auth/permissions";
 export async function GET(request: Request) {
   const actor = await requireActor();
-  if (actor.role !== "owner" || actor.readOnly)
+  if (actor.role !== "owner" || (actor.readOnly || actor.planLapsed))
     return NextResponse.json(
       { error: "Chỉ chủ studio được kết nối." },
       { status: 403 },
