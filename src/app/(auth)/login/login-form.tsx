@@ -82,15 +82,16 @@ function PasswordLoginForm() {
       ) : null}
 
       <div>
-        <Label htmlFor="email" className="text-[13px]">Email chủ studio / quản lý</Label>
+        <Label htmlFor="email" className="text-[13px]">Email hoặc tên đăng nhập quản trị nền tảng</Label>
         <div className="group relative mt-1.5">
           <Mail className={fieldIconClassName} aria-hidden="true" />
           <Input
             id="email"
             name="email"
-            type="email"
+            type="text"
             autoComplete="username"
-            placeholder="chu_studio@gmail.com"
+            autoCapitalize="none"
+            placeholder="Email hoặc tên đăng nhập"
             defaultValue={state.values?.email ?? ""}
             aria-invalid={Boolean(state.fieldErrors?.email)}
             aria-describedby={state.fieldErrors?.email ? "email-error" : undefined}
@@ -134,7 +135,7 @@ function PasswordLoginForm() {
         <FieldError id="password-error" message={state.fieldErrors?.password} />
       </div>
 
-      <SubmitButton pending={pending} label="Đăng nhập với Email" />
+      <SubmitButton pending={pending} label="Đăng nhập với mật khẩu" />
     </form>
   );
 }

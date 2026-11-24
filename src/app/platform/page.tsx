@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { count, desc, eq, like, or, and } from "drizzle-orm";
+import { count, desc, eq, like, ne, or, and } from "drizzle-orm";
 import {
   Building2,
   Clock,
@@ -20,6 +20,7 @@ import { ForbiddenState } from "@/components/shared/forbidden-state";
 import { hasPermission } from "@/lib/auth/permissions";
 import { requireActor } from "@/lib/auth/session";
 import { logoutAction } from "@/lib/auth/actions";
+import { INTERNAL_PLATFORM_TENANT_ID } from "@/lib/auth/platform-admin";
 import { getDb } from "@/lib/db/client";
 import { branches, contactRequests, platformSubscriptions, staff, tenants } from "@/lib/db/schema";
 import { formatDateTime, formatVnd } from "@/lib/utils";
@@ -70,8 +71,8 @@ export default async function PlatformPage({
 
   const db = getDb();
 
-  // All tenants for metrics
-  const allTenants = db.select().from(tenants).all();
+  const customerTenantFilter = ne(tenants.id, INTERNAL_PLATFORM_TENANT_ID);
+  const allTenants = db.select().from(tenants).where(customerTenantFilter).all();
 
   const totalStudios = allTenants.length;
   const activeTenants = allTenants.filter((t) => t.status === "active").length;
@@ -85,15 +86,19 @@ export default async function PlatformPage({
   const allCompletedSubs = db
     .select({ amount: platformSubscriptions.amount })
     .from(platformSubscriptions)
-    .where(eq(platformSubscriptions.status, "completed"))
+    .where(and(
+      eq(platformSubscriptions.status, "completed"),
+      ne(platformSubscriptions.tenantId, INTERNAL_PLATFORM_TENANT_ID),
+    ))
     .all();
 
   const totalRevenueCollected = allCompletedSubs.reduce((sum, s) => sum + s.amount, 0);
 
   // Filtered tenants for display
-  const conditions = [];
+  const conditions = [customerTenantFilter];
   if (query) {
-    conditions.push(or(like(tenants.name, `%${query}%`), like(tenants.slug, `%${query}%`)));
+    const match = or(like(tenants.name, `%${query}%`), like(tenants.slug, `%${query}%`));
+    if (match) conditions.push(match);
   }
   if (filterPlan) {
     conditions.push(eq(tenants.plan, filterPlan));
@@ -105,7 +110,7 @@ export default async function PlatformPage({
   const tenantRows = db
     .select()
     .from(tenants)
-    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .where(and(...conditions))
     .orderBy(desc(tenants.createdAt))
     .all();
 
@@ -165,6 +170,7 @@ export default async function PlatformPage({
       paidAt: platformSubscriptions.paidAt,
     })
     .from(platformSubscriptions)
+    .where(ne(platformSubscriptions.tenantId, INTERNAL_PLATFORM_TENANT_ID))
     .orderBy(desc(platformSubscriptions.createdAt))
     .limit(20)
     .all();

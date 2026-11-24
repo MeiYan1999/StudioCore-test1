@@ -3,6 +3,8 @@ import { eq } from "drizzle-orm";
 import { PASSWORD_CHANGED } from "@/lib/audit";
 import { authenticate, isLoginLocked } from "@/lib/auth/login-service";
 import { changeOwnPassword } from "@/lib/auth/password-change-service";
+import { hashSecret } from "@/lib/auth/password";
+import { bootstrapPlatformAdmin } from "@/lib/auth/platform-admin";
 import {
   createSession,
   getActorFromToken,
@@ -250,10 +252,12 @@ describe("đổi mật khẩu khi đã đăng nhập", () => {
   }
 
   it("đổi mật khẩu của platform admin và thu hồi phiên, token đặt lại của riêng tài khoản", async () => {
-    const email = createPrivateAccount("platform@studiocore.demo");
-    const { actor, token } = await signIn(email);
-    const otherSession = await signIn(email);
-    const missingSession = await signIn(email);
+    const login = "test-platform-admin";
+    const initialHash = hashSecret(validChange.currentPassword);
+    expect(bootstrapPlatformAdmin(passwordDb, login, initialHash)).toBe(true);
+    const { actor, token } = await signIn(login);
+    const otherSession = await signIn(login);
+    const missingSession = await signIn(login);
     passwordDb.delete(sessions).where(eq(sessions.id, missingSession.sessionId)).run();
     const unrelated = await signIn("owner@studiobinhminh.demo");
     for (const owner of [actor, unrelated.actor]) {
@@ -267,6 +271,7 @@ describe("đổi mật khẩu khi đã đăng nhập", () => {
     }
 
     expect(actor.canChangePassword).toBe(true);
+    expect(actor.staffEmail).toBeNull();
     expect(changeOwnPassword(passwordDb, actor, validChange)).toEqual({ ok: true });
     for (const revokedToken of [token, otherSession.token, missingSession.token]) {
       expect(await getActorFromToken(passwordDb, revokedToken)).toBeNull();
@@ -277,9 +282,10 @@ describe("đổi mật khẩu khi đã đăng nhập", () => {
     const audit = passwordDb.select().from(activityLogs).where(eq(activityLogs.action, PASSWORD_CHANGED)).get();
     expect(audit).toMatchObject({ actorId: actor.staffId, tenantId: actor.tenantId, metadata: "{}" });
 
-    const oldLogin = await authenticate(passwordDb, { mode: "password", identifier: email, secret: validChange.currentPassword }, meta("127.0.0.11"));
+    expect(bootstrapPlatformAdmin(passwordDb, login, initialHash)).toBe(false);
+    const oldLogin = await authenticate(passwordDb, { mode: "password", identifier: login, secret: validChange.currentPassword }, meta("127.0.0.11"));
     expect(oldLogin.ok).toBe(false);
-    expect((await signIn(email, validChange.newPassword)).actor.role).toBe("platform_admin");
+    expect((await signIn(login, validChange.newPassword)).actor.role).toBe("platform_admin");
   });
 
   it("từ chối sai mật khẩu, xác nhận không khớp, độ dài sai và mật khẩu không đổi", async () => {
