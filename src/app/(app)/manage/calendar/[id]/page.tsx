@@ -69,8 +69,11 @@ export default async function AppointmentDetailPage({
     canManage || appointment.photographer?.id === actor.staffId;
   const equipmentUsages = listAppointmentEquipment(getDb(), actor, appointment.id);
   const openEquipment = equipmentUsages.filter((usage) => !usage.returnedAt);
+  // An inactive branch is not in the actor's branches; lending there is not offered.
   const canLendEquipment =
-    canManage && (appointment.status === "scheduled" || appointment.status === "checked_in");
+    canManage &&
+    (appointment.status === "scheduled" || appointment.status === "checked_in") &&
+    actor.branches.some((branch) => branch.id === appointment.branchId);
   const availableEquipment = canLendEquipment
     ? listEquipment(getDb(), actor, { status: "available", branchId: appointment.branchId })
     : [];
