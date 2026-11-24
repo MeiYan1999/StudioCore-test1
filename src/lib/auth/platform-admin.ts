@@ -1,11 +1,14 @@
 import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import type { AppDb } from "../db/client";
 import { rolePermissions, staff, tenants } from "../db/schema";
 import { platformAdminLoginSchema } from "../validators/staff";
 import { DEFAULT_ROLE_PERMISSIONS } from "./roles";
 
-const PLATFORM_TENANT_ID = "tenant-platform";
+export const INTERNAL_PLATFORM_TENANT_ID = "tenant-platform";
+const PLATFORM_TENANT_SLUG = "studiocore-platform";
+
+export class PlatformAdminConflictError extends Error {}
 
 export function platformAdminCode(login: string): string {
   return `PLATFORM-${login.toUpperCase()}`;
@@ -20,17 +23,28 @@ export function bootstrapPlatformAdmin(db: AppDb, loginInput: string, passwordHa
 
   const code = platformAdminCode(login.data);
   return db.transaction((tx) => {
-    const existing = tx.select({ role: staff.role }).from(staff).where(eq(staff.code, code)).get();
+    const existing = tx.select({ role: staff.role, tenantId: staff.tenantId })
+      .from(staff).where(eq(staff.code, code)).get();
     if (existing) {
-      if (existing.role !== "platform_admin") throw new Error("Tên đăng nhập quản trị đã trùng mã nhân viên.");
+      if (existing.role !== "platform_admin" || existing.tenantId !== INTERNAL_PLATFORM_TENANT_ID) {
+        throw new PlatformAdminConflictError("Tên đăng nhập quản trị đã trùng mã nhân viên.");
+      }
       return false;
     }
+    const internalTenant = tx.select({ slug: tenants.slug }).from(tenants)
+      .where(eq(tenants.id, INTERNAL_PLATFORM_TENANT_ID)).get();
+    if (internalTenant && internalTenant.slug !== PLATFORM_TENANT_SLUG) {
+      throw new PlatformAdminConflictError("Mã studio nội bộ đã được sử dụng.");
+    }
+    const slugConflict = tx.select({ id: tenants.id }).from(tenants)
+      .where(and(eq(tenants.slug, PLATFORM_TENANT_SLUG), ne(tenants.id, INTERNAL_PLATFORM_TENANT_ID))).get();
+    if (slugConflict) throw new PlatformAdminConflictError("URL studio nội bộ đã được sử dụng.");
 
     tx.insert(tenants)
       .values({
-        id: PLATFORM_TENANT_ID,
+        id: INTERNAL_PLATFORM_TENANT_ID,
         name: "StudioCore Platform",
-        slug: "studiocore-platform",
+        slug: PLATFORM_TENANT_SLUG,
         status: "active",
         plan: "enterprise",
       })
@@ -38,7 +52,7 @@ export function bootstrapPlatformAdmin(db: AppDb, loginInput: string, passwordHa
       .run();
     tx.insert(staff).values({
       id: randomUUID(),
-      tenantId: PLATFORM_TENANT_ID,
+      tenantId: INTERNAL_PLATFORM_TENANT_ID,
       name: "Quản trị nền tảng",
       code,
       role: "platform_admin",
@@ -47,7 +61,7 @@ export function bootstrapPlatformAdmin(db: AppDb, loginInput: string, passwordHa
     tx.insert(rolePermissions).values(
       DEFAULT_ROLE_PERMISSIONS.platform_admin.map((permission) => ({
         id: randomUUID(),
-        tenantId: PLATFORM_TENANT_ID,
+        tenantId: INTERNAL_PLATFORM_TENANT_ID,
         role: "platform_admin" as const,
         permission,
       })),

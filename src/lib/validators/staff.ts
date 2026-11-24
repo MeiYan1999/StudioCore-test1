@@ -5,10 +5,12 @@ const pinSchema = z
   .string()
   .regex(/^\d{6}$/, "PIN phải gồm đúng 6 chữ số.");
 
-const optionalPasswordSchema = z
+export const newStaffPasswordSchema = z
   .string()
   .min(8, "Mật khẩu phải có ít nhất 8 ký tự.")
-  .max(128, "Mật khẩu tối đa 128 ký tự.")
+  .max(128, "Mật khẩu tối đa 128 ký tự.");
+
+const optionalPasswordSchema = newStaffPasswordSchema
   .optional()
   .or(z.literal(""));
 

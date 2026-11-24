@@ -3,7 +3,7 @@ import type { AppDb } from "../db/client";
 import { loginAttempts, staff, tenants } from "../db/schema";
 import { getAllowedBranches, createSession } from "./session-core";
 import { verifySecret } from "./password";
-import { platformAdminCode } from "./platform-admin";
+import { INTERNAL_PLATFORM_TENANT_ID, platformAdminCode } from "./platform-admin";
 import { writeAudit } from "../audit";
 
 const LOGIN_WINDOW_MINUTES = 15;
@@ -139,7 +139,11 @@ export async function authenticate(
           .innerJoin(tenants, eq(staff.tenantId, tenants.id))
           .where(identifier.includes("@")
             ? eq(staff.email, identifier)
-            : and(eq(staff.role, "platform_admin"), eq(staff.code, platformAdminCode(identifier))))
+            : and(
+              eq(staff.role, "platform_admin"),
+              eq(staff.tenantId, INTERNAL_PLATFORM_TENANT_ID),
+              eq(staff.code, platformAdminCode(identifier)),
+            ))
           .get()
       : db
           .select({ staff, tenant: tenants })

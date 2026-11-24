@@ -81,12 +81,14 @@ Sau khi kết nối Render với GitHub và duyệt Blueprint:
 
 ### Tạo tài khoản quản trị nền tảng riêng
 
-Trong Render → Environment, đặt `PLATFORM_ADMIN_LOGIN=admin` và `PLATFORM_ADMIN_PASSWORD_HASH` là hash scrypt do `hashSecret` của ứng dụng tạo. Tạo hash trên terminal riêng (Bash); mật khẩu nhập ẩn, không đặt trong lệnh hoặc file:
+Trong Render → Environment, đặt `PLATFORM_ADMIN_LOGIN=admin` và `PLATFORM_ADMIN_PASSWORD_HASH` là hash scrypt do `hashSecret` của ứng dụng tạo. Tạo hash trên terminal riêng (Bash); mật khẩu từ 8 đến 128 ký tự, được nhập ẩn và không đặt trong lệnh hoặc file:
 
 ```bash
-IFS= read -rs -p 'Mật khẩu mới: ' password; printf '\n'
-printf '%s' "$password" | node --import tsx -e 'const fs = require("node:fs"); const { hashSecret } = require("./src/lib/auth/password.ts"); console.log(hashSecret(fs.readFileSync(0, "utf8")))'
-unset password
+(
+  IFS= read -rs -p 'Mật khẩu mới: ' password || exit 1
+  printf '\n'
+  printf '%s' "$password" | node --import tsx scripts/hash-platform-admin-password.ts
+)
 ```
 
 Giữ hash trong Render, không commit hoặc gửi qua chat. Khi container khởi động, ứng dụng tạo tài khoản sau restore và migrate, không cần seed demo và không thay mật khẩu tài khoản đã tồn tại. Đăng nhập bằng `admin` và mật khẩu tại `/login`; tài khoản này không có PIN. Đổi biến hash sau khi tạo **không** đặt lại mật khẩu.
