@@ -1,8 +1,9 @@
-import { and, asc, count, desc, eq, like, ne, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, isNull, like, ne, or, sql } from "drizzle-orm";
 import type { AppDb } from "../db/client";
 import {
   branches,
   customers,
+  notifications,
   orderItems,
   orders,
   wardrobeItems,
@@ -763,4 +764,54 @@ export function activeRentalForItem(
     )
     .get();
   return row ? mapRental(row) : null;
+}
+
+/**
+ * Names of wardrobe items still checked out for an order, limited to the
+ * branches the actor may see (same scope as `listRentals`).
+ */
+export function listUnreturnedRentalItems(
+  db: AppDb,
+  actor: ActorContext,
+  orderId: string,
+): string[] {
+  const scope = getBranchScope(actor);
+  if (scope.mode === "none") return [];
+  const conditions = [
+    eq(wardrobeRentals.tenantId, actor.tenantId),
+    eq(wardrobeRentals.orderId, orderId),
+    isNull(wardrobeRentals.returnedAt),
+  ];
+  if (scope.mode === "branch") {
+    conditions.push(eq(wardrobeRentals.branchId, scope.branchId));
+  }
+  return db
+    .select({ name: wardrobeItems.name })
+    .from(wardrobeRentals)
+    .innerJoin(wardrobeItems, eq(wardrobeRentals.wardrobeItemId, wardrobeItems.id))
+    .where(and(...conditions))
+    .all()
+    .map((row) => row.name);
+}
+
+/** Tells whoever cancelled an appointment which items of its order are still out. */
+export function notifyUnreturnedRentals(
+  db: AppDb,
+  actor: ActorContext,
+  input: { appointmentId: string; orderId: string },
+): void {
+  const unreturned = listUnreturnedRentalItems(db, actor, input.orderId);
+  if (unreturned.length === 0) return;
+  db.insert(notifications)
+    .values({
+      id: crypto.randomUUID(),
+      tenantId: actor.tenantId,
+      userId: actor.staffId,
+      type: "appointment",
+      title: "Trang phục chưa trả sau khi hủy lịch",
+      content: `Đơn của lịch đã hủy còn ${unreturned.length} trang phục đang mượn: ${unreturned.join(", ")}.`,
+      link: `/manage/calendar/${input.appointmentId}`,
+      createdAt: new Date(),
+    })
+    .run();
 }

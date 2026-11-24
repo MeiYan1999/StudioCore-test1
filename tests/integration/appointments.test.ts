@@ -13,8 +13,8 @@ import {
   createAppointment,
   getAppointmentDetail,
   getCalendarData,
-  listUnreturnedRentalItems,
 } from "@/lib/services/appointment-service";
+import { listUnreturnedRentalItems } from "@/lib/services/wardrobe-service";
 import { createTestDb } from "../helpers/test-db";
 
 let db: AppDb;
@@ -252,6 +252,12 @@ describe("check-in / check-out", () => {
     expect(rental?.returnedAt).toBeNull();
     expect(listUnreturnedRentalItems(db, owner, "order-demo-06")).toHaveLength(1);
     expect(listUnreturnedRentalItems(db, secondaryOwner, "order-demo-06")).toHaveLength(0);
+    // manager chỉ thuộc chi nhánh Q1; phiếu ở chi nhánh khác không được lộ tên trang phục
+    db.update(wardrobeRentals)
+      .set({ branchId: "branch-demo-thu-duc" })
+      .where(eq(wardrobeRentals.id, "rental-cancel-test"))
+      .run();
+    expect(listUnreturnedRentalItems(db, manager, "order-demo-06")).toHaveLength(0);
 
     const warning = db
       .select()

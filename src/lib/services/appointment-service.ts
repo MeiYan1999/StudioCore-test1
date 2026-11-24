@@ -25,8 +25,6 @@ import {
   staff,
   staffBranches,
   staffShifts,
-  wardrobeItems,
-  wardrobeRentals,
 } from "../db/schema";
 import type { ActorContext } from "../auth/types";
 import {
@@ -73,6 +71,7 @@ import {
   ValidationError,
 } from "../errors";
 import { writeAudit } from "../audit";
+import { notifyUnreturnedRentals } from "./wardrobe-service";
 import { formatDateTime } from "../utils";
 
 function notifyAppointmentStaff(
@@ -900,27 +899,6 @@ export async function updateAppointment(
   });
 }
 
-/** Names of wardrobe items still checked out for an order (not yet returned). */
-export function listUnreturnedRentalItems(
-  db: AppDb,
-  actor: Pick<ActorContext, "tenantId">,
-  orderId: string,
-): string[] {
-  return db
-    .select({ name: wardrobeItems.name })
-    .from(wardrobeRentals)
-    .innerJoin(wardrobeItems, eq(wardrobeRentals.wardrobeItemId, wardrobeItems.id))
-    .where(
-      and(
-        eq(wardrobeRentals.tenantId, actor.tenantId),
-        eq(wardrobeRentals.orderId, orderId),
-        isNull(wardrobeRentals.returnedAt),
-      ),
-    )
-    .all()
-    .map((row) => row.name);
-}
-
 export function cancelAppointment(
   db: AppDb,
   actor: ActorContext,
@@ -966,17 +944,8 @@ export function cancelAppointment(
     content: `Lịch chụp ${formatDateTime(current.startAt)} đã bị hủy. Lý do: ${reason.trim()}`,
   });
 
-  // Cancelling never marks a rental returned: the items are physically out, so
-  // tell the person who cancelled to collect them.
-  const unreturned = listUnreturnedRentalItems(db, actor, current.orderId);
-  if (unreturned.length > 0) {
-    notifyAppointmentStaff(db, actor, {
-      appointmentId,
-      staffIds: [actor.staffId],
-      title: "Trang phục chưa trả sau khi hủy lịch",
-      content: `Đơn của lịch đã hủy còn ${unreturned.length} trang phục đang mượn: ${unreturned.join(", ")}.`,
-    });
-  }
+  // Cancelling never marks a rental returned: the items are physically out.
+  notifyUnreturnedRentals(db, actor, { appointmentId, orderId: current.orderId });
 }
 
 function assertCheckInPermission(actor: ActorContext, appointment: { photographerId: string | null }): void {

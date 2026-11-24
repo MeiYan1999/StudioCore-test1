@@ -23,10 +23,8 @@ import {
 } from "@/lib/scheduling/status";
 import { formatDateKey, getVietnamDateKey } from "@/lib/scheduling/time";
 import { formatDateTime } from "@/lib/utils";
-import {
-  getAppointmentDetail,
-  listUnreturnedRentalItems,
-} from "@/lib/services/appointment-service";
+import { getAppointmentDetail } from "@/lib/services/appointment-service";
+import { listUnreturnedRentalItems } from "@/lib/services/wardrobe-service";
 import { buildGoogleCalendarEventUrl } from "@/lib/services/ical-service";
 import { listOrderOptions, orderAssigneeOptions } from "@/lib/services/order-service";
 import { listRooms } from "@/lib/services/room-service";
