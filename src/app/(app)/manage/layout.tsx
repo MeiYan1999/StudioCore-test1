@@ -208,6 +208,7 @@ export default async function ManageLayout({
         isOwner: actor.role === "owner",
         readOnly: actor.readOnly,
         planLapsed: actor.planLapsed,
+        canRenewPlan: actor.canRenewPlan,
         canChangePassword: actor.canChangePassword,
         branches: actor.branches,
       }}

@@ -138,6 +138,7 @@ export type ShellActor = {
   isOwner: boolean;
   readOnly?: boolean;
   planLapsed?: boolean;
+  canRenewPlan?: boolean;
   canChangePassword: boolean;
   branches: { id: string; name: string }[];
 };
@@ -616,9 +617,13 @@ export function AppShell({
                   Gói dịch vụ đã hết hạn quá 7 ngày. Studio đang ở chế độ chỉ xem: vẫn xem và xuất
                   được dữ liệu, các thao tác ghi bị chặn cho đến khi gia hạn.
                 </span>
-                <a href="/manage/settings/billing" className="font-semibold underline">
-                  Gia hạn gói
-                </a>
+                {actor.canRenewPlan ? (
+                  <a href="/manage/settings/billing" className="font-semibold underline">
+                    Gia hạn gói
+                  </a>
+                ) : (
+                  <span>Liên hệ chủ studio để gia hạn.</span>
+                )}
               </div>
             </div>
           ) : null}
