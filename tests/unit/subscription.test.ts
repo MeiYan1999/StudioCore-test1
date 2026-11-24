@@ -3,6 +3,10 @@ import type { AppDb } from "@/lib/db/client";
 import { tenants } from "@/lib/db/schema";
 import {
   createSubscriptionInvoice,
+  DEFAULT_PLATFORM_SEPAY_API_KEY,
+  getPlatformBillingConfig,
+  isValidPlatformBillingKey,
+  savePlatformBillingConfig,
   getSubscriptionById,
   getTenantCurrentSubscription,
   processPlatformBillingWebhook,
@@ -76,7 +80,7 @@ describe("Subscription & Automated VietQR Billing Service", () => {
       transferAmount: 200_000, // Chuyển thiếu (cần 499_000)
       content: `${invoice.code} chuyen tien thieu`,
       referenceCode: "FT_TEST_01",
-    });
+    }, "Apikey studiocore_platform_secret");
 
     expect(result.success).toBe(false);
     expect(result.message).toContain("chưa đủ giá trị gói cước");
@@ -102,7 +106,7 @@ describe("Subscription & Automated VietQR Billing Service", () => {
       transferAmount: 499_000, // Đúng số tiền
       content: `MBVCB.738291.${invoice.code}.THANH TOAN GOI PRO`,
       referenceCode: "FT_SEPAY_SUCCESS_99",
-    });
+    }, "Apikey studiocore_platform_secret");
 
     expect(result.success).toBe(true);
     expect(result.plan).toBe("pro");
@@ -153,6 +157,40 @@ describe("Subscription & Automated VietQR Billing Service", () => {
       "Apikey studiocore_platform_secret",
     );
     expect(successResult.success).toBe(true);
+  });
+
+  it("webhook thiếu API Key không được kích hoạt gói", () => {
+    const invoice = createSubscriptionInvoice(db, TEST_TENANT_ID, "enterprise", "yearly");
+    for (const header of [undefined, "", "Apikey "]) {
+      const result = processPlatformBillingWebhook(
+        db,
+        { transferType: "in", transferAmount: 999_999_999, content: invoice.code },
+        header,
+      );
+      expect(result.success).toBe(false);
+      expect(result.message).toContain("API Key");
+    }
+    expect(getSubscriptionById(db, invoice.subscriptionId)?.status).toBe("pending");
+  });
+
+  it("production từ chối khóa mặc định công khai", () => {
+    expect(isValidPlatformBillingKey(DEFAULT_PLATFORM_SEPAY_API_KEY, "Apikey studiocore_platform_secret", true)).toBe(false);
+    expect(isValidPlatformBillingKey(DEFAULT_PLATFORM_SEPAY_API_KEY, "Apikey studiocore_platform_secret", false)).toBe(true);
+    expect(isValidPlatformBillingKey("real-secret-key", "Bearer real-secret-key", true)).toBe(true);
+    expect(isValidPlatformBillingKey("real-secret-key", "Bearer real-secret-keX", true)).toBe(false);
+  });
+
+  it("khóa mặc định đã lưu không che khóa cấu hình qua biến môi trường", () => {
+    const fresh = createTestDb();
+    fresh.insert(tenants).values({ id: "tenant-key", name: "Key", slug: "tenant-key", status: "active", plan: "trial" }).run();
+    savePlatformBillingConfig(fresh, "tenant-key", { sepayApiKey: DEFAULT_PLATFORM_SEPAY_API_KEY });
+    process.env.PLATFORM_SEPAY_API_KEY = "env-rotated-key";
+    try {
+      expect(getPlatformBillingConfig(fresh).sepayApiKey).toBe("env-rotated-key");
+    } finally {
+      delete process.env.PLATFORM_SEPAY_API_KEY;
+    }
+    expect(getPlatformBillingConfig(fresh).sepayApiKey).toBe(DEFAULT_PLATFORM_SEPAY_API_KEY);
   });
 
   it("chức năng giả lập thanh toán (Dev / Test Mode) kích hoạt gói thành công ngay lập tức", () => {

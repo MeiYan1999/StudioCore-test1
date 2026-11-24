@@ -12,6 +12,7 @@ import {
   sql,
   type SQL,
 } from "drizzle-orm";
+import { normalizeIdempotencyKey } from "../finance/idempotency";
 import type { AppDb } from "../db/client";
 import {
   branches,
@@ -989,6 +990,8 @@ export function recordOrderPayment(
     method: string;
     reference: string;
     paidAt: string;
+    /** Client-generated key per submit attempt; a replay returns the first payment. */
+    idempotencyKey?: string;
   },
 ): string {
   const inboxBooking = db.get(sql`SELECT id FROM inbox_bookings WHERE order_id=${orderId} AND tenant_id=${actor.tenantId}`);
@@ -1019,6 +1022,27 @@ export function recordOrderPayment(
 
   if (!order) {
     throw new NotFoundError("Không tìm thấy đơn hàng.");
+  }
+  const idempotencyKey = input.idempotencyKey
+    ? `form:${normalizeIdempotencyKey(input.idempotencyKey)}`
+    : crypto.randomUUID();
+  if (input.idempotencyKey) {
+    const replayed = db
+      .select({ id: payments.id, orderId: payments.orderId })
+      .from(payments)
+      .where(
+        and(
+          eq(payments.tenantId, actor.tenantId),
+          eq(payments.idempotencyKey, idempotencyKey),
+        ),
+      )
+      .get();
+    if (replayed) {
+      if (replayed.orderId !== orderId) {
+        throw new ValidationError("Yêu cầu thanh toán không hợp lệ, vui lòng tải lại trang.");
+      }
+      return replayed.id;
+    }
   }
   if (order.status === "cancelled") {
     throw new ValidationError("Không thể thu tiền đơn đã hủy.");
@@ -1053,7 +1077,7 @@ export function recordOrderPayment(
         method: input.method,
         status: "completed",
         reference: input.reference.trim() || null,
-        idempotencyKey: crypto.randomUUID(),
+        idempotencyKey,
         paidAt,
         createdBy: actor.staffId,
       })

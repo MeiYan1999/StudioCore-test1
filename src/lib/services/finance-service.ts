@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { normalizeIdempotencyKey } from "../finance/idempotency";
 import { and, asc, count, desc, eq, gte, lte, or, sql, type SQL } from "drizzle-orm";
 import type { AppDb } from "../db/client";
 import {
@@ -936,7 +937,14 @@ export function remindDebt(
 export function recordRefund(
   db: AppDb,
   actor: ActorContext,
-  input: { orderId: string; amount: number; reason: string; method: PaymentMethod },
+  input: {
+    orderId: string;
+    amount: number;
+    reason: string;
+    method: PaymentMethod;
+    /** Client-generated key per submit attempt; a replay returns the first refund. */
+    idempotencyKey?: string;
+  },
 ): string {
   assertPermission(actor, "finance.manage");
   if (!Number.isInteger(input.amount) || input.amount <= 0) {
@@ -952,11 +960,32 @@ export function recordRefund(
     .get();
   if (!order) throw new NotFoundError("Không tìm thấy đơn hàng.");
   assertBranchAccess(actor, order.branchId);
+  const transactionId = crypto.randomUUID();
+  const paymentId = crypto.randomUUID();
+  const idempotencyKey = input.idempotencyKey
+    ? `refund-form:${normalizeIdempotencyKey(input.idempotencyKey)}`
+    : `refund:${transactionId}`;
+  if (input.idempotencyKey) {
+    const replayed = db
+      .select({ id: transactions.id, orderId: transactions.orderId })
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.tenantId, actor.tenantId),
+          eq(transactions.idempotencyKey, idempotencyKey),
+        ),
+      )
+      .get();
+    if (replayed) {
+      if (replayed.orderId !== order.id) {
+        throw new ValidationError("Yêu cầu hoàn tiền không hợp lệ, vui lòng tải lại trang.");
+      }
+      return replayed.id;
+    }
+  }
   if (input.amount > order.paid) {
     throw new ValidationError("Số tiền hoàn vượt quá số đã thu.");
   }
-  const transactionId = crypto.randomUUID();
-  const paymentId = crypto.randomUUID();
   db.transaction((tx) => {
     tx.insert(transactions)
       .values({
@@ -970,6 +999,7 @@ export function recordRefund(
         customerId: order.customerId,
         method: input.method,
         description: input.reason.trim() || "Hoàn tiền đơn hàng",
+        idempotencyKey,
         occurredAt: new Date(),
         createdBy: actor.staffId,
       })
@@ -983,7 +1013,7 @@ export function recordRefund(
         method: input.method,
         status: "refunded",
         reference: input.reason.trim() || "REFUND",
-        idempotencyKey: `refund:${transactionId}`,
+        idempotencyKey,
         paidAt: new Date(),
         createdBy: actor.staffId,
       })

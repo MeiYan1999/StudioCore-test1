@@ -6,6 +6,7 @@ import {
   deleteAiHubApiKey,
   getAiHubData,
   resetAiHubFeatureStats,
+  testAiHubApiKey,
   toggleAiHubApiKey,
   updateAiHubFeature,
 } from "@/lib/services/ai-hub-service";
@@ -128,5 +129,39 @@ describe("AI Hub v2 Service", () => {
     const deleted = deleteAiHubApiKey(db, TEST_TENANT_ID, key.id);
     expect(deleted.metrics.totalKeys).toBe(0);
     expect(deleted.metrics.activeKeys).toBe(0);
+  });
+
+  it("kiểm tra API Key gọi thật tới nhà cung cấp và không báo thành công giả", async () => {
+    const data = addAiHubApiKey(db, TEST_TENANT_ID, {
+      name: "Key kiểm tra",
+      provider: "openai",
+      apiKey: "sk-test-probe-123456",
+    });
+    const keyId = data.apiKeys.at(-1)!.id;
+    const calls: { url: string; auth: string | null }[] = [];
+    const fakeFetch = (status: number) =>
+      (async (url: RequestInfo | URL, init?: RequestInit) => {
+        calls.push({ url: String(url), auth: new Headers(init?.headers).get("authorization") });
+        return new Response("{}", { status });
+      }) as typeof fetch;
+
+    const ok = await testAiHubApiKey(db, TEST_TENANT_ID, keyId, fakeFetch(200));
+    expect(ok.success).toBe(true);
+    expect(calls[0]).toEqual({
+      url: "https://api.openai.com/v1/models",
+      auth: "Bearer sk-test-probe-123456",
+    });
+
+    const rejected = await testAiHubApiKey(db, TEST_TENANT_ID, keyId, fakeFetch(401));
+    expect(rejected.success).toBe(false);
+    expect(rejected.message).toContain("401");
+
+    const offline = await testAiHubApiKey(db, TEST_TENANT_ID, keyId, (async () => {
+      throw new Error("network");
+    }) as typeof fetch);
+    expect(offline.success).toBe(false);
+
+    const otherTenant = await testAiHubApiKey(db, "tenant-khac", keyId, fakeFetch(200));
+    expect(otherTenant.success).toBe(false);
   });
 });

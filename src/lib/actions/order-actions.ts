@@ -214,6 +214,7 @@ export async function recordPaymentAction(
       method: parsed.data.method,
       reference: parsed.data.reference || "",
       paidAt: parsed.data.paidAt || "",
+      idempotencyKey: getFormString(formData, "requestId") || undefined,
     });
     revalidatePath(`/manage/orders/${orderId}`);
     revalidatePath("/manage/orders");

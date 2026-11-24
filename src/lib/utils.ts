@@ -132,3 +132,11 @@ export function parseVietnamDateTimeLocal(value: string | null | undefined): Dat
   return date;
 }
 
+
+/** Key sent with a money form so a double submit or retry is recorded once. */
+export function newRequestId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 14)}`;
+}

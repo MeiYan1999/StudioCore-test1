@@ -4,6 +4,7 @@ import {
   findTenantBySepayApiKey,
   getSepaySettings,
   handleSepayWebhookCall,
+  matchOrderByTransferContent,
   regenerateSepayApiKey,
   setSepayWebhookEnabled,
 } from "@/lib/services/sepay-service";
@@ -202,5 +203,38 @@ describe("SePay Webhook & Connection Service", () => {
     expect(updatedOrder?.paid).toBe(500000);
     expect(updatedOrder?.remaining).toBe(500000);
     expect(updatedOrder?.status).toBe("deposit_received");
+  });
+
+  it("giao dịch thử không ghi vào sổ quỹ", async () => {
+    const sepay = getSepaySettings(db, testTenantId);
+    const before = db.select().from(transactions).where(eq(transactions.tenantId, testTenantId)).all().length;
+    const payload = { id: "test-1", transferType: "in" as const, transferAmount: 10000, content: "TEST" };
+    const res = await handleSepayWebhookCall(db, sepay.apiKey, payload, JSON.stringify(payload), { test: true });
+    expect(res.success).toBe(true);
+    expect(db.select().from(transactions).where(eq(transactions.tenantId, testTenantId)).all().length).toBe(before);
+  });
+
+  it("webhook không có id gửi lại cùng nội dung chỉ ghi một lần", async () => {
+    const sepay = getSepaySettings(db, testTenantId);
+    const payload = { transferType: "in" as const, transferAmount: 55000, content: "khong co ma" };
+    const body = JSON.stringify(payload);
+    await handleSepayWebhookCall(db, sepay.apiKey, payload, body);
+    const before = db.select().from(transactions).where(eq(transactions.tenantId, testTenantId)).all().length;
+    const retry = await handleSepayWebhookCall(db, sepay.apiKey, payload, body);
+    expect(retry.message).toContain("Duplicate");
+    expect(db.select().from(transactions).where(eq(transactions.tenantId, testTenantId)).all().length).toBe(before);
+  });
+
+  it("khớp đơn theo mã đầy đủ, không khớp tiền tố và bỏ qua khi mơ hồ", () => {
+    const list = [{ code: "DH-1" }, { code: "DH-10" }];
+    expect(matchOrderByTransferContent(list, "CK DH10 coc")?.code).toBe("DH-10");
+    expect(matchOrderByTransferContent([{ code: "DH-1" }], "CK DH10 coc")).toBeNull();
+    expect(matchOrderByTransferContent(list, "CK DH1 coc")?.code).toBe("DH-1");
+    expect(matchOrderByTransferContent([{ code: "DH-A1" }, { code: "DH-B1" }], "DHA1 DHB1")).toBeNull();
+    expect(matchOrderByTransferContent(list, "khong co ma")).toBeNull();
+    const dated = [{ code: "DH-20261124-AB12" }];
+    expect(matchOrderByTransferContent(dated, "DH20261124AB12 500")?.code).toBe("DH-20261124-AB12");
+    expect(matchOrderByTransferContent(dated, "dh 20261124 ab12-0901234567")?.code).toBe("DH-20261124-AB12");
+    expect(matchOrderByTransferContent(dated, "DH20261124AB125")).toBeNull();
   });
 });

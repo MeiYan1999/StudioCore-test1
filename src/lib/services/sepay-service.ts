@@ -172,11 +172,48 @@ export function findTenantBySepayApiKey(
   return row?.tenantId ?? null;
 }
 
+/**
+ * Matches the order whose code appears in the transfer content. A shorter code
+ * directly followed by more digits (DH1 inside DH10) is not a match,
+ * and two different candidates of equal length are ambiguous: no match.
+ */
+export function matchOrderByTransferContent<T extends { code: string }>(
+  candidates: T[],
+  content: string,
+): T | null {
+  const clean = (value: string) => value.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+  const raw = content.toUpperCase();
+  let best: T | null = null;
+  let bestLength = 0;
+  let ambiguous = false;
+  for (const candidate of candidates) {
+    const code = clean(candidate.code);
+    if (!code) continue;
+    // Banks drop or change separators inside the code, so allow any between
+    // its characters; the boundary is checked on the raw content so a numeric
+    // note after a space ("DH-12 500") still matches.
+    const pattern = new RegExp(
+      code.split("").join("[^A-Z0-9]*") + (/[0-9]$/.test(code) ? "(?![0-9])" : ""),
+    );
+    const found = pattern.test(raw);
+    if (!found) continue;
+    if (code.length > bestLength) {
+      best = candidate;
+      bestLength = code.length;
+      ambiguous = false;
+    } else if (code.length === bestLength) {
+      ambiguous = true;
+    }
+  }
+  return ambiguous ? null : best;
+}
+
 export async function handleSepayWebhookCall(
   db: AppDb,
   apiKey: string,
   payload: SepayWebhookPayload,
   rawBody: string,
+  options: { test?: boolean } = {},
 ): Promise<{ success: boolean; status: number; message: string; paymentId?: string }> {
   const tenantId = findTenantBySepayApiKey(db, apiKey);
   if (!tenantId) {
@@ -202,19 +239,29 @@ export async function handleSepayWebhookCall(
     };
   }
 
-  const eventId = String(
-    payload.id || payload.referenceCode || `sepay-${Date.now()}-${Math.random()}`,
-  );
-  const transferAmount = Number(payload.transferAmount || 0);
-  const transferType = payload.transferType === "out" ? "out" : "in";
-  const eventType =
-    transferType === "in" ? "payment.received" : "payment.sent";
-  const content = payload.content || payload.description || "";
+  if (options.test) {
+    // Connectivity check only: never touches payments or the cashbook.
+    return {
+      success: true,
+      status: 200,
+      message: "Webhook SePay hoạt động. Giao dịch thử không được ghi vào sổ quỹ.",
+    };
+  }
+
   const payloadHash = crypto
     .createHash("sha256")
     .update(rawBody || JSON.stringify(payload))
     .digest("hex");
-
+  // Without a provider id, a retry of the same body must map to the same event.
+  const eventId = String(
+    payload.id || payload.referenceCode || `sepay-hash-${payloadHash.slice(0, 32)}`,
+  );
+  const rawAmount = Number(payload.transferAmount || 0);
+  const transferAmount = Number.isFinite(rawAmount) && rawAmount > 0 ? Math.round(rawAmount) : 0;
+  const transferType = payload.transferType === "out" ? "out" : "in";
+  const eventType =
+    transferType === "in" ? "payment.received" : "payment.sent";
+  const content = payload.content || payload.description || "";
   // Check if already processed
   const existingEvent = db
     .select()
@@ -239,21 +286,14 @@ export async function handleSepayWebhookCall(
   // If money is in (transferType === "in"), try to match an order
   let matchedOrder: typeof orders.$inferSelect | null = null;
   if (transferType === "in" && content) {
-    // 1. Try finding order by exact code match in content
-    const allTenantOrders = db
-      .select()
-      .from(orders)
-      .where(and(eq(orders.tenantId, tenantId), sql`${orders.status} != 'cancelled'`))
-      .all();
-
-    for (const ord of allTenantOrders) {
-      const cleanOrderCode = ord.code.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
-      const cleanContent = content.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
-      if (cleanOrderCode && cleanContent.includes(cleanOrderCode)) {
-        matchedOrder = ord;
-        break;
-      }
-    }
+    matchedOrder = matchOrderByTransferContent(
+      db
+        .select()
+        .from(orders)
+        .where(and(eq(orders.tenantId, tenantId), sql`${orders.status} != 'cancelled'`))
+        .all(),
+      content,
+    );
   }
 
   // If order matched and amount valid, use processPaymentWebhook
