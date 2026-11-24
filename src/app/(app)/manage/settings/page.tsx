@@ -178,7 +178,7 @@ export default async function SettingsHubPage() {
     {
       id: "calendar",
       title: "Đồng bộ Google Calendar",
-      description: "Đồng bộ lịch chụp 2 chiều 24/7 với Google Calendar và Apple Calendar.",
+      description: "Xem sự kiện Google trong Lịch chụp và đăng ký lịch StudioCore qua iCal.",
       href: "/manage/calendar",
       icon: CalendarDays,
       iconBg: "bg-blue-500/10 dark:bg-blue-500/20",

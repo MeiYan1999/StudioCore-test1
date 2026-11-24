@@ -10,11 +10,20 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { ForbiddenState } from "@/components/shared/forbidden-state";
 import { BookingSheet } from "@/components/scheduling/booking-sheet";
 import { GoogleCalendarSyncDialog } from "@/components/scheduling/google-calendar-sync-dialog";
+import { GoogleCalendarLiveRefresh } from "@/components/scheduling/google-calendar-live-refresh";
 import { ContractCreateModal } from "@/components/orders/contract-create-modal";
 import { hasPermission } from "@/lib/auth/permissions";
 import { requireActor } from "@/lib/auth/session";
 import { getDb } from "@/lib/db/client";
 import { getOrCreateCalendarFeedToken } from "@/lib/services/ical-service";
+import {
+  canManageGoogleCalendar,
+  canViewGoogleCalendar,
+  getGoogleCalendarConfig,
+  getGoogleCalendarConnection,
+  getGoogleCalendarSnapshot,
+  type GoogleCalendarEvent,
+} from "@/lib/services/google-calendar-service";
 import {
   APPOINTMENT_STATUS_META,
   type AppointmentStatus,
@@ -45,7 +54,18 @@ type SearchParams = {
   branchId?: string;
   photographerId?: string;
   roomId?: string;
+  googleCalendar?: string;
 };
+
+type DisplayEvent = CalendarAppointment | GoogleCalendarEvent;
+
+function displayEventKey(event: DisplayEvent) {
+  return "kind" in event ? `google:${event.id}` : event.id;
+}
+
+function mergeEvents(appointments: CalendarAppointment[], events: GoogleCalendarEvent[] = []) {
+  return [...appointments, ...events].sort((a, b) => a.startAt.getTime() - b.startAt.getTime());
+}
 
 const VIEWS: { value: CalendarView; label: string }[] = [
   { value: "day", label: "Ngày" },
@@ -79,9 +99,25 @@ function EventCard({
   appointment,
   compact = false,
 }: {
-  appointment: CalendarAppointment;
+  appointment: DisplayEvent;
   compact?: boolean;
 }) {
+  if ("kind" in appointment) {
+    return (
+      <article
+        className={cn(
+          "rounded-lg border border-border border-l-4 border-l-sky-500 bg-surface p-2.5",
+          compact ? "text-xs" : "text-sm",
+        )}
+      >
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="font-semibold tabular-nums text-foreground">{appointment.timeLabel}</span>
+          <Badge tone="info" className="px-1.5 py-0 text-[10px]">Google Calendar</Badge>
+        </div>
+        <p className="mt-1 truncate font-medium text-foreground" title={appointment.title}>{appointment.title}</p>
+      </article>
+    );
+  }
   const meta = APPOINTMENT_STATUS_META[appointment.status];
 
   return (
@@ -162,6 +198,19 @@ export default async function CalendarPage({
   const defaultBranchId = actor.activeBranchId ?? actor.branches[0]?.id ?? "";
   const feedToken = getOrCreateCalendarFeedToken(getDb(), actor.tenantId);
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://studiocore.io.vn";
+  const googleConfig = getGoogleCalendarConfig();
+  const googleConnection = getGoogleCalendarConnection(getDb(), actor.tenantId);
+  const googleVisible = googleConnection && canViewGoogleCalendar(actor, googleConnection, data.branchId) &&
+    !data.roomId && !data.photographerId && data.days.length > 0;
+  const google = googleConfig && googleVisible
+    ? await getGoogleCalendarSnapshot(googleConfig, googleConnection, data.rangeStartKey, data.rangeEndKey)
+    : null;
+  const displayDays = data.days.map((day) => ({
+    ...day,
+    events: mergeEvents(day.appointments, google?.days.get(day.dateKey)),
+  }));
+  const dayEvents = displayDays[0]?.events ?? [];
+  const timelineDays = displayDays.filter(({ events }) => events.length);
 
   const studioBankConfig = {
     bankBin: tenantSettings["payment.bankBin"] || "970422",
@@ -191,10 +240,20 @@ export default async function CalendarPage({
     <div>
       <PageHeader
         title="Lịch chụp"
-        description={`${data.rangeLabel} · ${data.appointments.length} lịch trong phạm vi xem.`}
+        description={`${data.rangeLabel} · ${data.appointments.length + (google?.count ?? 0)} lịch trong phạm vi xem.`}
         actions={
           <>
-            <GoogleCalendarSyncDialog feedToken={feedToken} siteUrl={siteUrl} />
+            <GoogleCalendarSyncDialog
+              feedToken={feedToken}
+              siteUrl={siteUrl}
+              inbound={canManageGoogleCalendar(actor) ? {
+                configured: !!googleConfig,
+                connection: googleConnection ? { branchId: googleConnection.branchId, calendarId: googleConnection.calendarId } : null,
+                branches: actor.branches,
+                defaultBranchId,
+                result: typeof params.googleCalendar === "string" ? params.googleCalendar : undefined,
+              } : null}
+            />
             {canManage ? (
               <Button asChild variant="outline">
                 <Link href="/manage/settings/rooms">
@@ -229,6 +288,17 @@ export default async function CalendarPage({
           </>
         }
       />
+
+      {google ? <GoogleCalendarLiveRefresh /> : null}
+      {googleVisible && (!google || google.status !== "ok") ? (
+        <p role="status" className="mb-4 rounded-lg border border-border bg-surface p-3 text-sm text-muted-foreground">
+          {google?.status === "reconnect"
+            ? "Không còn quyền đọc Google Calendar. Chủ studio cần kết nối lại."
+            : google
+              ? "Tạm thời không đọc được Google Calendar. Lịch StudioCore vẫn hiển thị bình thường."
+              : "Kết nối Google Calendar chưa được cấu hình trên máy chủ."}
+        </p>
+      ) : null}
 
       <div className="mb-4 rounded-xl border border-border bg-surface p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -349,10 +419,13 @@ export default async function CalendarPage({
 
       {data.view === "day" ? (
         <section aria-label="Lịch ngày" className="space-y-3">
+          {dayEvents.map((appointment) => (
+            <EventCard key={displayEventKey(appointment)} appointment={appointment} />
+          ))}
           {data.appointments.length === 0 ? (
             <EmptyState
               icon={<CalendarDays className="h-6 w-6" aria-hidden="true" />}
-              title="Chưa có lịch trong ngày"
+              title={dayEvents.length > 0 ? "Chưa có lịch chụp StudioCore trong ngày" : "Chưa có lịch trong ngày"}
               description="Chọn ngày khác hoặc thêm hợp đồng mới / xếp lịch chụp cho ngày này."
               action={
                 canManage ? (
@@ -388,9 +461,6 @@ export default async function CalendarPage({
             />
           ) : (
             <>
-              {data.appointments.map((appointment) => (
-                <EventCard key={appointment.id} appointment={appointment} />
-              ))}
               {canManage ? (
                 <div className="pt-2 flex items-center gap-2">
                   <ContractCreateModal
@@ -428,7 +498,7 @@ export default async function CalendarPage({
       {data.view === "week" ? (
         <div className="overflow-x-auto rounded-xl border border-border bg-surface">
           <div className="grid min-w-[980px] grid-cols-7 divide-x divide-border">
-            {data.days.map((day) => (
+            {displayDays.map((day) => (
               <div key={day.dateKey} className="min-h-64 p-2 flex flex-col justify-between">
                 <div>
                   <div
@@ -458,6 +528,9 @@ export default async function CalendarPage({
                     ) : null}
                   </div>
                   <div className="space-y-2">
+                    {day.events.map((appointment) => (
+                      <EventCard key={displayEventKey(appointment)} appointment={appointment} compact />
+                    ))}
                     {day.appointments.length === 0 ? (
                       canManage ? (
                         <div className="flex flex-col gap-1.5 rounded-lg border border-dashed border-border/80 p-3 text-center">
@@ -493,14 +566,10 @@ export default async function CalendarPage({
                             }
                           />
                         </div>
-                      ) : (
+                      ) : day.events.length === 0 ? (
                         <p className="px-1 text-xs text-muted-foreground">Trống</p>
-                      )
-                    ) : (
-                      day.appointments.map((appointment) => (
-                        <EventCard key={appointment.id} appointment={appointment} compact />
-                      ))
-                    )}
+                      ) : null
+                    ) : null}
                   </div>
                 </div>
                 {canManage && day.appointments.length > 0 ? (
@@ -554,7 +623,7 @@ export default async function CalendarPage({
             ))}
           </div>
           <div className="grid min-w-[900px] grid-cols-7">
-            {data.days.map((day) => (
+            {displayDays.map((day) => (
               <div
                 key={day.dateKey}
                 className={cn(
@@ -587,12 +656,12 @@ export default async function CalendarPage({
                   ) : null}
                 </div>
                 <div className="space-y-1">
-                  {day.appointments.slice(0, 3).map((appointment) => (
-                    <EventCard key={appointment.id} appointment={appointment} compact />
+                  {day.events.slice(0, 3).map((appointment) => (
+                    <EventCard key={displayEventKey(appointment)} appointment={appointment} compact />
                   ))}
-                  {day.appointments.length > 3 ? (
+                  {day.events.length > 3 ? (
                     <p className="px-1 text-[10px] text-muted-foreground">
-                      +{day.appointments.length - 3} lịch khác
+                      +{day.events.length - 3} lịch khác
                     </p>
                   ) : null}
                 </div>
@@ -604,23 +673,22 @@ export default async function CalendarPage({
 
       {data.view === "timeline" ? (
         <div className="space-y-5">
-          {data.days.filter((day) => day.appointments.length > 0).length === 0 ? (
+          {timelineDays.length === 0 ? (
             <EmptyState
               icon={<CalendarDays className="h-6 w-6" aria-hidden="true" />}
               title="Chưa có lịch trong 30 ngày"
               description="Dùng nút Xếp lịch để tạo buổi chụp đầu tiên trong khoảng này."
             />
           ) : (
-            data.days
-              .filter((day) => day.appointments.length > 0)
+            timelineDays
               .map((day) => (
                 <section key={day.dateKey} aria-label={`Lịch ngày ${day.label}`}>
                   <h2 className="mb-2 text-sm font-semibold text-foreground">
                     {day.weekdayLabel}, {day.label}
                   </h2>
                   <div className="grid gap-2 lg:grid-cols-2">
-                    {day.appointments.map((appointment) => (
-                      <EventCard key={appointment.id} appointment={appointment} />
+                    {day.events.map((appointment) => (
+                      <EventCard key={displayEventKey(appointment)} appointment={appointment} />
                     ))}
                   </div>
                 </section>
