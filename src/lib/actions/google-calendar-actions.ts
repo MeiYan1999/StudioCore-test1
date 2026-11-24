@@ -34,7 +34,7 @@ export async function connectGoogleCalendarAction(form: FormData) {
   redirect(flow.url.toString());
 }
 
-export async function disconnectGoogleCalendarAction() {
+export async function disconnectGoogleCalendarAction(filterQuery: string) {
   const actor = await getActorContext();
   if (!canManageGoogleCalendar(actor)) redirect("/manage/calendar");
   disconnectGoogleCalendar(getDb(), actor.tenantId);
@@ -46,5 +46,7 @@ export async function disconnectGoogleCalendarAction() {
       maxAge: 0,
     });
   }
-  redirect("/manage/calendar?googleCalendar=disconnected");
+  const query = new URLSearchParams(filterQuery);
+  query.set("googleCalendar", "disconnected");
+  redirect(`/manage/calendar?${query}`);
 }
