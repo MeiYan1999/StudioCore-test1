@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, isNull, like, ne, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, isNull, like, ne, or, sql } from "drizzle-orm";
 import type { AppDb } from "../db/client";
 import {
   branches,
@@ -768,23 +768,22 @@ export function activeRentalForItem(
 
 /**
  * Names of wardrobe items still checked out for an order, limited to the
- * branches the actor may see (same scope as `listRentals`).
+ * branches the actor is assigned to (not just the one currently selected, so a
+ * cancellation at another assigned branch still gets its warning).
  */
 export function listUnreturnedRentalItems(
   db: AppDb,
   actor: ActorContext,
   orderId: string,
 ): string[] {
-  const scope = getBranchScope(actor);
-  if (scope.mode === "none") return [];
+  const branchIds = actor.branches.map((branch) => branch.id);
+  if (branchIds.length === 0) return [];
   const conditions = [
     eq(wardrobeRentals.tenantId, actor.tenantId),
     eq(wardrobeRentals.orderId, orderId),
     isNull(wardrobeRentals.returnedAt),
+    inArray(wardrobeRentals.branchId, branchIds),
   ];
-  if (scope.mode === "branch") {
-    conditions.push(eq(wardrobeRentals.branchId, scope.branchId));
-  }
   return db
     .select({ name: wardrobeItems.name })
     .from(wardrobeRentals)
