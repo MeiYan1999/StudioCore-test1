@@ -1,17 +1,19 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { count, eq } from "drizzle-orm";
+import { and, count, eq } from "drizzle-orm";
 import { authenticate } from "@/lib/auth/login-service";
 import { getActorFromToken } from "@/lib/auth/session-core";
 import type { ActorContext } from "@/lib/auth/types";
 import type { AppDb } from "@/lib/db/client";
-import { appointments } from "@/lib/db/schema";
+import { appointments, notifications, wardrobeRentals } from "@/lib/db/schema";
 import { BookingConflictError, AuthorizationError } from "@/lib/errors";
 import {
   checkInAppointment,
+  cancelAppointment,
   checkOutAppointment,
   createAppointment,
   getAppointmentDetail,
   getCalendarData,
+  listUnreturnedRentalItems,
 } from "@/lib/services/appointment-service";
 import { createTestDb } from "../helpers/test-db";
 
@@ -210,5 +212,57 @@ describe("check-in / check-out", () => {
     expect(afterCheckOut?.status).toBe("completed");
     expect(afterCheckOut?.orderStatus).toBe("awaiting_edit");
     expect(afterCheckOut?.checkOutAt).not.toBeNull();
+  });
+
+  it("hủy lịch không tự đánh dấu trả trang phục và cảnh báo người hủy", async () => {
+    const created = await createAppointment(db, owner, {
+      orderId: "order-demo-06",
+      branchId: "branch-demo-q1",
+      roomId: "room-demo-q1-2",
+      photographerId: "staff-sc-photo",
+      makeupId: null,
+      editorId: null,
+      startAt: iso("2026-12-14T09:00:00+07:00"),
+      endAt: iso("2026-12-14T11:00:00+07:00"),
+      notes: "Kiểm tra hủy lịch",
+      idempotencyKey: crypto.randomUUID(),
+    });
+    db.insert(wardrobeRentals)
+      .values({
+        id: "rental-cancel-test",
+        tenantId: owner.tenantId,
+        branchId: "branch-demo-q1",
+        wardrobeItemId: "wardrobe-demo-02",
+        orderId: "order-demo-06",
+        checkedOutAt: new Date("2026-12-10T09:00:00+07:00"),
+        dueAt: new Date("2026-12-15T18:00:00+07:00"),
+        status: "active",
+        createdBy: owner.staffId,
+      })
+      .run();
+
+    cancelAppointment(db, owner, created.appointmentId, "Khách đổi ngày");
+
+    const rental = db
+      .select()
+      .from(wardrobeRentals)
+      .where(eq(wardrobeRentals.id, "rental-cancel-test"))
+      .get();
+    expect(rental?.status).toBe("active");
+    expect(rental?.returnedAt).toBeNull();
+    expect(listUnreturnedRentalItems(db, owner, "order-demo-06")).toHaveLength(1);
+    expect(listUnreturnedRentalItems(db, secondaryOwner, "order-demo-06")).toHaveLength(0);
+
+    const warning = db
+      .select()
+      .from(notifications)
+      .where(
+        and(
+          eq(notifications.userId, owner.staffId),
+          eq(notifications.title, "Trang phục chưa trả sau khi hủy lịch"),
+        ),
+      )
+      .get();
+    expect(warning?.link).toBe(`/manage/calendar/${created.appointmentId}`);
   });
 });
