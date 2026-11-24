@@ -33,7 +33,8 @@ export function getGoogleCalendarConfig(requestHeaders?: Pick<Headers, "get">) {
   const clientSecret = env.GOOGLE_CALENDAR_CLIENT_SECRET?.trim();
   if (!clientId || !clientSecret) return null;
   const canonical = new URL(env.NEXT_PUBLIC_SITE_URL);
-  const render = URL.parse(process.env.RENDER_EXTERNAL_URL ?? "");
+  const renderUrl = process.env.RENDER_EXTERNAL_URL?.trim();
+  const render = renderUrl && URL.canParse(renderUrl) ? new URL(renderUrl) : null;
   const origin = requestHeaders
     ? resolveGoogleCalendarOrigin(requestHeaders, render?.protocol === "https:" ? [canonical, render] : [canonical])
     : canonical.origin;
