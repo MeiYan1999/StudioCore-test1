@@ -5,6 +5,7 @@ import { activityLogs, branches, settings } from "../db/schema";
 import type { ActorContext } from "../auth/types";
 import { assertPermission } from "../auth/permissions";
 import { NotFoundError, ValidationError } from "../errors";
+import { assertPlanAllowsNew } from "./plan-limits";
 
 export function setTenantSetting(
   db: AppDb,
@@ -215,6 +216,7 @@ export function saveBranch(
       .run();
     return input.id;
   }
+  assertPlanAllowsNew(db, actor.tenantId, "branches");
   const id = crypto.randomUUID();
   db.insert(branches)
     .values({

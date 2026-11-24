@@ -1,4 +1,5 @@
 import { and, asc, count, desc, eq, gt, inArray, isNull, ne } from "drizzle-orm";
+import { assertPlanAllowsNew } from "./plan-limits";
 import type { AppDb } from "../db/client";
 import { branches, rolePermissions, sessions, staff, staffBranches } from "../db/schema";
 import type { ActorContext } from "../auth/types";
@@ -284,6 +285,7 @@ export function createStaff(
   const phone = normalizeOptionalPhone(input.phone);
   const branchIds = assertBranchesInTenant(db, actor.tenantId, input.branchIds);
   assertUniqueStaffFields(db, actor.tenantId, code, email);
+  assertPlanAllowsNew(db, actor.tenantId, "staff");
 
   const staffId = crypto.randomUUID();
 
