@@ -79,6 +79,18 @@ Sau khi kết nối Render với GitHub và duyệt Blueprint:
 - Render Free xóa file cục bộ khi khởi động lại, deploy lại hoặc ngủ do không có truy cập; lượt truy cập đầu tiên sau khi ngủ phải chờ khởi động.
 - Đây là môi trường demo công khai với tài khoản demo. Production: đặt `SEED_DEMO=false`, vô hiệu hóa/đổi mật khẩu tài khoản demo, dùng private storage và PostgreSQL.
 
+### Tạo tài khoản quản trị nền tảng riêng
+
+Trong Render → Environment, đặt `PLATFORM_ADMIN_LOGIN=admin` và `PLATFORM_ADMIN_PASSWORD_HASH` là hash scrypt do `hashSecret` của ứng dụng tạo. Tạo hash trên terminal riêng (Bash); mật khẩu nhập ẩn, không đặt trong lệnh hoặc file:
+
+```bash
+IFS= read -rs -p 'Mật khẩu mới: ' password; printf '\n'
+printf '%s' "$password" | node --import tsx -e 'const fs = require("node:fs"); const { hashSecret } = require("./src/lib/auth/password.ts"); console.log(hashSecret(fs.readFileSync(0, "utf8")))'
+unset password
+```
+
+Giữ hash trong Render, không commit hoặc gửi qua chat. Khi container khởi động, ứng dụng tạo tài khoản sau restore và migrate, không cần seed demo và không thay mật khẩu tài khoản đã tồn tại. Đăng nhập bằng `admin` và mật khẩu tại `/login`; tài khoản này không có PIN. Đổi biến hash sau khi tạo **không** đặt lại mật khẩu.
+
 ## Chức năng đã có
 
 - Đăng nhập email + mật khẩu hoặc mã nhân viên + PIN.
