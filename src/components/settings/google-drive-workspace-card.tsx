@@ -155,6 +155,14 @@ export function GoogleDriveWorkspaceCard({ info, configured }: Props) {
             </span>
           </div>
 
+          {!info.canManageSharing ? (
+            <Alert tone="warning">
+              Kết nối này chưa có quyền quản lý chia sẻ, nên khi thu hồi link
+              album StudioCore chưa gỡ được quyền xem trên Google Drive. Ngắt
+              kết nối rồi kết nối lại để cấp quyền.
+            </Alert>
+          ) : null}
+
           {/* Box 2: Token expiration box (slate) */}
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200/90 bg-slate-50/90 p-3.5 dark:border-border dark:bg-muted/30">
             <p className="text-xs font-medium text-slate-700 dark:text-slate-300 sm:text-sm">

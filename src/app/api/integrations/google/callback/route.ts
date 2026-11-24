@@ -51,7 +51,7 @@ export async function GET(request: Request): Promise<Response> {
 
   try {
     const result = await exchangeGoogleCode(code);
-    saveGoogleConnection(getDb(), actor, result.refreshToken);
+    saveGoogleConnection(getDb(), actor, result.refreshToken, result.scopes);
 
     // Tự động khởi tạo kho lưu trữ studio và kiểm tra dung lượng Google Drive
     if (result.accessToken) {
