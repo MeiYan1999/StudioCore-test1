@@ -231,7 +231,7 @@ export const PLANS: Plan[] = [
     name: "Doanh nghiệp",
     monthly: 699_000,
     yearly: 6_990_000,
-    description: "Cho chuỗi studio lớn, thương hiệu áo cưới nhiều cơ sở.",
+    description: "Cho chuỗi studio lớn, thương hiệu nhiều cơ sở.",
     features: [
       "Không giới hạn chi nhánh",
       "Không giới hạn nhân sự",

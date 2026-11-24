@@ -228,7 +228,7 @@ export function BentoGridFeatures() {
           </div>
 
           <h3 className="mt-5 text-xl font-bold tracking-tight text-foreground">
-            Kho Áo cưới &amp; Báo hạn trả
+            Kho trang phục &amp; Báo hạn trả
           </h3>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
             Quét mã QR để xem ảnh mẫu váy, lịch sử giặt ủi, thông số 3 vòng của khách và tự động cảnh báo

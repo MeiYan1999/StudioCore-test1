@@ -38,7 +38,7 @@ import {
 } from "@/lib/marketing/metadata";
 
 export const metadata = marketingMetadata({
-  title: "StudioCore — Hệ điều hành Quản lý Studio Chụp ảnh & Áo cưới Đột phá",
+  title: "StudioCore — Hệ điều hành Quản lý Studio chuyên nghiệp",
   description:
     "Phần mềm SaaS chuyên sâu cho studio ảnh cưới, gia đình & phóng sự: Lịch chụp chống trùng ekip, hợp đồng số ký tay VietQR, PhotoShare Zero-Storage và kế toán thuế HKD.",
   path: "/",
@@ -95,7 +95,7 @@ export default function HomePage() {
             </h1>
 
             <p className="mx-auto mt-6 max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg">
-              Giải pháp SaaS all-in-one chuyên sâu cho Studio Cưới, Phim trường &amp; Áo cưới: Lịch chụp
+              Giải pháp SaaS all-in-one chuyên sâu cho Studio Cưới &amp; Phim trường: Lịch chụp
               chống trùng ekip, hợp đồng số ký tay VietQR, PhotoShare chọn ảnh RAW 30 giây và kế toán thuế
               Hộ kinh doanh.
             </p>
@@ -165,7 +165,7 @@ export default function HomePage() {
           <div className="mt-14 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 border-t border-border/80 pt-6 text-center text-xs text-muted-foreground sm:gap-x-8">
             <span className="flex items-center gap-1.5">
               <span className="h-2 w-2 rounded-full bg-primary" />
-              Tin cậy bởi <strong className="text-foreground">250+ Studio &amp; Áo cưới</strong>
+              Tin cậy bởi <strong className="text-foreground">250+ Studio</strong>
             </span>
             <span className="hidden sm:inline">·</span>
             <span className="flex items-center gap-1.5">
@@ -220,7 +220,7 @@ export default function HomePage() {
               Hệ tính năng chuyên sâu
             </p>
             <h2 className="mt-2 text-3xl font-extrabold tracking-tight sm:text-4xl text-foreground">
-              Thiết kế chuẩn mực cho Studio &amp; Áo cưới Việt Nam.
+              Thiết kế chuẩn mực cho Studio Việt Nam.
             </h2>
             <p className="mt-3 text-sm leading-6 text-muted-foreground sm:text-base">
               Không dàn trải tính năng thừa thãi. Mọi module đều giải quyết triệt để bài toán doanh thu,
