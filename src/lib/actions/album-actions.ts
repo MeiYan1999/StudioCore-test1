@@ -226,10 +226,12 @@ export async function updateAlbumAction(
   } catch (error) {
     return { status: "error", message: errorMessage(error), values };
   }
+  // Gia hạn album đã hết hạn thì bật lại quyền Drive đã gỡ trước đó.
+  const driveNote = await driveSharingNote(actor, parsed.data.albumId);
 
   revalidatePath("/manage/photos");
   revalidatePath(`/manage/albums/${parsed.data.albumId}`);
-  return { status: "success", message: "Đã lưu cấu hình album." };
+  return { status: "success", message: `Đã lưu cấu hình album.${driveNote}` };
 }
 
 async function driveSharingNote(
