@@ -16,11 +16,16 @@ export const dynamic = "force-dynamic";
 
 function isRecordedDerivative(key: string): boolean {
   if (!looksLikeDerivativeKey(key)) return false;
+  // Keys are `<tenantId>/<albumId>/<file>`; filtering by album uses its index.
+  const [tenantId, albumId] = key.split("/");
+  if (!tenantId || !albumId) return false;
   const row = getDb()
     .select({ id: photos.id })
     .from(photos)
     .where(
       and(
+        eq(photos.albumId, albumId),
+        eq(photos.tenantId, tenantId),
         or(eq(photos.thumbnailKey, key), eq(photos.previewKey, key)),
         ne(photos.storageKey, key),
       ),
