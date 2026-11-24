@@ -107,9 +107,11 @@ export function getPlatformBillingConfig(db: AppDb): PlatformBillingConfig {
       getSetting("platform.account_name") ||
       process.env.PLATFORM_ACCOUNT_NAME ||
       "CONG TY STUDIOCORE",
+    // A saved copy of the public default counts as unset, so the env key wins.
     sepayApiKey:
-      getSetting("platform.sepay_api_key") ||
-      process.env.PLATFORM_SEPAY_API_KEY ||
+      [getSetting("platform.sepay_api_key"), process.env.PLATFORM_SEPAY_API_KEY]
+        .map((value) => value?.trim())
+        .find((value) => value && value !== DEFAULT_PLATFORM_SEPAY_API_KEY) ||
       DEFAULT_PLATFORM_SEPAY_API_KEY,
     webhookUrl: `${siteUrl}/api/webhooks/platform-billing`,
   };

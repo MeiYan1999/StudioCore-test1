@@ -4,7 +4,9 @@ import { tenants } from "@/lib/db/schema";
 import {
   createSubscriptionInvoice,
   DEFAULT_PLATFORM_SEPAY_API_KEY,
+  getPlatformBillingConfig,
   isValidPlatformBillingKey,
+  savePlatformBillingConfig,
   getSubscriptionById,
   getTenantCurrentSubscription,
   processPlatformBillingWebhook,
@@ -176,6 +178,19 @@ describe("Subscription & Automated VietQR Billing Service", () => {
     expect(isValidPlatformBillingKey(DEFAULT_PLATFORM_SEPAY_API_KEY, "Apikey studiocore_platform_secret", false)).toBe(true);
     expect(isValidPlatformBillingKey("real-secret-key", "Bearer real-secret-key", true)).toBe(true);
     expect(isValidPlatformBillingKey("real-secret-key", "Bearer real-secret-keX", true)).toBe(false);
+  });
+
+  it("khóa mặc định đã lưu không che khóa cấu hình qua biến môi trường", () => {
+    const fresh = createTestDb();
+    fresh.insert(tenants).values({ id: "tenant-key", name: "Key", slug: "tenant-key", status: "active", plan: "trial" }).run();
+    savePlatformBillingConfig(fresh, "tenant-key", { sepayApiKey: DEFAULT_PLATFORM_SEPAY_API_KEY });
+    process.env.PLATFORM_SEPAY_API_KEY = "env-rotated-key";
+    try {
+      expect(getPlatformBillingConfig(fresh).sepayApiKey).toBe("env-rotated-key");
+    } finally {
+      delete process.env.PLATFORM_SEPAY_API_KEY;
+    }
+    expect(getPlatformBillingConfig(fresh).sepayApiKey).toBe(DEFAULT_PLATFORM_SEPAY_API_KEY);
   });
 
   it("chức năng giả lập thanh toán (Dev / Test Mode) kích hoạt gói thành công ngay lập tức", () => {
