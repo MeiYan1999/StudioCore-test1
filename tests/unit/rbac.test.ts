@@ -28,6 +28,7 @@ function actor(overrides: Partial<ActorContext> = {}): ActorContext {
     ],
     activeBranchId: null,
     readOnly: false,
+    canChangePassword: false,
     ...overrides,
   };
 }

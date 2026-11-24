@@ -207,6 +207,7 @@ export default async function ManageLayout({
         activeBranchId: actor.activeBranchId,
         isOwner: actor.role === "owner",
         readOnly: actor.readOnly,
+        canChangePassword: actor.canChangePassword,
         branches: actor.branches,
       }}
       nav={groups}

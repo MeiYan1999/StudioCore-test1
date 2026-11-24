@@ -19,6 +19,7 @@ import {
   FileText,
   HardDrive,
   Images,
+  KeyRound,
   LayoutDashboard,
   ListFilter,
   LogOut,
@@ -136,6 +137,7 @@ export type ShellActor = {
   activeBranchId: string | null;
   isOwner: boolean;
   readOnly?: boolean;
+  canChangePassword: boolean;
   branches: { id: string; name: string }[];
 };
 
@@ -418,6 +420,14 @@ function UserMenu({ actor }: { actor: ShellActor }) {
           </span>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
+        {actor.canChangePassword ? (
+          <DropdownMenuItem asChild>
+            <Link href="/change-password">
+              <KeyRound className="h-4 w-4" aria-hidden="true" />
+              Đổi mật khẩu
+            </Link>
+          </DropdownMenuItem>
+        ) : null}
         <form action={logoutAction}>
           <button
             type="submit"

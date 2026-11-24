@@ -16,6 +16,7 @@ const TEST_STAFF = "staff-contract-test";
 
 const testActor: ActorContext = {
   sessionId: "test-session", tenantSlug: "studio-test", tenantPlan: "pro", staffCode: "NV001", staffEmail: null, readOnly: false,
+  canChangePassword: false,
   staffId: TEST_STAFF,
   staffName: "Test Manager",
   tenantId: TEST_TENANT,

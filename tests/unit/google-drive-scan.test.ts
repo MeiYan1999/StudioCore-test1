@@ -28,6 +28,7 @@ describe("Google Drive Public & Connected Folder Scan", () => {
     branches: [{ id: "branch-demo-q1", name: "Chi nhánh Q1" }],
     activeBranchId: "branch-demo-q1",
     readOnly: false,
+    canChangePassword: false,
     permissions: ["albums.manage", "albums.view"],
   };
 
