@@ -380,3 +380,96 @@ export function deleteAiHubApiKey(
   setTenantSetting(db, tenantId, "ai.hub.keys", JSON.stringify(updatedKeys));
   return getAiHubData(db, tenantId);
 }
+
+export type AiHubKeyTestResult = {
+  success: boolean;
+  message: string;
+  latencyMs?: number;
+};
+
+type AiProvider = AiHubApiKey["provider"];
+
+export function aiProviderProbeRequest(
+  provider: AiProvider,
+  apiKey: string,
+): { url: string; headers: Record<string, string> } {
+  switch (provider) {
+    case "openai":
+      return {
+        url: "https://api.openai.com/v1/models",
+        headers: { Authorization: `Bearer ${apiKey}` },
+      };
+    case "gemini":
+      return {
+        url: "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1",
+        headers: { "x-goog-api-key": apiKey },
+      };
+    case "anthropic":
+      return {
+        url: "https://api.anthropic.com/v1/models?limit=1",
+        headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+      };
+    case "deepseek":
+      return {
+        url: "https://api.deepseek.com/models",
+        headers: { Authorization: `Bearer ${apiKey}` },
+      };
+    case "openrouter":
+      return {
+        url: "https://openrouter.ai/api/v1/key",
+        headers: { Authorization: `Bearer ${apiKey}` },
+      };
+  }
+}
+
+/** Calls the provider with the stored key; never reports success without a 2xx. */
+export async function testAiHubApiKey(
+  db: AppDb,
+  tenantId: string,
+  keyId: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<AiHubKeyTestResult> {
+  const key = getAiHubData(db, tenantId).apiKeys.find((item) => item.id === keyId);
+  if (!key) return { success: false, message: "Không tìm thấy API Key." };
+  const secret = key.keyEncrypted ? decryptSecret(key.keyEncrypted) : null;
+  if (!secret) {
+    return {
+      success: false,
+      message: "Không giải mã được API Key đã lưu. Vui lòng xóa và thêm lại key.",
+    };
+  }
+  const probe = aiProviderProbeRequest(key.provider, secret);
+  const startedAt = Date.now();
+  try {
+    const response = await fetchImpl(probe.url, {
+      method: "GET",
+      headers: probe.headers,
+      signal: AbortSignal.timeout(8000),
+      cache: "no-store",
+    });
+    const latencyMs = Date.now() - startedAt;
+    if (response.ok) {
+      return {
+        success: true,
+        latencyMs,
+        message: `Kết nối thành công tới ${key.provider}, phản hồi sau ${latencyMs}ms.`,
+      };
+    }
+    const reason =
+      response.status === 401 || response.status === 403
+        ? "API Key không hợp lệ hoặc đã bị thu hồi"
+        : response.status === 429
+          ? "API Key đã hết hạn mức hoặc bị giới hạn tần suất"
+          : "nhà cung cấp trả về lỗi";
+    return {
+      success: false,
+      latencyMs,
+      message: `Kiểm tra thất bại (HTTP ${response.status}): ${reason}.`,
+    };
+  } catch {
+    return {
+      success: false,
+      message: `Không kết nối được tới ${key.provider}. Vui lòng thử lại sau.`,
+    };
+  }
+}

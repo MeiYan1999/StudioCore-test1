@@ -34,7 +34,7 @@ import {
   TRANSACTION_CATEGORIES,
   TRANSACTION_CATEGORY_LABELS,
 } from "@/lib/finance/constants";
-import { formatVnd } from "@/lib/utils";
+import { formatVnd, newRequestId } from "@/lib/utils";
 
 type BranchOption = { id: string; name: string };
 type OrderOption = {
@@ -364,6 +364,7 @@ export function RefundSheet({
   orders: OrderOption[];
 }) {
   const [open, setOpen] = useState(false);
+  const [requestId, setRequestId] = useState("");
   const [orderId, setOrderId] = useState(orders[0]?.id ?? "");
   const [amount, setAmount] = useState(
     String(orders[0]?.paid && orders[0].paid > 0 ? orders[0].paid : 0),
@@ -383,7 +384,13 @@ export function RefundSheet({
   );
   const selected = orders.find((order) => order.id === orderId);
   return (
-    <Sheet open={open} onOpenChange={setOpen}>
+    <Sheet
+      open={open}
+      onOpenChange={(next) => {
+        if (next) setRequestId(newRequestId());
+        setOpen(next);
+      }}
+    >
       <SheetTrigger asChild>
         <Button variant="outline" size="sm">
           <RotateCcw className="h-4 w-4" aria-hidden />
@@ -398,6 +405,7 @@ export function RefundSheet({
           </SheetDescription>
         </SheetHeader>
         <form action={formAction} className="space-y-4">
+          <input type="hidden" name="requestId" value={requestId} />
           {state.status === "error" ? <Alert tone="danger">{state.message}</Alert> : null}
           <div>
             <Label htmlFor="refund-order">Đơn hàng</Label>

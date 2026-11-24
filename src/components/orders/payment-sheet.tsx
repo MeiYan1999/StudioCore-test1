@@ -6,7 +6,7 @@ import { Landmark } from "lucide-react";
 import { toast } from "sonner";
 import { recordPaymentAction } from "@/lib/actions/order-actions";
 import { initialActionState } from "@/lib/actions/action-state";
-import { formatVnd } from "@/lib/utils";
+import { formatVnd, newRequestId } from "@/lib/utils";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,6 +41,7 @@ export function PaymentSheet({
   remaining: number;
 }) {
   const [open, setOpen] = useState(false);
+  const [requestId, setRequestId] = useState("");
   const router = useRouter();
   const [state, formAction] = useActionState(
     async (previousState: typeof initialActionState, formData: FormData) => {
@@ -56,7 +57,13 @@ export function PaymentSheet({
   );
 
   return (
-    <Sheet open={open} onOpenChange={setOpen}>
+    <Sheet
+      open={open}
+      onOpenChange={(next) => {
+        if (next) setRequestId(newRequestId());
+        setOpen(next);
+      }}
+    >
       <SheetTrigger asChild>
         <Button>
           <Landmark className="h-4 w-4" aria-hidden="true" />
@@ -72,6 +79,7 @@ export function PaymentSheet({
         </SheetHeader>
         <form action={formAction} className="space-y-4" noValidate>
           <input type="hidden" name="orderId" value={orderId} />
+          <input type="hidden" name="requestId" value={requestId} />
           {state.status === "error" && state.message ? (
             <Alert tone="danger">{state.message}</Alert>
           ) : null}

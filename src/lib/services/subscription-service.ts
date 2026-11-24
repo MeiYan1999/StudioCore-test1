@@ -59,6 +59,25 @@ export interface PlatformBillingConfig {
   webhookUrl: string;
 }
 
+export const DEFAULT_PLATFORM_SEPAY_API_KEY = "studiocore_platform_secret";
+
+/**
+ * The default key is public (it ships in the source), so it only authenticates
+ * outside production. Production must configure its own key.
+ */
+export function isValidPlatformBillingKey(
+  expectedKey: string,
+  header: string | undefined,
+  isProduction = process.env.NODE_ENV === "production",
+): boolean {
+  const provided = (header ?? "").replace(/^(Apikey|Bearer)\s+/i, "").trim();
+  if (!expectedKey || !provided) return false;
+  if (isProduction && expectedKey === DEFAULT_PLATFORM_SEPAY_API_KEY) return false;
+  const a = crypto.createHash("sha256").update(provided).digest();
+  const b = crypto.createHash("sha256").update(expectedKey).digest();
+  return crypto.timingSafeEqual(a, b);
+}
+
 export function getPlatformBillingConfig(db: AppDb): PlatformBillingConfig {
   const getSetting = (k: string) => {
     const row = db
@@ -91,7 +110,7 @@ export function getPlatformBillingConfig(db: AppDb): PlatformBillingConfig {
     sepayApiKey:
       getSetting("platform.sepay_api_key") ||
       process.env.PLATFORM_SEPAY_API_KEY ||
-      "studiocore_platform_secret",
+      DEFAULT_PLATFORM_SEPAY_API_KEY,
     webhookUrl: `${siteUrl}/api/webhooks/platform-billing`,
   };
 }
@@ -377,16 +396,13 @@ export function processPlatformBillingWebhook(
   },
   apiKeyHeader?: string,
 ): ProcessWebhookResult {
-  // 1. Kiểm tra API Key nền tảng (nếu có cấu hình)
+  // 1. Bắt buộc xác thực API Key nền tảng: thiếu key hoặc sai key đều bị từ chối.
   const config = getPlatformBillingConfig(db);
-  if (config.sepayApiKey && apiKeyHeader) {
-    const cleanHeader = apiKeyHeader.replace(/^(Apikey|Bearer)\s+/i, "").trim();
-    if (cleanHeader !== config.sepayApiKey) {
-      return {
-        success: false,
-        message: "API Key xác thực Webhook không hợp lệ.",
-      };
-    }
+  if (!isValidPlatformBillingKey(config.sepayApiKey, apiKeyHeader)) {
+    return {
+      success: false,
+      message: "API Key xác thực Webhook không hợp lệ.",
+    };
   }
 
   // Chỉ xử lý giao dịch tiền vào (tiền nạp mua gói)
@@ -437,7 +453,7 @@ export function processPlatformBillingWebhook(
   }
 
   // 4. Kiểm tra số tiền chuyển vào
-  if (transferAmount < subscription.amount) {
+  if (!Number.isFinite(transferAmount) || transferAmount < subscription.amount) {
     return {
       success: false,
       message: `Số tiền chuyển khoản (${transferAmount.toLocaleString("vi-VN")} đ) chưa đủ giá trị gói cước (${subscription.amount.toLocaleString("vi-VN")} đ).`,

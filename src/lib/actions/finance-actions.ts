@@ -242,6 +242,7 @@ export async function recordRefundAction(
       amount: parsed.data.amount,
       reason: parsed.data.reason,
       method: parsed.data.method,
+      idempotencyKey: getFormString(formData, "requestId") || undefined,
     });
   } catch (error) {
     return { status: "error", message: errorMessage(error) };

@@ -92,6 +92,7 @@ export async function sendTestSepayWebhookAction(): Promise<{
     settings.apiKey,
     testPayload,
     JSON.stringify(testPayload),
+    { test: true },
   );
 
   revalidatePath("/manage/settings/sepay");

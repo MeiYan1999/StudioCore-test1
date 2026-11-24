@@ -8,6 +8,7 @@ import {
   addAiHubApiKey,
   deleteAiHubApiKey,
   resetAiHubFeatureStats,
+  testAiHubApiKey,
   toggleAiHubApiKey,
   updateAiHubFeature,
   type AiHubFeatureId,
@@ -19,8 +20,7 @@ function checkAuth(actor: Awaited<ReturnType<typeof getActorContext>>) {
   }
   const canManage =
     hasPermission(actor.permissions, "settings.manage") ||
-    hasPermission(actor.permissions, "integrations.manage") ||
-    hasPermission(actor.permissions, "settings.view");
+    hasPermission(actor.permissions, "integrations.manage");
   if (!canManage) {
     throw new Error("Bạn không có quyền quản lý Trung tâm AI.");
   }
@@ -106,12 +106,7 @@ export async function deleteAiHubApiKeyAction(keyId: string) {
   return { success: true, data: result };
 }
 
-export async function testAiHubApiKeyAction(_keyId: string) {
-  checkAuth(await getActorContext());
-  // Simulate quick connection test or validation
-  await new Promise((r) => setTimeout(r, 600));
-  return {
-    success: true,
-    message: "Kết nối thành công! API Key hoạt động bình thường, latency 182ms.",
-  };
+export async function testAiHubApiKeyAction(keyId: string) {
+  const actor = checkAuth(await getActorContext());
+  return testAiHubApiKey(getDb(), actor.tenantId, keyId);
 }

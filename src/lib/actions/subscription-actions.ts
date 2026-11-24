@@ -43,9 +43,17 @@ export async function createSubscriptionInvoiceAction(
 }
 
 export async function checkSubscriptionStatusAction(subscriptionId: string) {
+  const actor = await getActorContext();
+  if (!actor) {
+    return { success: false, error: "Vui lòng đăng nhập lại." };
+  }
   const db = getDb();
   const sub = getSubscriptionById(db, subscriptionId);
-  if (!sub) {
+  if (
+    !sub ||
+    (sub.tenantId !== actor.tenantId &&
+      !hasPermission(actor.permissions, "tenants.manage"))
+  ) {
     return { success: false, error: "Không tìm thấy giao dịch." };
   }
 
