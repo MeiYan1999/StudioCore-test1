@@ -27,10 +27,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import type { ActorBranch } from "@/lib/auth/types";
-import {
-  connectGoogleCalendarAction,
-  disconnectGoogleCalendarAction,
-} from "@/lib/actions/google-calendar-actions";
+import { connectGoogleCalendarAction } from "@/lib/actions/google-calendar-actions";
 import { regenerateCalendarFeedTokenAction } from "@/lib/actions/scheduling-actions";
 
 const RESULT_MESSAGES = {
@@ -63,6 +60,7 @@ export function GoogleCalendarSyncDialog({
     connection: { branchId: string; calendarId: string } | null;
     branches: ActorBranch[];
     defaultBranchId: string;
+    disconnectAction: () => Promise<void>;
     result?: string;
   } | null;
 }) {
@@ -193,7 +191,7 @@ export function GoogleCalendarSyncDialog({
                 </form>
               )}
               {inbound.connection ? (
-                <form action={disconnectGoogleCalendarAction}>
+                <form action={inbound.disconnectAction}>
                   <Button type="submit" size="sm" variant="outline">Ngắt kết nối</Button>
                 </form>
               ) : null}
