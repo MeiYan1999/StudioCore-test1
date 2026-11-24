@@ -174,7 +174,7 @@ export function findTenantBySepayApiKey(
 
 /**
  * Matches the order whose code appears in the transfer content. A shorter code
- * that is only a prefix of a longer number (DH1 inside DH10) is not a match,
+ * directly followed by more digits (DH1 inside DH10) is not a match,
  * and two different candidates of equal length are ambiguous: no match.
  */
 export function matchOrderByTransferContent<T extends { code: string }>(
@@ -182,23 +182,20 @@ export function matchOrderByTransferContent<T extends { code: string }>(
   content: string,
 ): T | null {
   const clean = (value: string) => value.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
-  const cleanContent = clean(content);
+  const raw = content.toUpperCase();
   let best: T | null = null;
   let bestLength = 0;
   let ambiguous = false;
   for (const candidate of candidates) {
     const code = clean(candidate.code);
     if (!code) continue;
-    let index = cleanContent.indexOf(code);
-    let found = false;
-    while (index !== -1) {
-      const next = cleanContent[index + code.length] ?? "";
-      if (!(/[0-9]/.test(code.at(-1) ?? "") && /[0-9]/.test(next))) {
-        found = true;
-        break;
-      }
-      index = cleanContent.indexOf(code, index + 1);
-    }
+    // Banks drop or change separators inside the code, so allow any between
+    // its characters; the boundary is checked on the raw content so a numeric
+    // note after a space ("DH-12 500") still matches.
+    const pattern = new RegExp(
+      code.split("").join("[^A-Z0-9]*") + (/[0-9]$/.test(code) ? "(?![0-9])" : ""),
+    );
+    const found = pattern.test(raw);
     if (!found) continue;
     if (code.length > bestLength) {
       best = candidate;

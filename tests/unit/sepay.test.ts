@@ -232,5 +232,9 @@ describe("SePay Webhook & Connection Service", () => {
     expect(matchOrderByTransferContent(list, "CK DH1 coc")?.code).toBe("DH-1");
     expect(matchOrderByTransferContent([{ code: "DH-A1" }, { code: "DH-B1" }], "DHA1 DHB1")).toBeNull();
     expect(matchOrderByTransferContent(list, "khong co ma")).toBeNull();
+    const dated = [{ code: "DH-20261124-AB12" }];
+    expect(matchOrderByTransferContent(dated, "DH20261124AB12 500")?.code).toBe("DH-20261124-AB12");
+    expect(matchOrderByTransferContent(dated, "dh 20261124 ab12-0901234567")?.code).toBe("DH-20261124-AB12");
+    expect(matchOrderByTransferContent(dated, "DH20261124AB125")).toBeNull();
   });
 });
