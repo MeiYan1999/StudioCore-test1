@@ -28,7 +28,7 @@ export default async function ResetPasswordPage({
         <p className="mt-1 text-sm text-muted-foreground">
           {token
             ? "Token chỉ dùng một lần, hết hạn sau 30 phút và sẽ thu hồi các phiên đăng nhập cũ."
-            : "Nhập email tài khoản đã đăng ký để nhận liên kết khôi phục mật khẩu an toàn."}
+            : "Xem hướng dẫn khôi phục quyền truy cập vào tài khoản StudioCore."}
         </p>
       </div>
       <div className="rounded-xl border border-border bg-surface p-5 shadow-sm sm:p-6">

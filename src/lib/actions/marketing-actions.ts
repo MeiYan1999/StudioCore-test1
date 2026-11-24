@@ -8,10 +8,7 @@ import { setSessionCookie } from "@/lib/auth/session";
 import { createSession } from "@/lib/auth/session-core";
 import { AuthorizationError, ValidationError } from "@/lib/errors";
 import { registerTenant } from "@/lib/services/onboarding-service";
-import {
-  requestPasswordReset,
-  resetPasswordWithToken,
-} from "@/lib/services/password-reset-service";
+import { resetPasswordWithToken } from "@/lib/services/password-reset-service";
 import { createContactRequest } from "@/lib/services/contact-service";
 
 async function requestMeta(): Promise<{ ip: string; userAgent: string }> {
@@ -96,17 +93,15 @@ export async function requestPasswordResetAction(
   _previousState: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const email = getFormString(formData, "email");
-  try {
-    const result = requestPasswordReset(getDb(), email);
-    return {
-      status: "success",
-      message: result.message,
-      values: result.link ? { resetLink: result.link } : {},
-    };
-  } catch (error) {
-    return { status: "error", message: errorMessage(error), values: { email } };
+  const email = getFormString(formData, "email").trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return { status: "error", message: "Email không hợp lệ.", values: { email } };
   }
+  return {
+    status: "success",
+    message:
+      "Hiện chưa hỗ trợ đặt lại mật khẩu qua email. Vui lòng liên hệ bộ phận hỗ trợ để được hướng dẫn xác minh tài khoản.",
+  };
 }
 
 export async function resetPasswordAction(

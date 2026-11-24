@@ -12,7 +12,6 @@ import {
   requestPasswordResetAction,
   resetPasswordAction,
 } from "@/lib/actions/marketing-actions";
-import { copyToClipboard } from "@/lib/utils/clipboard";
 
 export function ResetRequestForm() {
   const [state, formAction, pending] = useActionState(
@@ -24,21 +23,10 @@ export function ResetRequestForm() {
       {state.status === "error" ? <Alert tone="danger">{state.message}</Alert> : null}
       {state.status === "success" ? (
         <Alert tone="success">
-          {state.message}
-          {state.values?.resetLink ? (
-            <span className="mt-2 block break-all rounded-md bg-white/60 p-2 font-mono text-xs dark:bg-black/20">
-              <Link href={state.values.resetLink} className="text-primary underline">
-                {state.values.resetLink}
-              </Link>
-              <button
-                type="button"
-                className="ml-2 font-sans font-semibold text-primary underline"
-                onClick={() => void copyToClipboard(state.values?.resetLink ?? "")}
-              >
-                Copy
-              </button>
-            </span>
-          ) : null}
+          {state.message}{" "}
+          <Link href="/contact" className="font-semibold underline">
+            Liên hệ hỗ trợ
+          </Link>
         </Alert>
       ) : null}
       <div>
@@ -56,13 +44,9 @@ export function ResetRequestForm() {
           />
         </div>
       </div>
-      <p className="text-xs text-muted-foreground">
-        Local adapter demo hiển thị liên kết đặt lại trực tiếp thay vì gửi email;
-        production cần cấu hình email provider. Token hết hạn sau 30 phút.
-      </p>
       <Button type="submit" className="w-full" disabled={pending}>
         {pending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <KeyRound className="h-4 w-4" aria-hidden />}
-        {pending ? "Đang tạo liên kết..." : "Tạo liên kết đặt lại"}
+        {pending ? "Đang xử lý..." : "Xem hướng dẫn khôi phục"}
       </Button>
       <p className="text-center text-xs text-muted-foreground">
         <Link href="/login" className="text-primary hover:underline">
@@ -120,7 +104,7 @@ export function ResetPasswordForm({ token }: { token: string }) {
       </Button>
       <p className="text-center text-xs text-muted-foreground">
         <Link href="/reset-password" className="text-primary hover:underline">
-          Gửi lại liên kết
+          Hướng dẫn khôi phục
         </Link>
       </p>
     </form>

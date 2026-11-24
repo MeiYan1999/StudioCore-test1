@@ -1,12 +1,17 @@
-import { beforeAll, describe, expect, it } from "vitest";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { and, count, eq } from "drizzle-orm";
+import { initialActionState } from "@/lib/actions/action-state";
+import { requestPasswordResetAction } from "@/lib/actions/marketing-actions";
 import { authenticate } from "@/lib/auth/login-service";
 import { createSession, getActorFromToken } from "@/lib/auth/session-core";
 import type { ActorContext } from "@/lib/auth/types";
 import type { AppDb } from "@/lib/db/client";
+import * as dbClient from "@/lib/db/client";
 import {
   branches,
   contactRequests,
+  passwordResetTokens,
   rolePermissions,
   settings,
   staff,
@@ -18,7 +23,7 @@ import {
   slugifyStudioName,
 } from "@/lib/services/onboarding-service";
 import {
-  requestPasswordReset,
+  hashPasswordResetToken,
   resetPasswordWithToken,
 } from "@/lib/services/password-reset-service";
 import { createContactRequest } from "@/lib/services/contact-service";
@@ -30,6 +35,23 @@ let db: AppDb;
 beforeAll(() => {
   db = createTestDb();
 });
+
+function insertResetToken(
+  account: { staffId: string; tenantId: string },
+  expiresAt: Date,
+  hashToken = hashPasswordResetToken,
+) {
+  const token = randomBytes(32).toString("base64url");
+  db.insert(passwordResetTokens)
+    .values({
+      ...account,
+      id: randomUUID(),
+      tokenHash: hashToken(token),
+      expiresAt,
+    })
+    .run();
+  return token;
+}
 
 describe("onboarding và pháp lý", () => {
   it("slug tiếng Việt và đăng ký tenant trial thật", () => {
@@ -83,6 +105,24 @@ describe("onboarding và pháp lý", () => {
     expect(second.tenantSlug).toBe("studio-kiem-thu-2");
   });
 
+  it("trả cùng hướng dẫn cho email có và không có tài khoản, không cấp token", async () => {
+    using getDb = vi.spyOn(dbClient, "getDb").mockReturnValue(db);
+    const request = (email: string) => {
+      const form = new FormData();
+      form.set("email", email);
+      return requestPasswordResetAction(initialActionState, form);
+    };
+    const existing = await request("owner@studiocore.demo");
+    const unknown = await request("unknown@studiocore.test");
+    expect(existing).toEqual(unknown);
+    expect(getDb).not.toHaveBeenCalled();
+    expect(existing).toEqual({
+      status: "success",
+      message:
+        "Hiện chưa hỗ trợ đặt lại mật khẩu qua email. Vui lòng liên hệ bộ phận hỗ trợ để được hướng dẫn xác minh tài khoản.",
+    });
+  });
+
   it("reset token thật, dùng một lần và thu hồi session cũ", async () => {
     const login = await authenticate(
       db,
@@ -92,12 +132,12 @@ describe("onboarding và pháp lý", () => {
     if (!login.ok) throw new Error(login.error);
     const oldActor = await getActorFromToken(db, login.token);
     expect(oldActor).not.toBeNull();
-    const request = requestPasswordReset(db, "qa-owner@studiocore.test");
-    expect(request.link).toBeTruthy();
-    const url = new URL(request.link as string);
-    const token = url.searchParams.get("token");
-    expect(token).toBeTruthy();
-    resetPasswordWithToken(db, token as string, "NewDemo@123");
+    if (!oldActor) throw new Error("Không tìm thấy session cũ.");
+    const account = { staffId: oldActor.staffId, tenantId: oldActor.tenantId };
+    const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+    const token = insertResetToken(account, expiresAt);
+    const siblingToken = insertResetToken(account, expiresAt);
+    resetPasswordWithToken(db, token, "NewDemo@123");
     expect(await getActorFromToken(db, login.token)).toBeNull();
     const oldLogin = await authenticate(
       db,
@@ -112,8 +152,28 @@ describe("onboarding và pháp lý", () => {
     );
     expect(newLogin.ok).toBe(true);
     expect(() =>
-      resetPasswordWithToken(db, token as string, "Another@123"),
+      resetPasswordWithToken(db, token, "Another@123"),
     ).toThrow(/không hợp lệ|hết hạn/);
+    expect(() =>
+      resetPasswordWithToken(db, siblingToken, "Another@123"),
+    ).toThrow(/không hợp lệ|hết hạn/);
+  });
+
+  it("từ chối token đã hết hạn và token từng phát qua form công khai", () => {
+    const owner = db.select().from(staff).where(eq(staff.email, "qa-owner2@studiocore.test")).get();
+    if (!owner) throw new Error("Không tìm thấy tài khoản thử nghiệm.");
+    const account = { staffId: owner.id, tenantId: owner.tenantId };
+    const expired = insertResetToken(account, new Date(Date.now() - 1000));
+    const legacy = insertResetToken(account, new Date(Date.now() + 60_000), (token) =>
+      createHash("sha256").update(token).digest("hex"),
+    );
+    for (const token of [expired, legacy]) {
+      expect(() => resetPasswordWithToken(db, token, "Another@123")).toThrow(
+        /không hợp lệ|hết hạn/,
+      );
+    }
+    const unchanged = db.select().from(staff).where(eq(staff.id, owner.id)).get();
+    expect(unchanged?.passwordHash).toBe(owner.passwordHash);
   });
 
   it("contact request validate, lưu DB và rate limit theo IP", () => {
