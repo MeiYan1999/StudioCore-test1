@@ -14,6 +14,7 @@ import { GoogleCalendarLiveRefresh } from "@/components/scheduling/google-calend
 import { ContractCreateModal } from "@/components/orders/contract-create-modal";
 import { hasPermission } from "@/lib/auth/permissions";
 import { requireActor } from "@/lib/auth/session";
+import { disconnectGoogleCalendarAction } from "@/lib/actions/google-calendar-actions";
 import { getDb } from "@/lib/db/client";
 import { getOrCreateCalendarFeedToken } from "@/lib/services/ical-service";
 import {
@@ -74,16 +75,19 @@ const VIEWS: { value: CalendarView; label: string }[] = [
   { value: "timeline", label: "Timeline" },
 ];
 
+function buildQuery(filters: SearchParams): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(filters)) {
+    if (value) params.set(key, value);
+  }
+  return params.toString();
+}
+
 function buildHref(
   current: SearchParams,
   overrides: Partial<SearchParams>,
 ): string {
-  const params = new URLSearchParams();
-  const merged = { ...current, ...overrides };
-  for (const [key, value] of Object.entries(merged)) {
-    if (value) params.set(key, value);
-  }
-  const query = params.toString();
+  const query = buildQuery({ ...current, ...overrides });
   return query ? `/manage/calendar?${query}` : "/manage/calendar";
 }
 
@@ -251,6 +255,7 @@ export default async function CalendarPage({
                 connection: googleConnection ? { branchId: googleConnection.branchId, calendarId: googleConnection.calendarId } : null,
                 branches: actor.branches,
                 defaultBranchId,
+                disconnectAction: disconnectGoogleCalendarAction.bind(null, buildQuery(currentFilters)),
                 result: typeof params.googleCalendar === "string" ? params.googleCalendar : undefined,
               } : null}
             />
