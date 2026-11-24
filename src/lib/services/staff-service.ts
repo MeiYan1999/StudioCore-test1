@@ -460,7 +460,9 @@ export function updateRolePermissions(
     throw new ValidationError("Vai trò này không thể chỉnh sửa.");
   }
 
-  const nextPermissions = [...new Set(permissions.filter(isPermission))];
+  const nextPermissions = [
+    ...new Set(permissions.filter(isPermission).filter((permission) => permission !== "tenants.manage")),
+  ];
 
   db.transaction((tx) => {
     tx.delete(rolePermissions)

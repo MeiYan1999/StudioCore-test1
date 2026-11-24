@@ -78,7 +78,7 @@ export async function checkSubscriptionStatusAction(subscriptionId: string) {
 
 export async function simulateSubscriptionPaymentAction(subscriptionId: string) {
   const actor = await getActorContext();
-  if (!actor || actor.role !== "platform_admin") {
+  if (!actor || !hasPermission(actor.permissions, "tenants.manage")) {
     return {
       success: false,
       error: "Tính năng này chỉ dành cho Quản trị viên Nền tảng (Platform SuperAdmin).",
@@ -95,11 +95,7 @@ export async function simulateSubscriptionPaymentAction(subscriptionId: string) 
 
 export async function savePlatformBillingConfigAction(formData: FormData) {
   const actor = await getActorContext();
-  if (
-    !actor ||
-    (!hasPermission(actor.permissions, "tenants.manage") &&
-      actor.role !== "platform_admin")
-  ) {
+  if (!actor || !hasPermission(actor.permissions, "tenants.manage")) {
     return {
       success: false,
       error: "Chỉ Quản trị viên Nền tảng (Platform SuperAdmin) mới có quyền cấu hình thanh toán nền tảng.",
