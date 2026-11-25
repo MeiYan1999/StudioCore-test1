@@ -1,6 +1,7 @@
 import { getActorContext } from "@/lib/auth/session";
 import { hasPermission } from "@/lib/auth/permissions";
 import { writeAudit } from "@/lib/audit";
+import { getBranchScope } from "@/lib/auth/permissions";
 import {
   CUSTOMER_SOURCE_LABELS,
   CUSTOMER_STATUS_LABELS,
@@ -85,11 +86,13 @@ export async function GET(request: Request): Promise<Response> {
     ),
   ];
 
+  const exportScope = getBranchScope(actor);
   writeAudit(getDb(), {
     tenantId: actor.tenantId,
     actorId: actor.staffId,
     action: "customers.export",
     entity: "customer",
+    branchId: exportScope.mode === "branch" ? exportScope.branchId : null,
     metadata: { count: rows.length, filters },
   });
 

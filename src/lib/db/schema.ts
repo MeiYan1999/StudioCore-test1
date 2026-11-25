@@ -221,6 +221,8 @@ export const activityLogs = sqliteTable(
   {
     id: text("id").primaryKey(),
     tenantId: text("tenant_id").references(() => tenants.id),
+    // Branch of the record the action touched; null for tenant-wide actions.
+    branchId: text("branch_id"),
     actorId: text("actor_id").references(() => staff.id),
     action: text("action").notNull(),
     entity: text("entity").notNull(),
