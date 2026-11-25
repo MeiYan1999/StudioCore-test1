@@ -153,7 +153,7 @@ export function InvoiceStatusActions({
     },
     initialActionState,
   );
-  if (status === "paid" || status === "cancelled") {
+  if (status === "cancelled") {
     return null;
   }
   return (
