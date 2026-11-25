@@ -8,6 +8,7 @@ import { isSharedDemoStaff } from "../demo-accounts";
 import type { ActorBranch, ActorContext } from "./types";
 import { PERMISSIONS, type Role } from "./roles";
 import { AuthorizationError } from "../errors";
+import { isPlanLapsed } from "../services/plan-limits";
 
 export const RECOVERED_SESSION_USER_AGENT = "self-healed";
 
@@ -228,8 +229,8 @@ export async function getActorFromToken(
   }
 
   const readOnly = row.session.readOnly;
-  const permissions = readOnly
-    ? PERMISSIONS.filter((permission) => permission.endsWith(".view"))
+  const rolePermissionList = readOnly
+    ? []
     : db
         .select({ permission: rolePermissions.permission })
         .from(rolePermissions)
@@ -241,6 +242,15 @@ export async function getActorFromToken(
         )
         .all()
         .map((item) => item.permission);
+  const planLapsed =
+    !readOnly &&
+    row.staff.role !== "platform_admin" &&
+    isPlanLapsed(row.tenant.planExpiresAt);
+  const permissions = readOnly
+    ? PERMISSIONS.filter((permission) => permission.endsWith(".view"))
+    : planLapsed
+      ? rolePermissionList.filter((permission) => permission.endsWith(".view"))
+      : rolePermissionList;
 
   const allowedBranches = getAllowedBranches(
     db,
@@ -273,6 +283,8 @@ export async function getActorFromToken(
     branches: allowedBranches,
     activeBranchId,
     readOnly,
+    planLapsed,
+    canRenewPlan: rolePermissionList.includes("settings.manage"),
     canChangePassword: Boolean(
       !readOnly && !isSharedDemoStaff(row.staff.id) &&
       row.session.userAgent !== RECOVERED_SESSION_USER_AGENT && row.staff.passwordHash,

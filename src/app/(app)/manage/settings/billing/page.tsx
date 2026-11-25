@@ -22,7 +22,8 @@ export default async function BillingPage({
   const actor = await requireActor();
   const canView =
     hasPermission(actor.permissions, "settings.view") ||
-    hasPermission(actor.permissions, "settings.manage");
+    hasPermission(actor.permissions, "settings.manage") ||
+    Boolean(actor.canRenewPlan);
 
   if (!canView) {
     return (
