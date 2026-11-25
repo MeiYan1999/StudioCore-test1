@@ -33,7 +33,7 @@ function fail(error: unknown): { ok: false; error: string } {
 async function actorForWrite() {
   const actor = await getActorContext();
   if (!actor) throw new AuthorizationError("Vui lòng đăng nhập lại.");
-  if (actor.readOnly) throw new AuthorizationError("Tài khoản đang ở chế độ chỉ xem.");
+  if (actor.readOnly || actor.planLapsed) throw new AuthorizationError("Tài khoản đang ở chế độ chỉ xem.");
   return actor;
 }
 

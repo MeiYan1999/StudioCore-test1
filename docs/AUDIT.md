@@ -64,7 +64,7 @@ Trạng thái dùng trong tài liệu: `ĐÃ XÁC MINH` · `ĐÃ TRIỂN KHAI, C
 | ID | Mức | Trạng thái | Phát hiện | Bằng chứng |
 | --- | --- | --- | --- | --- |
 | F-06 | P2 | ĐÃ SỬA (chặn) | Hóa đơn chuyển `issued → paid` bằng tay dù đơn còn nợ. Nay chỉ chuyển được khi đơn đã thu đủ (`orders.remaining = 0`) và chưa hủy. Bảng phân bổ khoản thu–hóa đơn vẫn chưa có (B-02) | `updateInvoiceStatus` (`finance-service.ts`) |
-| F-09 | P2 | CHƯA CÓ | Hạn mức gói (nhân sự, chi nhánh, dung lượng, số album) và ngày hết hạn gói không được kiểm tra ở backend; gói chỉ là nhãn | `SUBSCRIPTION_PLANS`, `tenants.planExpiresAt` chỉ được ghi trong `subscription-service.ts`/`platform-actions.ts`, không nơi nào đọc để chặn |
+| F-09 | P2 | CHƯA CÓ · ĐÃ SỬA (chi nhánh, nhân sự, hết hạn; `plan-limits.ts`) | Hạn mức gói (nhân sự, chi nhánh, dung lượng, số album) và ngày hết hạn gói không được kiểm tra ở backend; gói chỉ là nhãn | `SUBSCRIPTION_PLANS`, `tenants.planExpiresAt` chỉ được ghi trong `subscription-service.ts`/`platform-actions.ts`, không nơi nào đọc để chặn |
 | F-10 | P2 | CHƯA CÓ · ĐÃ SỬA | Thiết bị không có luồng mượn/trả: `equipment_usages` chỉ được đọc (`getEquipmentDetail`), không có hàm ghi ngoài seed. Nay có `checkOutEquipment`/`checkInEquipment` gắn lịch chụp, thao tác trên trang chi tiết lịch | `src/lib/services/equipment-service.ts` |
 | F-11 | P2 | ĐÃ SỬA (cảnh báo) | Hủy lịch không nhắc gì về trang phục của đơn đang mượn. Phiếu thuê là phiếu đã xuất đồ (không có đặt trước), nên hủy lịch không tự đánh dấu trả; nay người hủy nhận thông báo và trang lịch đã hủy hiện cảnh báo | `cancelAppointment` (`appointment-service.ts`), `updateBooking` (`omnichannel/booking.ts`), `notifyUnreturnedRentals` (`wardrobe-service.ts`) |
 | F-12 | P2 | LỖI LOGIC | Chỉ với album tạo bằng "Tải thư mục/ZIP" lưu trên R2: bản "gốc" là WebP nén lại và preview không có watermark (local có). Album từ link Drive không qua R2, ảnh gốc là file thật trên Google Drive | `processImage` (`r2-storage.ts`) |
@@ -105,7 +105,7 @@ Các mục cần thay đổi mô hình dữ liệu (F-06, F-09, F-10) không g�
 | --- | --- | --- | --- |
 | B-01 | P2 | ĐÃ SỬA: URL ký/hết hạn cho thumbnail và preview của link share | F-01 |
 | B-02 | P2 | Phân bổ khoản thu vào hóa đơn; trạng thái hóa đơn suy ra từ khoản thu (F-06) | migration bổ sung |
-| B-03 | P2 | Thực thi hạn mức gói và ngày hết hạn ở backend, có kiểm tra đồng thời (F-09) | quyết định hạn mức từng gói |
+| B-03 | P2 | ĐÃ SỬA: Cơ bản 1 chi nhánh/10 nhân sự, Pro và Dùng thử 3/30, Doanh nghiệp không giới hạn; chỉ chặn tạo mới; hết hạn quá 7 ngày thì chỉ xem (F-09). Còn lại: studio dùng thử đăng ký mới chưa được gán ngày hết hạn | quyết định có đặt hạn 30 ngày cho dùng thử |
 | B-04 | P2 | ĐÃ SỬA: mượn/trả thiết bị theo lịch chụp, chống xuất trùng (F-10). Chưa có đặt trước thiết bị theo khung giờ | — |
 | B-05 | P2 | Khi hủy lịch/đơn: giải phóng phiếu thuê chưa lấy, cảnh báo phiếu đang mượn (F-11) | — |
 | B-06 | P2 | ĐÃ BỎ theo mặc định (chỉ ảnh hưởng album tải thư mục/ZIP; mở lại nếu studio giao ảnh qua luồng này): giữ file gốc và watermark preview trên R2 (F-12) | dung lượng R2 |

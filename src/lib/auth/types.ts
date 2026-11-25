@@ -20,5 +20,9 @@ export type ActorContext = {
   branches: ActorBranch[];
   activeBranchId: string | null;
   readOnly: boolean;
+  /** Plan expired past the grace period: view/export only until renewed. */
+  planLapsed?: boolean;
+  /** The role may buy or renew a plan, kept even while planLapsed strips manage permissions. */
+  canRenewPlan?: boolean;
   canChangePassword: boolean;
 };
