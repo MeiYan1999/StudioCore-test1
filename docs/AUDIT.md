@@ -60,6 +60,11 @@ Trạng thái dùng trong tài liệu: `ĐÃ XÁC MINH` · `ĐÃ TRIỂN KHAI, C
 - Bằng chứng: `checkSubscriptionStatusAction` (`src/lib/actions/subscription-actions.ts`) gọi `getSubscriptionById` không có actor, không lọc tenant.
 - Sửa: yêu cầu đăng nhập và đúng tenant (hoặc `tenants.manage`).
 
+### F-17 · P0 · LỖI PHÂN QUYỀN · ĐÃ SỬA — Chủ studio tự cấp quyền quản trị nền tảng
+- Bằng chứng: `updateRolePermissions` (`src/lib/services/staff-service.ts`) lưu mọi quyền hợp lệ kể cả `tenants.manage`; trang phân quyền chỉ ẩn quyền này ở giao diện. `getActorFromToken` nạp quyền theo `role_permissions` của studio, nên một vai trò studio có dòng `tenants.manage` vào được `/platform`, các action trong `platform-actions.ts` và `api/exports/platform-backup`.
+- Sửa: `updateRolePermissions` bỏ `tenants.manage`; `getActorFromToken` chỉ giữ `tenants.manage` cho vai trò `platform_admin` (`mayManagePlatform`), nên dòng đã lưu sẵn trong DB mất hiệu lực mà không cần migration. Tài khoản quản trị nền tảng demo (mật khẩu công khai) mất quyền nền tảng khi `NODE_ENV=production`. `savePlatformBillingConfigAction` và `simulateSubscriptionPaymentAction` kiểm tra quyền thay vì tên vai trò.
+- Test: `tests/integration/platform-boundary.test.ts`.
+
 ### Chưa sửa (đưa vào backlog)
 | ID | Mức | Trạng thái | Phát hiện | Bằng chứng |
 | --- | --- | --- | --- | --- |
@@ -70,7 +75,7 @@ Trạng thái dùng trong tài liệu: `ĐÃ XÁC MINH` · `ĐÃ TRIỂN KHAI, C
 | F-12 | P2 | LỖI LOGIC | Chỉ với album tạo bằng "Tải thư mục/ZIP" lưu trên R2: bản "gốc" là WebP nén lại và preview không có watermark (local có). Album từ link Drive không qua R2, ảnh gốc là file thật trên Google Drive | `processImage` (`r2-storage.ts`) |
 | F-13 | P3 | ĐÃ SỬA | Mọi nhân sự đã đăng nhập đều tạo được đơn mua gói cho studio | `createSubscriptionInvoiceAction` |
 | F-14 | P3 | LỖI LOGIC · ĐÃ SỬA | Nhật ký hoạt động không lọc theo chi nhánh; quản lý chi nhánh có `audit.view` thấy toàn tenant. Nay `activity_logs.branch_id` (migration 0013, có điền lại dữ liệu cũ) và `listActivityLogs`/`listAuditActions` lọc theo chi nhánh đang chọn; dòng không thuộc chi nhánh nào chỉ chủ studio và chính người thực hiện thấy | `listActivityLogs` (`audit-service.ts`) |
-| F-15 | P3 | LỖI LOGIC | `getPlatformBillingConfig` đọc setting `platform.*` không lọc tenant | `subscription-service.ts` |
+| F-15 | P3 | ĐÃ SỬA | `getPlatformBillingConfig` đọc setting `platform.*` không lọc tenant | `subscription-service.ts` |
 | F-16 | P3 | ĐÃ SỬA (phần mở khóa) | Kích hoạt gói đặt lại `tenants.status = active` kể cả studio đang bị khóa (đã sửa). Đơn quá `expiresAt` vẫn kích hoạt khi tiền tới: giữ nguyên có chủ ý, vì khách đã chuyển tiền | `activateSubscription` |
 
 ## 3. Hiện trạng từng phân hệ

@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { and, desc, eq, gt, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, or, sql } from "drizzle-orm";
 import type { AppDb } from "../db/client";
 import {
   activityLogs,
@@ -79,11 +79,20 @@ export function isValidPlatformBillingKey(
 }
 
 export function getPlatformBillingConfig(db: AppDb): PlatformBillingConfig {
+  // Only a tenant that holds a platform admin account can supply platform settings.
+  const platformTenantIds = db
+    .selectDistinct({ tenantId: staff.tenantId })
+    .from(staff)
+    .where(and(eq(staff.role, "platform_admin"), isNull(staff.archivedAt)))
+    .all()
+    .map((row) => row.tenantId);
   const getSetting = (k: string) => {
+    if (platformTenantIds.length === 0) return "";
     const row = db
       .select({ value: settings.value })
       .from(settings)
-      .where(eq(settings.key, k))
+      .where(and(eq(settings.key, k), inArray(settings.tenantId, platformTenantIds)))
+      .orderBy(desc(settings.updatedAt))
       .limit(1)
       .get();
     return row?.value || "";

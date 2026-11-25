@@ -241,7 +241,11 @@ export async function getActorFromToken(
           ),
         )
         .all()
-        .map((item) => item.permission);
+        .map((item) => item.permission)
+        .filter(
+          (permission) =>
+            permission !== "tenants.manage" || mayManagePlatform(row.staff.id, row.staff.role),
+        );
   const planLapsed =
     !readOnly &&
     row.staff.role !== "platform_admin" &&
@@ -290,6 +294,16 @@ export async function getActorFromToken(
       row.session.userAgent !== RECOVERED_SESSION_USER_AGENT && row.staff.passwordHash,
     ),
   };
+}
+
+/**
+ * Platform administration is tied to the platform_admin role, never to a stored
+ * role permission a studio could edit. The shared demo platform account has a
+ * published password, so it loses platform access in production.
+ */
+export function mayManagePlatform(staffId: string, role: string): boolean {
+  if (role !== "platform_admin") return false;
+  return !(process.env.NODE_ENV === "production" && isSharedDemoStaff(staffId));
 }
 
 export function revokeSessionById(db: AppDb, sessionId: string, tenantId: string): void {

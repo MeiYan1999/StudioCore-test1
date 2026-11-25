@@ -344,6 +344,7 @@ export function updateStaff(
         eq(staff.id, staffId),
         eq(staff.tenantId, actor.tenantId),
         isNull(staff.archivedAt),
+        ne(staff.role, "platform_admin"),
       ),
     )
     .get();
@@ -462,7 +463,9 @@ export function updateRolePermissions(
     throw new ValidationError("Vai trò này không thể chỉnh sửa.");
   }
 
-  const nextPermissions = [...new Set(permissions.filter(isPermission))];
+  const nextPermissions = [
+    ...new Set(permissions.filter(isPermission).filter((permission) => permission !== "tenants.manage")),
+  ];
 
   db.transaction((tx) => {
     tx.delete(rolePermissions)
