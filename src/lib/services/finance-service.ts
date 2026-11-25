@@ -834,7 +834,8 @@ export function updateInvoiceStatus(
   const allowed: Record<string, string[]> = {
     draft: ["issued", "cancelled"],
     issued: ["paid", "cancelled"],
-    paid: [],
+    // Trạng thái paid nay tự suy ra từ khoản thu nên vẫn phải hủy được để xuất lại hóa đơn sai.
+    paid: ["cancelled"],
     cancelled: [],
   };
   if (!(allowed[invoice.status] ?? []).includes(status)) {

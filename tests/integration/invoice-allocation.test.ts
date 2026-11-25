@@ -95,7 +95,8 @@ describe("trạng thái hóa đơn suy ra từ khoản thu của đơn", () => {
   });
 
   it("hóa đơn đã hủy không bị khoản thu làm thay đổi; hóa đơn mới của đơn đã thu đủ là đã thanh toán", () => {
-    db.update(invoices).set({ status: "cancelled" }).where(eq(invoices.id, invoiceId)).run();
+    expect(invoiceStatus()).toBe("paid");
+    updateInvoiceStatus(db, owner, invoiceId, "cancelled");
     recordRefund(db, owner, { orderId: ORDER_ID, amount: 500_000, reason: "Test", method: "cash" });
     pay(500_000);
     expect(invoiceStatus()).toBe("cancelled");
