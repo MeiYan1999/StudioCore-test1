@@ -14,6 +14,7 @@ import { hashSecret } from "../auth/password";
 import { normalizeVietnamesePhone } from "../utils/phone";
 import { writeAudit } from "../audit";
 import { AuthorizationError, ValidationError } from "../errors";
+import { trialExpiryFrom } from "./plan-limits";
 
 export type RegisterInput = {
   studioName: string;
@@ -113,6 +114,7 @@ export function registerTenant(
         slug,
         status: "active",
         plan: "trial",
+        planExpiresAt: trialExpiryFrom(),
       })
       .run();
     tx.insert(branches)

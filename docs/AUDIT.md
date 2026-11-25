@@ -111,7 +111,7 @@ Các mục cần thay đổi mô hình dữ liệu (F-06, F-09, F-10) không g�
 | --- | --- | --- | --- |
 | B-01 | P2 | ĐÃ SỬA: URL ký/hết hạn cho thumbnail và preview của link share | F-01 |
 | B-02 | P2 | ĐÃ SỬA: trạng thái hóa đơn suy ra từ khoản thu của đơn, trang hóa đơn hiện số đã thu (F-06). Không dùng migration; bảng phân bổ chỉ cần nếu sau này cho nhiều hóa đơn hiệu lực trên một đơn | — |
-| B-03 | P2 | ĐÃ SỬA: Cơ bản 1 chi nhánh/10 nhân sự, Pro và Dùng thử 3/30, Doanh nghiệp không giới hạn; chỉ chặn tạo mới; hết hạn quá 7 ngày thì chỉ xem (F-09). Còn lại: studio dùng thử đăng ký mới chưa được gán ngày hết hạn | quyết định có đặt hạn 30 ngày cho dùng thử |
+| B-03 | P2 | ĐÃ SỬA: Cơ bản 1 chi nhánh/10 nhân sự, Pro và Dùng thử 3/30, Doanh nghiệp không giới hạn; chỉ chặn tạo mới; hết hạn quá 7 ngày thì chỉ xem (F-09). Studio đăng ký mới được gán hạn dùng thử 30 ngày (`trialExpiryFrom`); studio dùng thử tạo trước đó không có ngày hết hạn và giữ nguyên | — |
 | B-04 | P2 | ĐÃ SỬA: mượn/trả thiết bị theo lịch chụp, chống xuất trùng (F-10). Chưa có đặt trước thiết bị theo khung giờ | — |
 | B-05 | P2 | Khi hủy lịch/đơn: giải phóng phiếu thuê chưa lấy, cảnh báo phiếu đang mượn (F-11) | — |
 | B-06 | P2 | ĐÃ BỎ theo mặc định (chỉ ảnh hưởng album tải thư mục/ZIP; mở lại nếu studio giao ảnh qua luồng này): giữ file gốc và watermark preview trên R2 (F-12) | dung lượng R2 |

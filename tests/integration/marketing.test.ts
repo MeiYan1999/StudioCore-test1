@@ -28,6 +28,7 @@ import {
 } from "@/lib/services/password-reset-service";
 import { createContactRequest } from "@/lib/services/contact-service";
 import { createOrder } from "@/lib/services/order-service";
+import { isPlanLapsed } from "@/lib/services/plan-limits";
 import { createTestDb } from "../helpers/test-db";
 
 let db: AppDb;
@@ -68,6 +69,13 @@ describe("onboarding và pháp lý", () => {
     });
     const tenant = db.select().from(tenants).where(eq(tenants.id, result.tenantId)).get();
     expect(tenant?.plan).toBe("trial");
+    const day = 24 * 60 * 60 * 1000;
+    const expiresIn = (tenant?.planExpiresAt?.getTime() ?? 0) - Date.now();
+    expect(expiresIn).toBeGreaterThan(29 * day);
+    expect(expiresIn).toBeLessThanOrEqual(30 * day);
+    // Hết 30 ngày dùng thử + 7 ngày ân hạn thì studio chuyển sang chỉ xem
+    expect(isPlanLapsed(tenant?.planExpiresAt ?? null, new Date(Date.now() + 36 * day))).toBe(false);
+    expect(isPlanLapsed(tenant?.planExpiresAt ?? null, new Date(Date.now() + 38 * day))).toBe(true);
     expect(tenant?.slug).toBe("studio-kiem-thu");
     const branch = db.select().from(branches).where(eq(branches.id, result.branchId)).get();
     expect(branch?.name).toBe("Chi nhánh Kiểm Thử");

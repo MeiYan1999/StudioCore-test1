@@ -14,6 +14,12 @@ export const PLAN_LIMITS: Record<string, PlanLimits> = {
 };
 
 export const PLAN_GRACE_DAYS = 7;
+export const TRIAL_DAYS = 30;
+
+/** Expiry of a trial that starts at `from`. */
+export function trialExpiryFrom(from: Date = new Date()): Date {
+  return new Date(from.getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
+}
 const PLAN_GRACE_MS = PLAN_GRACE_DAYS * 24 * 60 * 60 * 1000;
 
 /** Unknown plan keys are not capped, so legacy tenants keep working. */
