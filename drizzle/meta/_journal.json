@@ -92,6 +92,13 @@
       "when": 1795540125555,
       "tag": "0012_supreme_speed",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1795544896576,
+      "tag": "0013_activity_log_branch",
+      "breakpoints": true
     }
   ]
 }
