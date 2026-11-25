@@ -1000,6 +1000,11 @@ export function ShareGallery({
           aria-modal="true"
           aria-label="Mã QR của album"
           onClick={() => setQrOpen(false)}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") setQrOpen(false);
+            // Nút đóng là phần tử duy nhất nhận focus trong hộp thoại.
+            if (event.key === "Tab") event.preventDefault();
+          }}
         >
           <div
             className="w-full max-w-sm space-y-4 rounded-2xl bg-white p-6 text-center text-slate-900 shadow-xl dark:bg-neutral-900 dark:text-white"
@@ -1009,6 +1014,7 @@ export function ShareGallery({
               <h2 className="text-lg font-semibold">Quét mã để mở album</h2>
               <button
                 type="button"
+                autoFocus
                 onClick={() => setQrOpen(false)}
                 aria-label="Đóng"
                 className="rounded-full p-2 hover:bg-slate-100 dark:hover:bg-neutral-800"
