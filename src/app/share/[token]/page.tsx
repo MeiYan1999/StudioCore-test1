@@ -4,6 +4,7 @@ import { ShareGallery } from "@/components/share/share-gallery";
 import { SharePasswordGate } from "@/components/share/share-password-gate";
 import { ShareUnavailable } from "@/components/share/share-unavailable";
 import { getDb } from "@/lib/db/client";
+import { getTenantName } from "@/lib/services/drive-service";
 import {
   evaluateShareAccess,
   getShareAlbumByToken,
@@ -80,5 +81,11 @@ export default async function SharePage({
   }
 
   const page = getShareGalleryPage(db, access, { page: 1, pageSize: 24 });
-  return <ShareGallery token={token} initial={page} />;
+  return (
+    <ShareGallery
+      token={token}
+      studioName={getTenantName(db, album.tenantId)}
+      initial={page}
+    />
+  );
 }

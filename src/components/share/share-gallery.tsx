@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
   Check,
@@ -11,15 +11,18 @@ import {
   Download,
   Heart,
   Images,
-  Link2,
   Loader2,
   Lock,
   MessageSquare,
+  Moon,
+  QrCode,
   Send,
+  Share2,
+  Sun,
   X,
 } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 import { toast } from "sonner";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -36,6 +39,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -57,11 +61,20 @@ import {
   type CopyFormat,
 } from "@/lib/share/copy-formats";
 
-const TABS: { key: "all" | "selected" | "notes"; label: string }[] = [
-  { key: "all", label: "Tất cả" },
-  { key: "selected", label: "Đã chọn" },
-  { key: "notes", label: "Ghi chú" },
-];
+const THEME_STORAGE_KEY = "studiocore-drive-gallery-theme";
+
+function restoreSiteTheme() {
+  let stored = "system";
+  try {
+    stored = window.localStorage.getItem("studiocore-theme") || "system";
+  } catch {
+    stored = "system";
+  }
+  const dark =
+    stored === "dark" ||
+    (stored !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  document.documentElement.classList.toggle("dark", dark);
+}
 
 const REASON_MESSAGES: Record<string, string> = {
   not_found: "Không tìm thấy album hoặc link không đúng.",
@@ -162,9 +175,11 @@ function PhotoNoteEditor({
 
 export function ShareGallery({
   token,
+  studioName,
   initial,
 }: {
   token: string;
+  studioName: string;
   initial: ShareGalleryPage;
 }) {
   const [page, setPage] = useState<ShareGalleryPage>(initial);
@@ -181,6 +196,9 @@ export function ShareGallery({
     extraFee: number;
     requestCode: string | null;
   } | null>(null);
+  const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [qrOpen, setQrOpen] = useState(false);
+  const [currentUrl, setCurrentUrl] = useState("");
   const lastTriggerRef = useRef<HTMLButtonElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const photosRef = useRef<SharePhotoView[]>(page.photos);
@@ -351,6 +369,45 @@ export function ShareGallery({
     );
   }, []);
 
+  const handleShare = useCallback(async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: page.album.title, url: window.location.href });
+        return;
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+      }
+    }
+    await handleCopyLink();
+  }, [handleCopyLink, page.album.title]);
+
+  // Giống trang StudioCore Drive: mặc định sáng, chỉ tối khi khách đã chọn.
+  useLayoutEffect(() => {
+    let savedTheme: string | null = null;
+    try {
+      savedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
+    } catch {}
+    const dark = savedTheme === "dark";
+    document.documentElement.classList.toggle("dark", dark);
+    if (dark) {
+      const timeout = window.setTimeout(() => setTheme("dark"), 0);
+      return () => {
+        window.clearTimeout(timeout);
+        restoreSiteTheme();
+      };
+    }
+    return restoreSiteTheme;
+  }, []);
+
+  const toggleTheme = () => {
+    const next = theme === "dark" ? "light" : "dark";
+    setTheme(next);
+    document.documentElement.classList.toggle("dark", next === "dark");
+    try {
+      window.localStorage.setItem(THEME_STORAGE_KEY, next);
+    } catch {}
+  };
+
   const confirmSubmit = useCallback(async () => {
     setSubmitting(true);
     const result = await submitShareSelectionAction({ token });
@@ -419,104 +476,220 @@ export function ShareGallery({
     setOpenPhotoId(photoId);
   };
 
+  const quotaExceeded = page.counts.selected > page.album.selectionLimit;
+  const toolbarButton =
+    "inline-flex h-9 items-center gap-1.5 rounded-full border border-slate-200 px-2.5 text-sm font-medium hover:bg-slate-50 dark:border-neutral-700 dark:hover:bg-neutral-800";
+  const tabButton = (active: boolean) =>
+    cn(
+      "inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition sm:text-sm",
+      active
+        ? "bg-white text-slate-900 shadow-sm dark:bg-neutral-700 dark:text-white"
+        : "text-slate-600 dark:text-neutral-300",
+    );
+  const folderChip = (active: boolean) =>
+    cn(
+      "rounded-full border px-3 py-1 text-xs font-medium transition",
+      active
+        ? "border-blue-600 bg-blue-600 text-white"
+        : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300 dark:hover:bg-neutral-800",
+    );
+  const iconButton =
+    "relative inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40 dark:text-neutral-300 dark:hover:bg-neutral-800 dark:hover:text-white";
+
   return (
-    <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-30 border-b border-border bg-surface/95 backdrop-blur">
-        <div className="mx-auto max-w-7xl px-4 py-3 sm:px-6">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex min-w-0 items-center gap-2">
-              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                <Images className="h-5 w-5" aria-hidden />
-              </span>
-              <div className="min-w-0">
-                <p className="text-xs font-semibold uppercase tracking-wide text-primary">
-                  StudioCore PhotoShare
-                </p>
-                <h1 className="truncate text-lg font-semibold text-foreground">
-                  {page.album.title}
-                </h1>
-              </div>
+    <div className="min-h-screen bg-[#f3f4f6] pb-28 text-slate-900 transition-colors dark:bg-neutral-950 dark:text-neutral-100">
+      <header className="border-b border-slate-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
+        <div className="mx-auto flex max-w-[1040px] flex-wrap items-center gap-3 px-4 py-3">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-600 text-lg font-semibold text-white">
+              {studioName.trim().charAt(0).toLocaleUpperCase("vi") || "S"}
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Button variant="outline" size="sm" onClick={handleCopyLink}>
-                <Link2 className="h-4 w-4" aria-hidden />
-                Copy link
-              </Button>
-              <Badge tone={locked ? "neutral" : submitted ? "warning" : "info"}>
-                {locked
-                  ? "Đã khóa lựa chọn"
-                  : submitted
-                    ? "Đã gửi studio"
-                    : "Đang chọn ảnh"}
-              </Badge>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-bold uppercase tracking-wide">
+                {studioName || "StudioCore"}
+              </p>
+              <p className="text-xs text-slate-500 dark:text-neutral-400">
+                StudioCore PhotoShare
+              </p>
             </div>
           </div>
-
-          <div className="mt-3 flex flex-wrap items-center gap-3">
-            <Badge tone={page.counts.selected > page.album.selectionLimit ? "warning" : "success"}>
-              Đã chọn {page.counts.selected}/{page.album.selectionLimit} ảnh
-            </Badge>
-            {page.album.extraPhotoEnabled && page.counts.extraCount > 0 ? (
-              <span className="text-xs font-medium text-[var(--warning)]">
-                Vượt {page.counts.extraCount} ảnh · phí dự kiến{" "}
-                {formatVnd(page.counts.extraFee)}
-              </span>
-            ) : (
-              <span className="text-xs text-muted-foreground">
-                {page.album.extraPhotoEnabled
-                  ? `Ảnh thêm ${formatVnd(page.album.extraPhotoPrice)}/ảnh nếu vượt quota`
-                  : "Chọn đúng số lượng studio đã thông báo"}
-              </span>
-            )}
-            <div className="ml-auto flex flex-wrap items-center gap-2">
-              <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <input
-                  type="checkbox"
-                  checked={copyNotes}
-                  onChange={(event) => setCopyNotes(event.target.checked)}
-                  className="h-4 w-4 rounded border-border"
-                />
-                Kèm ghi chú
-              </label>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" disabled={copying}>
-                    {copying ? (
-                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                    ) : (
-                      <Copy className="h-4 w-4" aria-hidden />
-                    )}
-                    Copy mã đã chọn
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuLabel>Định dạng copy</DropdownMenuLabel>
-                  {(Object.keys(COPY_FORMAT_LABELS) as CopyFormat[]).map(
-                    (format) => (
-                      <DropdownMenuItem
-                        key={format}
-                        onSelect={() => void handleCopy(format)}
-                      >
-                        {COPY_FORMAT_LABELS[format]}
-                      </DropdownMenuItem>
-                    ),
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
-              <Button
-                size="sm"
-                onClick={() => setSubmitOpen(true)}
-                disabled={locked || page.counts.selected === 0 || submitting}
-              >
-                <Send className="h-4 w-4" aria-hidden />
-                {submitted ? "Gửi lại lựa chọn" : "Gửi lựa chọn"}
-              </Button>
-            </div>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <button
+              type="button"
+              onClick={toggleTheme}
+              aria-label={theme === "dark" ? "Bật giao diện sáng" : "Bật giao diện tối"}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full text-slate-600 hover:bg-slate-100 dark:text-neutral-300 dark:hover:bg-neutral-800"
+            >
+              {theme === "dark" ? (
+                <Sun className="h-4 w-4" aria-hidden />
+              ) : (
+                <Moon className="h-4 w-4" aria-hidden />
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setCurrentUrl(window.location.href);
+                setQrOpen(true);
+              }}
+              className={toolbarButton}
+            >
+              <QrCode className="h-4 w-4" aria-hidden />
+              <span>QR</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleShare()}
+              aria-label="Chia sẻ"
+              className={toolbarButton}
+            >
+              <Share2 className="h-4 w-4" aria-hidden />
+              <span className="hidden sm:inline">Chia sẻ</span>
+            </button>
           </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-4 py-5 sm:px-6">
+      <section className="mx-auto flex max-w-[1040px] flex-wrap items-start justify-between gap-4 px-4 pb-5 pt-7">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+            {page.album.title}
+          </h1>
+          <p className="mt-1 text-sm text-slate-500 dark:text-neutral-400">
+            {page.counts.all} ảnh ·{" "}
+            {locked
+              ? "Đã khóa lựa chọn"
+              : submitted
+                ? "Đã gửi studio"
+                : "Đang chọn ảnh"}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={handleCopyLink}
+          className="inline-flex h-9 shrink-0 items-center gap-2 rounded-full border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200 dark:hover:bg-neutral-800"
+        >
+          <Share2 className="h-4 w-4" aria-hidden />
+          Cùng chọn ảnh
+        </button>
+      </section>
+
+      <div className="sticky top-0 z-30 border-y border-slate-200 bg-white/95 shadow-sm backdrop-blur dark:border-neutral-800 dark:bg-neutral-900/95">
+        <div className="mx-auto flex max-w-[1040px] flex-wrap items-center justify-between gap-3 px-4 py-2.5">
+          <div className="flex max-w-full items-center gap-1 overflow-x-auto rounded-full bg-slate-100 p-1 dark:bg-neutral-800">
+            <button
+              type="button"
+              aria-pressed={tab === "all"}
+              onClick={() => void loadPage("all", folderId)}
+              className={tabButton(tab === "all")}
+            >
+              Tất cả ({page.counts.all})
+            </button>
+            <button
+              type="button"
+              aria-pressed={tab === "selected"}
+              aria-label={`Đã chọn (${page.counts.selected})`}
+              onClick={() => void loadPage("selected", folderId)}
+              className={tabButton(tab === "selected")}
+            >
+              <Check className="h-3.5 w-3.5" aria-hidden />({page.counts.selected})
+            </button>
+            <button
+              type="button"
+              aria-pressed={tab === "notes"}
+              aria-label={`Ghi chú (${page.counts.notes})`}
+              onClick={() => void loadPage("notes", folderId)}
+              className={tabButton(tab === "notes")}
+            >
+              <MessageSquare className="h-3.5 w-3.5" aria-hidden />
+              {page.counts.notes}
+            </button>
+          </div>
+
+          <div className="ml-auto flex items-center gap-2">
+            <div className="hidden items-center gap-2 sm:flex">
+              <span className="h-1.5 w-16 overflow-hidden rounded-full bg-slate-200 dark:bg-neutral-700">
+                <span
+                  className={cn(
+                    "block h-full rounded-full",
+                    quotaExceeded ? "bg-amber-500" : "bg-blue-600",
+                  )}
+                  style={{
+                    width: `${
+                      page.album.selectionLimit > 0
+                        ? Math.min(100, (page.counts.selected / page.album.selectionLimit) * 100)
+                        : 0
+                    }%`,
+                  }}
+                />
+              </span>
+              <span
+                className={cn(
+                  "whitespace-nowrap text-xs font-semibold",
+                  quotaExceeded
+                    ? "text-amber-700 dark:text-amber-300"
+                    : "text-blue-700 dark:text-blue-300",
+                )}
+              >
+                {page.counts.selected}/{page.album.selectionLimit}
+              </span>
+            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  disabled={copying}
+                  aria-label="Copy mã đã chọn"
+                  className="inline-flex h-9 items-center gap-1.5 rounded-full border border-blue-300 px-3 text-xs font-semibold text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-45 dark:border-blue-800 dark:text-blue-300 dark:hover:bg-blue-950/40 sm:text-sm"
+                >
+                  {copying ? (
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                  ) : (
+                    <Copy className="h-4 w-4" aria-hidden />
+                  )}
+                  Mã
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>Định dạng copy</DropdownMenuLabel>
+                {(Object.keys(COPY_FORMAT_LABELS) as CopyFormat[]).map(
+                  (format) => (
+                    <DropdownMenuItem
+                      key={format}
+                      onSelect={() => void handleCopy(format)}
+                    >
+                      {COPY_FORMAT_LABELS[format]}
+                    </DropdownMenuItem>
+                  ),
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  role="menuitemcheckbox"
+                  aria-checked={copyNotes}
+                  onSelect={(event) => {
+                    event.preventDefault();
+                    setCopyNotes((current) => !current);
+                  }}
+                >
+                  <span
+                    className={cn(
+                      "flex h-4 w-4 items-center justify-center rounded border",
+                      copyNotes
+                        ? "border-blue-600 bg-blue-600 text-white"
+                        : "border-slate-300 dark:border-neutral-600",
+                    )}
+                  >
+                    {copyNotes ? <Check className="h-3 w-3" aria-hidden /> : null}
+                  </span>
+                  Kèm ghi chú
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+      </div>
+
+      <main className="mx-auto max-w-[1040px] px-4 pt-5">
         {page.isDemo ? (
           <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-[var(--warning)] dark:border-amber-900 dark:bg-amber-950/40">
             <strong>Đây là môi trường demo.</strong> Toàn bộ ảnh là ảnh synthetic
@@ -525,11 +698,11 @@ export function ShareGallery({
         ) : null}
 
         {locked ? (
-          <div className="mb-4 flex items-start gap-3 rounded-xl border border-border bg-surface-muted px-4 py-3 text-sm">
-            <Lock className="mt-0.5 h-4 w-4 text-muted-foreground" aria-hidden />
+          <div className="mb-4 flex items-start gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm dark:border-neutral-800 dark:bg-neutral-900">
+            <Lock className="mt-0.5 h-4 w-4 text-slate-500 dark:text-neutral-400" aria-hidden />
             <div>
-              <p className="font-medium text-foreground">Lựa chọn đã được khóa</p>
-              <p className="text-muted-foreground">
+              <p className="font-medium">Lựa chọn đã được khóa</p>
+              <p className="text-slate-500 dark:text-neutral-400">
                 Studio đã nhận danh sách ảnh bạn chọn. Liên hệ studio nếu cần
                 chỉnh sửa.
               </p>
@@ -543,10 +716,10 @@ export function ShareGallery({
         ) : null}
 
         {submittedInfo ? (
-          <div className="mb-4 rounded-xl border border-border bg-surface px-4 py-3 text-sm">
-            <p className="font-medium text-foreground">Đã ghi nhận lựa chọn.</p>
+          <div className="mb-4 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm dark:border-neutral-800 dark:bg-neutral-900">
+            <p className="font-medium">Đã ghi nhận lựa chọn.</p>
             {submittedInfo.extraFee > 0 ? (
-              <p className="mt-1 text-muted-foreground">
+              <p className="mt-1 text-slate-500 dark:text-neutral-400">
                 {submittedInfo.extraCount} ảnh vượt quota, phí phát sinh{" "}
                 <strong>{formatVnd(submittedInfo.extraFee)}</strong>
                 {submittedInfo.requestCode
@@ -554,7 +727,7 @@ export function ShareGallery({
                   : null}
               </p>
             ) : (
-              <p className="mt-1 text-muted-foreground">
+              <p className="mt-1 text-slate-500 dark:text-neutral-400">
                 Không phát sinh phí ảnh thêm.
               </p>
             )}
@@ -562,71 +735,58 @@ export function ShareGallery({
         ) : null}
 
         <div className="mb-4 flex flex-wrap items-center gap-2">
-          <div className="flex rounded-lg border border-border bg-surface p-1">
-            {TABS.map((item) => (
+          {page.folders.length > 0 ? (
+            <>
               <button
-                key={item.key}
                 type="button"
-                onClick={() => void loadPage(item.key, folderId)}
-                className={cn(
-                  "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-                  tab === item.key
-                    ? "bg-accent text-accent-foreground"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
+                onClick={() => void loadPage(tab, "")}
+                className={folderChip(folderId === "")}
               >
-                {item.label} ({page.counts[item.key]})
+                Tất cả thư mục
               </button>
-            ))}
-          </div>
-          <div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto sm:flex-1">
-            <button
-              type="button"
-              onClick={() => void loadPage(tab, "")}
-              className={cn(
-                "rounded-full border px-3 py-1 text-xs font-medium",
-                folderId === ""
-                  ? "border-primary bg-primary text-primary-foreground"
-                  : "border-border bg-surface text-muted-foreground hover:text-foreground",
-              )}
-            >
-              Tất cả thư mục
-            </button>
-            {page.folders.map((folder) => (
-              <button
-                key={folder.id}
-                type="button"
-                onClick={() => void loadPage(tab, folder.id)}
-                className={cn(
-                  "rounded-full border px-3 py-1 text-xs font-medium",
-                  folderId === folder.id
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : "border-border bg-surface text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {folder.name} ({folder.photoCount})
-              </button>
-            ))}
-          </div>
+              {page.folders.map((folder) => (
+                <button
+                  key={folder.id}
+                  type="button"
+                  onClick={() => void loadPage(tab, folder.id)}
+                  className={folderChip(folderId === folder.id)}
+                >
+                  {folder.name} ({folder.photoCount})
+                </button>
+              ))}
+            </>
+          ) : null}
+          {page.album.extraPhotoEnabled && page.counts.extraCount > 0 ? (
+            <span className="text-xs font-medium text-[var(--warning)] sm:ml-auto">
+              Vượt {page.counts.extraCount} ảnh · phí dự kiến{" "}
+              {formatVnd(page.counts.extraFee)}
+            </span>
+          ) : (
+            <span className="text-xs text-slate-500 dark:text-neutral-400 sm:ml-auto">
+              {page.album.extraPhotoEnabled
+                ? `Ảnh thêm ${formatVnd(page.album.extraPhotoPrice)}/ảnh nếu vượt quota`
+                : "Chọn đúng số lượng studio đã thông báo"}
+            </span>
+          )}
         </div>
 
         {loading ? (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
             {Array.from({ length: 8 }).map((_, index) => (
               <Skeleton key={index} className="aspect-[3/2] w-full rounded-xl" />
             ))}
           </div>
         ) : page.photos.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-border bg-surface px-6 py-16 text-center">
-            <Images className="mx-auto h-10 w-10 text-muted-foreground" aria-hidden />
-            <p className="mt-3 font-medium text-foreground">
+          <div className="py-20 text-center">
+            <Images className="mx-auto h-10 w-10 text-slate-400 dark:text-neutral-500" aria-hidden />
+            <p className="mt-3 font-medium">
               {tab === "selected"
                 ? "Bạn chưa chọn ảnh nào"
                 : tab === "notes"
                   ? "Chưa có ảnh nào có ghi chú"
                   : "Album chưa có ảnh"}
             </p>
-            <p className="mt-1 text-sm text-muted-foreground">
+            <p className="mt-1 text-sm text-slate-500 dark:text-neutral-400">
               {tab === "all"
                 ? "Studio sẽ thông báo khi ảnh sẵn sàng."
                 : "Chuyển sang tab Tất cả để chọn ảnh và thêm ghi chú."}
@@ -634,16 +794,16 @@ export function ShareGallery({
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
               {page.photos.map((photo, index) => (
                 <article
                   key={photo.id}
-                  className="group overflow-hidden rounded-xl border border-border bg-surface"
+                  className="overflow-hidden rounded-xl bg-white shadow-[0_2px_8px_rgba(15,23,42,0.09)] dark:bg-neutral-900 dark:shadow-black/30"
                 >
-                  <div className="relative aspect-[3/2] bg-surface-muted">
+                  <div className="relative aspect-[3/2] overflow-hidden bg-slate-200 dark:bg-neutral-800">
                     <button
                       type="button"
-                      className="absolute inset-0 h-full w-full"
+                      className="absolute inset-0 block h-full w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500"
                       onClick={(event) =>
                         openPhoto(photo.id, event.currentTarget)
                       }
@@ -661,124 +821,205 @@ export function ShareGallery({
                         className="h-full w-full object-cover"
                       />
                     </button>
-                    <span className="pointer-events-none absolute left-2 top-2 rounded-md bg-black/70 px-2 py-1 font-mono text-xs font-semibold text-white">
-                      {photo.code}
-                    </span>
-                    {photo.isRaw ? (
-                      <span className="pointer-events-none absolute left-2 top-10 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-semibold text-white">
-                        RAW
-                      </span>
-                    ) : null}
-                    <button
-                      type="button"
-                      aria-label={
-                        photo.favorite ? `Bỏ tim ${photo.code}` : `Thả tim ${photo.code}`
-                      }
-                      aria-pressed={photo.favorite}
-                      disabled={locked || !page.album.allowFavorites}
-                      onClick={() =>
-                        void updatePhoto(photo.id, {
-                          favorite: !photo.favorite,
-                        })
-                      }
-                      className={cn(
-                        "absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white transition-colors hover:bg-black/80 disabled:opacity-50",
-                        photo.favorite && "bg-rose-600 hover:bg-rose-700",
-                      )}
+                    <span
+                      title={photo.filename}
+                      className="pointer-events-none absolute left-2 top-2 max-w-[calc(100%-3.5rem)] truncate rounded-md bg-black/70 px-2 py-1 text-[10px] font-medium text-white"
                     >
-                      <Heart
-                        className={cn("h-4 w-4", photo.favorite && "fill-current")}
-                        aria-hidden
-                      />
-                    </button>
-                    <div className="absolute inset-x-2 bottom-2 flex items-end justify-between gap-2">
-                      <span className="min-w-0 truncate rounded-md bg-black/60 px-2 py-1 text-[11px] text-white">
-                        {photo.folderName ?? "Chưa phân thư mục"}
-                      </span>
+                      {photo.code}
+                      {photo.isRaw ? " · RAW" : ""}
+                    </span>
+                    {page.album.allowFavorites ? (
                       <button
                         type="button"
-                        role="checkbox"
-                        aria-checked={photo.selected}
                         aria-label={
-                          photo.selected
-                            ? `Bỏ chọn ${photo.code}`
-                            : `Chọn ${photo.code}`
+                          photo.favorite ? `Bỏ tim ${photo.code}` : `Thả tim ${photo.code}`
                         }
+                        aria-pressed={photo.favorite}
                         disabled={locked}
                         onClick={() =>
                           void updatePhoto(photo.id, {
-                            selected: !photo.selected,
+                            favorite: !photo.favorite,
                           })
                         }
                         className={cn(
-                          "flex h-8 items-center gap-1 rounded-md px-2 text-xs font-semibold text-white",
-                          photo.selected
-                            ? "bg-primary hover:bg-primary-hover"
-                            : "bg-black/60 hover:bg-black/80",
+                          "absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/55 text-white transition-colors hover:bg-black/75 disabled:opacity-50",
+                          photo.favorite && "bg-[#e5484d] hover:bg-[#d73e43]",
                         )}
                       >
-                        <Check className="h-4 w-4" aria-hidden />
-                        {photo.selected ? "Đã chọn" : "Chọn"}
+                        <Heart
+                          className={cn("h-4 w-4", photo.favorite && "fill-current")}
+                          aria-hidden
+                        />
                       </button>
-                    </div>
-                  </div>
-                  <div className="p-2.5">
-                    <p className="truncate text-sm font-medium text-foreground">
-                      {photo.filename}
-                    </p>
-                    {photo.note ? (
-                      <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-                        {photo.note}
-                      </p>
                     ) : null}
-                    <div className="mt-2 flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
+                    {page.folders.length > 1 && photo.folderName ? (
+                      <span className="pointer-events-none absolute bottom-2 left-2 max-w-[calc(100%-1rem)] truncate rounded-md bg-black/55 px-2 py-1 text-[10px] text-white">
+                        {photo.folderName}
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="flex min-h-12 items-center gap-1.5 px-2 py-1.5">
+                    <button
+                      type="button"
+                      role="checkbox"
+                      aria-checked={photo.selected}
+                      aria-label={
+                        photo.selected
+                          ? `Bỏ chọn ${photo.code}`
+                          : `Chọn ${photo.code}`
+                      }
+                      disabled={locked}
+                      onClick={() =>
+                        void updatePhoto(photo.id, {
+                          selected: !photo.selected,
+                        })
+                      }
+                      className={cn(
+                        "inline-flex h-8 min-w-0 flex-1 items-center justify-center gap-1 rounded-full px-2 text-xs font-semibold transition",
+                        photo.selected
+                          ? "bg-blue-600 text-white hover:bg-blue-700"
+                          : "bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700",
+                        locked && "cursor-not-allowed opacity-60",
+                      )}
+                    >
+                      <Check className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                      <span className="truncate">
+                        {photo.selected ? "Đã chọn" : "Chọn"}
+                      </span>
+                    </button>
+                    <div className="ml-auto flex shrink-0 items-center gap-0.5">
+                      <button
+                        type="button"
+                        aria-label={`Copy mã ${photo.code}`}
+                        title="Copy mã ảnh"
                         onClick={async () => {
                           const copied = await copyText(photo.code);
                           toast[copied ? "success" : "error"](
                             copied ? `Đã copy ${photo.code}` : "Không copy được mã.",
                           );
                         }}
+                        className={iconButton}
                       >
-                        <Copy className="h-3.5 w-3.5" aria-hidden />
-                        Mã
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
+                        <Copy className="h-4 w-4" aria-hidden />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`Ghi chú cho ${photo.code}`}
+                        title={photo.note ?? "Ghi chú"}
                         disabled={locked || !page.album.allowNotes}
                         onClick={(event) =>
                           openPhoto(photo.id, event.currentTarget)
                         }
+                        className={iconButton}
                       >
-                        <MessageSquare className="h-3.5 w-3.5" aria-hidden />
-                        {photo.note ? "Sửa ghi chú" : "Ghi chú"}
-                      </Button>
+                        <MessageSquare className="h-4 w-4" aria-hidden />
+                        {photo.note ? (
+                          <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-amber-500" />
+                        ) : null}
+                      </button>
                     </div>
                   </div>
                 </article>
               ))}
             </div>
             {page.hasMore ? (
-              <div className="mt-5 flex justify-center">
+              <div className="mt-6 text-center">
                 <Button variant="outline" onClick={() => void loadMore()} disabled={loading}>
                   {loading ? (
                     <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
                   ) : null}
-                  Tải thêm ảnh
+                  Xem thêm
                 </Button>
               </div>
             ) : null}
           </>
         )}
 
-        <p className="mt-8 text-center text-xs text-muted-foreground">
+        <p className="mt-8 text-center text-xs text-slate-500 dark:text-neutral-400">
           Ảnh xem trên PhotoShare là bản derivative có watermark. Bản gốc chỉ tải
           được khi studio cho phép.
         </p>
       </main>
+
+      <div className="fixed inset-x-3 bottom-3 z-30 mx-auto max-w-fit rounded-full border border-slate-200 bg-white/95 p-2 shadow-[0_8px_30px_rgba(15,23,42,0.18)] backdrop-blur dark:border-neutral-700 dark:bg-neutral-900/95">
+        <div className="flex items-center gap-1.5">
+          <span
+            className={cn(
+              "whitespace-nowrap px-2 text-xs font-bold sm:text-sm",
+              quotaExceeded
+                ? "text-amber-700 dark:text-amber-300"
+                : "text-blue-700 dark:text-blue-300",
+            )}
+          >
+            {page.counts.selected}/{page.album.selectionLimit}
+          </span>
+          <button
+            type="button"
+            disabled={copying || page.counts.selected === 0}
+            onClick={() => void handleCopy("comma")}
+            className="inline-flex h-9 items-center gap-1 rounded-full px-2.5 text-xs font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-40 dark:text-neutral-300 dark:hover:bg-neutral-800"
+          >
+            <Copy className="h-3.5 w-3.5" aria-hidden />
+            Copy
+          </button>
+          <button
+            type="button"
+            aria-pressed={tab === "selected"}
+            onClick={() =>
+              void loadPage(tab === "selected" ? "all" : "selected", folderId)
+            }
+            className={cn(
+              "inline-flex h-9 items-center gap-1 rounded-full px-2.5 text-xs font-medium",
+              tab === "selected"
+                ? "bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300"
+                : "text-slate-600 hover:bg-slate-100 dark:text-neutral-300 dark:hover:bg-neutral-800",
+            )}
+          >
+            <Check className="h-3.5 w-3.5" aria-hidden />
+            Ảnh chọn
+          </button>
+          <Button
+            disabled={locked || page.counts.selected === 0 || submitting}
+            onClick={() => setSubmitOpen(true)}
+            className="h-9 rounded-full bg-blue-600 px-3 text-xs text-white hover:bg-blue-700 disabled:opacity-50 sm:px-4 sm:text-sm"
+          >
+            {submitted ? "Gửi lại" : "Gửi Studio"}
+          </Button>
+        </div>
+      </div>
+
+      {qrOpen ? (
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Mã QR của album"
+          onClick={() => setQrOpen(false)}
+        >
+          <div
+            className="w-full max-w-sm space-y-4 rounded-2xl bg-white p-6 text-center text-slate-900 shadow-xl dark:bg-neutral-900 dark:text-white"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Quét mã để mở album</h2>
+              <button
+                type="button"
+                onClick={() => setQrOpen(false)}
+                aria-label="Đóng"
+                className="rounded-full p-2 hover:bg-slate-100 dark:hover:bg-neutral-800"
+              >
+                <X className="h-4 w-4" aria-hidden />
+              </button>
+            </div>
+            <div className="mx-auto inline-flex rounded-xl bg-white p-3">
+              <QRCodeSVG value={currentUrl} size={232} includeMargin />
+            </div>
+            <p className="break-all text-xs text-slate-500 dark:text-neutral-400">
+              {currentUrl}
+            </p>
+          </div>
+        </div>
+      ) : null}
 
       {currentPhoto ? (
         <div
