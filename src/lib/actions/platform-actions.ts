@@ -126,18 +126,17 @@ export async function createTenantFromPlatformAction(formData: FormData): Promis
       branchPhone: phone,
     });
 
-    if (plan !== "trial") {
-      const expiresAt = new Date(Date.now() + months * 30 * 24 * 60 * 60 * 1000);
-      db.update(tenants)
-        .set({
-          plan,
-          status: "active",
-          planExpiresAt: expiresAt,
-          updatedAt: new Date(),
-        })
-        .where(eq(tenants.id, result.tenantId))
-        .run();
-    }
+    // Áp dụng cả với gói dùng thử: thời hạn quản trị chọn thay cho hạn 30 ngày mặc định.
+    const expiresAt = new Date(Date.now() + months * 30 * 24 * 60 * 60 * 1000);
+    db.update(tenants)
+      .set({
+        plan,
+        status: "active",
+        planExpiresAt: expiresAt,
+        updatedAt: new Date(),
+      })
+      .where(eq(tenants.id, result.tenantId))
+      .run();
 
     revalidatePath("/platform");
     return {
