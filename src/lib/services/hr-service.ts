@@ -270,6 +270,20 @@ export function createLeaveRequest(
     throw new AuthorizationError("Bạn chỉ tạo được đơn nghỉ cho chính mình.");
   }
   assertBranchAccess(actor, input.branchId);
+  const staffRow = db
+    .select({ id: staff.id })
+    .from(staff)
+    .where(
+      and(
+        eq(staff.id, input.staffId),
+        eq(staff.tenantId, actor.tenantId),
+        isNull(staff.archivedAt),
+      ),
+    )
+    .get();
+  if (!staffRow) {
+    throw new ValidationError("Nhân sự không hợp lệ.");
+  }
   const startAt = parseVietnamDateTimeLocal(input.startAt);
   const endAt = parseVietnamDateTimeLocal(input.endAt);
   if (!startAt || !endAt || endAt <= startAt) {
