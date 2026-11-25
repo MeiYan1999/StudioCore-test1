@@ -93,6 +93,21 @@ export default async function InvoicesPage({
       cell: (row) => <Money value={row.total} className="font-medium" />,
     },
     {
+      key: "paidAmount",
+      header: "Đã thu",
+      className: "text-right",
+      cell: (row) => (
+        <div className="text-xs">
+          <Money value={row.paidAmount} />
+          {row.status === "issued" && row.paidAmount < row.total ? (
+            <p className="text-muted-foreground">
+              Còn {(row.total - row.paidAmount).toLocaleString("vi-VN")}đ
+            </p>
+          ) : null}
+        </div>
+      ),
+    },
+    {
       key: "status",
       header: "Trạng thái",
       cell: (row) => (

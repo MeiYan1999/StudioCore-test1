@@ -63,7 +63,7 @@ Trạng thái dùng trong tài liệu: `ĐÃ XÁC MINH` · `ĐÃ TRIỂN KHAI, C
 ### Chưa sửa (đưa vào backlog)
 | ID | Mức | Trạng thái | Phát hiện | Bằng chứng |
 | --- | --- | --- | --- | --- |
-| F-06 | P2 | ĐÃ SỬA (chặn) | Hóa đơn chuyển `issued → paid` bằng tay dù đơn còn nợ. Nay chỉ chuyển được khi đơn đã thu đủ (`orders.remaining = 0`) và chưa hủy. Bảng phân bổ khoản thu–hóa đơn vẫn chưa có (B-02) | `updateInvoiceStatus` (`finance-service.ts`) |
+| F-06 | P2 | ĐÃ SỬA | Hóa đơn chuyển `issued → paid` bằng tay dù đơn còn nợ. Nay trạng thái suy ra từ khoản thu: mỗi đơn chỉ có một hóa đơn hiệu lực nên số đã thu của đơn (`orders.paid`) là số phân bổ vào hóa đơn; thu đủ thì tự thành `paid`, hoàn tiền làm thiếu thì về `issued`. Không cần bảng phân bổ riêng | `syncInvoiceStatusForOrder`, `updateInvoiceStatus` (`finance-service.ts`) |
 | F-09 | P2 | CHƯA CÓ | Hạn mức gói (nhân sự, chi nhánh, dung lượng, số album) và ngày hết hạn gói không được kiểm tra ở backend; gói chỉ là nhãn | `SUBSCRIPTION_PLANS`, `tenants.planExpiresAt` chỉ được ghi trong `subscription-service.ts`/`platform-actions.ts`, không nơi nào đọc để chặn |
 | F-10 | P2 | CHƯA CÓ | Thiết bị không có luồng mượn/trả: `equipment_usages` chỉ được đọc (`getEquipmentDetail`), không có hàm ghi ngoài seed | `src/lib/services/equipment-service.ts` |
 | F-11 | P2 | ĐÃ SỬA (cảnh báo) | Hủy lịch không nhắc gì về trang phục của đơn đang mượn. Phiếu thuê là phiếu đã xuất đồ (không có đặt trước), nên hủy lịch không tự đánh dấu trả; nay người hủy nhận thông báo và trang lịch đã hủy hiện cảnh báo | `cancelAppointment` (`appointment-service.ts`), `updateBooking` (`omnichannel/booking.ts`), `notifyUnreturnedRentals` (`wardrobe-service.ts`) |
@@ -85,7 +85,7 @@ Trạng thái dùng trong tài liệu: `ĐÃ XÁC MINH` · `ĐÃ TRIỂN KHAI, C
 | 6 | Tài liệu / Hợp đồng | `/manage/documents`, in hợp đồng `/manage/orders/[id]/contract`, `api/documents/*` | `document-service.ts`, `contract-service.ts`; `documents`, storage `documents/<key>` | Tải file qua `getDocumentFile` (tenant + chi nhánh); `/api/files` chặn `documents/` | Lướt · ĐÃ XÁC MINH phần tải file |
 | 7 | Nhân sự | `/manage/staff`, `/manage/staff/attendance`, `/manage/staff/leave`, `/manage/settings/users` | `staff-service.ts`, `hr-service.ts`; `staff`, `attendance`, `leave_requests` | `staff.view/manage`, scope chi nhánh | Lướt · ĐÃ TRIỂN KHAI, CHƯA XÁC MINH ĐỦ |
 | 8 | Sổ quỹ | `/manage/finance` | `finance-service.ts` (`listTransactions`, `createManualTransaction`, `createExpense`); `transactions` là sổ quỹ, `payments` là khoản thu theo đơn | `finance.view/manage`, scope chi nhánh | Sâu · ĐÃ XÁC MINH; F-04, F-05, F-07 đã sửa |
-| 9 | Hóa đơn | `/manage/finance/invoices`, bản in | `createInvoiceForOrder`, `updateInvoiceStatus`; `invoices` | `finance.manage`; tạo hóa đơn không sinh khoản thu (đúng) | Sâu · F-06 còn mở |
+| 9 | Hóa đơn | `/manage/finance/invoices`, bản in | `createInvoiceForOrder`, `updateInvoiceStatus`; `invoices` | `finance.manage`; tạo hóa đơn không sinh khoản thu (đúng) | Sâu |
 | 10 | Công nợ | `/manage/finance/debts` | `listDebtors`, `remindDebt`; nguồn là `orders.remaining` | `finance.view`, scope chi nhánh | Lướt · ĐÃ TRIỂN KHAI, CHƯA XÁC MINH ĐỦ |
 | 11 | Hoa hồng | `/manage/finance/commissions` | `commission-payroll-service.ts`; `commission_rules`, `commissions` lưu snapshot `ruleType/ruleValue/baseAmount` | `payroll.manage`; `accrueCommissionsForOrderSystem` không tạo trùng theo đơn + nhân sự + vai trò; trạng thái pending → approved → paid | Sâu · ĐÃ XÁC MINH bằng đọc code |
 | 12 | Bảng lương | `/manage/payroll` | `generatePayrolls`, `updatePayroll`, `setPayrollStatus`; `payrolls` | `payroll.manage`; kỳ đã duyệt/đã trả không tạo lại, chỉ sửa khi `draft` | Sâu · ĐÃ XÁC MINH bằng đọc code |
@@ -104,7 +104,7 @@ Các mục cần thay đổi mô hình dữ liệu (F-06, F-09, F-10) không g�
 | ID | Mức | Việc | Phụ thuộc |
 | --- | --- | --- | --- |
 | B-01 | P2 | ĐÃ SỬA: URL ký/hết hạn cho thumbnail và preview của link share | F-01 |
-| B-02 | P2 | Phân bổ khoản thu vào hóa đơn; trạng thái hóa đơn suy ra từ khoản thu (F-06) | migration bổ sung |
+| B-02 | P2 | ĐÃ SỬA: trạng thái hóa đơn suy ra từ khoản thu của đơn, trang hóa đơn hiện số đã thu (F-06). Không dùng migration; bảng phân bổ chỉ cần nếu sau này cho nhiều hóa đơn hiệu lực trên một đơn | — |
 | B-03 | P2 | Thực thi hạn mức gói và ngày hết hạn ở backend, có kiểm tra đồng thời (F-09) | quyết định hạn mức từng gói |
 | B-04 | P2 | Mượn/trả thiết bị theo lịch chụp, chống đặt trùng (F-10) | — |
 | B-05 | P2 | Khi hủy lịch/đơn: giải phóng phiếu thuê chưa lấy, cảnh báo phiếu đang mượn (F-11) | — |

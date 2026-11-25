@@ -193,15 +193,17 @@ describe("tài chính, hóa đơn và webhook", () => {
     ).toThrow(/đã có hóa đơn/);
     // Đơn còn nợ: không được tự đánh dấu hóa đơn đã thanh toán
     expect(() => updateInvoiceStatus(db, owner, invoiceId, "paid")).toThrow(/còn nợ/);
-    const remaining = getOrderDetail(db, owner, "order-demo-04")?.remaining ?? 0;
+    const before = getOrderDetail(db, owner, "order-demo-04");
+    const remaining = before?.remaining ?? 0;
+    const paid = before?.paid ?? 0;
     expect(remaining).toBeGreaterThan(0);
     // Mô phỏng đơn đã thu đủ mà không làm lệch số liệu của các test báo cáo phía sau
-    db.update(orders).set({ remaining: 0 }).where(eq(orders.id, "order-demo-04")).run();
+    db.update(orders).set({ remaining: 0, paid: paid + remaining }).where(eq(orders.id, "order-demo-04")).run();
     updateInvoiceStatus(db, owner, invoiceId, "paid");
     expect(
       db.select({ status: invoices.status }).from(invoices).where(eq(invoices.id, invoiceId)).get()?.status,
     ).toBe("paid");
-    db.update(orders).set({ remaining }).where(eq(orders.id, "order-demo-04")).run();
+    db.update(orders).set({ remaining, paid }).where(eq(orders.id, "order-demo-04")).run();
   });
 
   it("hoàn tiền giảm paid/tăng công nợ và báo cáo thuế/doanh thu khớp", () => {

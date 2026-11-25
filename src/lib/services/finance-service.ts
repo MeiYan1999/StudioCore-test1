@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { normalizeIdempotencyKey } from "../finance/idempotency";
-import { and, asc, count, desc, eq, gte, lte, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, inArray, lte, or, sql, type SQL } from "drizzle-orm";
 import type { AppDb } from "../db/client";
 import {
   branches,
@@ -82,6 +82,8 @@ export type InvoiceView = {
   vatAmount: number;
   total: number;
   status: string;
+  /** Phần tiền đã thu của đơn được phân bổ vào hóa đơn này. */
+  paidAmount: number;
   issuedAt: Date | null;
   createdAt: Date;
 };
@@ -596,6 +598,7 @@ export function listInvoices(
       vatAmount: invoices.vatAmount,
       total: invoices.total,
       status: invoices.status,
+      paidAmount: sql<number>`case when ${invoices.status} in ('draft', 'cancelled') then 0 else min(${invoices.total}, max(${orders.paid}, 0)) end`,
       issuedAt: invoices.issuedAt,
       createdAt: invoices.createdAt,
     })
@@ -684,7 +687,7 @@ export function createInvoiceForOrder(
           vatRate: input.vatRate,
           vatAmount,
           total: order.total,
-          status: "issued",
+          status: order.total > 0 && order.paid >= order.total ? "paid" : "issued",
           issuedAt: now,
           notes: input.notes.trim() || null,
           createdBy: actor.staffId,
@@ -777,6 +780,43 @@ export function getInvoiceDetail(
   };
 }
 
+/**
+ * Khoản thu của đơn là nguồn sự thật: mỗi đơn chỉ có một hóa đơn hiệu lực nên toàn bộ
+ * số đã thu của đơn được phân bổ vào hóa đơn đó. Gọi trong cùng transaction với thay đổi `orders.paid`.
+ */
+export function syncInvoiceStatusForOrder(
+  tx: Pick<AppDb, "select" | "update">,
+  tenantId: string,
+  orderId: string,
+): void {
+  const order = tx
+    .select({ paid: orders.paid, status: orders.status })
+    .from(orders)
+    .where(and(eq(orders.id, orderId), eq(orders.tenantId, tenantId)))
+    .get();
+  if (!order) return;
+  const active = tx
+    .select({ id: invoices.id, total: invoices.total, status: invoices.status })
+    .from(invoices)
+    .where(
+      and(
+        eq(invoices.tenantId, tenantId),
+        eq(invoices.orderId, orderId),
+        inArray(invoices.status, ["issued", "paid"]),
+      ),
+    )
+    .all();
+  for (const invoice of active) {
+    const covered = order.status !== "cancelled" && order.paid >= invoice.total;
+    const next = covered ? "paid" : "issued";
+    if (next === invoice.status) continue;
+    tx.update(invoices)
+      .set({ status: next, updatedAt: new Date() })
+      .where(and(eq(invoices.id, invoice.id), eq(invoices.tenantId, tenantId)))
+      .run();
+  }
+}
+
 export function updateInvoiceStatus(
   db: AppDb,
   actor: ActorContext,
@@ -803,16 +843,16 @@ export function updateInvoiceStatus(
   if (status === "paid") {
     // Payments are the source of truth: an invoice is paid only once its order is.
     const order = db
-      .select({ remaining: orders.remaining, status: orders.status })
+      .select({ paid: orders.paid, status: orders.status })
       .from(orders)
       .where(and(eq(orders.id, invoice.orderId), eq(orders.tenantId, actor.tenantId)))
       .get();
     if (!order || order.status === "cancelled") {
       throw new ValidationError("Đơn hàng của hóa đơn đã hủy, không thể đánh dấu đã thanh toán.");
     }
-    if (order.remaining > 0) {
+    if (order.paid < invoice.total) {
       throw new ValidationError(
-        `Đơn hàng còn nợ ${order.remaining.toLocaleString("vi-VN")}đ. Hãy ghi nhận thu tiền trước khi đánh dấu hóa đơn đã thanh toán.`,
+        `Hóa đơn còn nợ ${(invoice.total - order.paid).toLocaleString("vi-VN")}đ. Hãy ghi nhận thu tiền trước khi đánh dấu hóa đơn đã thanh toán.`,
       );
     }
   }
@@ -1042,6 +1082,7 @@ export function recordRefund(
       })
       .where(eq(orders.id, order.id))
       .run();
+    syncInvoiceStatusForOrder(tx, actor.tenantId, order.id);
   });
   writeAudit(db, {
     tenantId: actor.tenantId,
@@ -1208,6 +1249,7 @@ export function processPaymentWebhook(
           })
           .where(eq(orders.id, order.id))
           .run();
+        syncInvoiceStatusForOrder(tx, order.tenantId, order.id);
         tx.insert(transactions)
           .values({
             id: crypto.randomUUID(),

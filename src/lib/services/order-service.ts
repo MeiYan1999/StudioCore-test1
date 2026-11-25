@@ -39,6 +39,7 @@ import {
 import type { OrderStatus } from "../orders/status";
 import { canTransitionOrder } from "../orders/status";
 import { accrueCommissionsForOrderSystem } from "./commission-payroll-service";
+import { syncInvoiceStatusForOrder } from "./finance-service";
 import { queueReviewRequest } from "./notification-service";
 import {
   calculateOrderTotals,
@@ -1112,6 +1113,7 @@ export function recordOrderPayment(
       })
       .where(and(eq(orders.id, orderId), eq(orders.tenantId, actor.tenantId)))
       .run();
+    syncInvoiceStatusForOrder(tx, actor.tenantId, orderId);
 
     tx.run(sql`UPDATE inbox_bookings SET status='confirmed' WHERE order_id=${orderId} AND tenant_id=${actor.tenantId} AND status='held' AND expires_at>${Date.now()} AND (SELECT paid >= deposit FROM orders WHERE id=${orderId})`);
 
