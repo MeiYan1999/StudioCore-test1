@@ -77,6 +77,7 @@ Trạng thái dùng trong tài liệu: `ĐÃ XÁC MINH` · `ĐÃ TRIỂN KHAI, C
 | F-14 | P3 | LỖI LOGIC · ĐÃ SỬA | Nhật ký hoạt động không lọc theo chi nhánh; quản lý chi nhánh có `audit.view` thấy toàn tenant. Nay `activity_logs.branch_id` (migration 0013, có điền lại dữ liệu cũ) và `listActivityLogs`/`listAuditActions` lọc theo chi nhánh đang chọn; dòng không thuộc chi nhánh nào chỉ chủ studio và chính người thực hiện thấy | `listActivityLogs` (`audit-service.ts`) |
 | F-15 | P3 | ĐÃ SỬA | `getPlatformBillingConfig` đọc setting `platform.*` không lọc tenant | `subscription-service.ts` |
 | F-16 | P3 | ĐÃ SỬA (phần mở khóa) | Kích hoạt gói đặt lại `tenants.status = active` kể cả studio đang bị khóa (đã sửa). Đơn quá `expiresAt` vẫn kích hoạt khi tiền tới: giữ nguyên có chủ ý, vì khách đã chuyển tiền | `activateSubscription` |
+| F-18 | P2 | ĐÃ SỬA | Chủ studio tạo được đơn nghỉ phép với `staffId` của studio khác (dòng `leave_requests` trong tenant mình trỏ tới nhân sự tenant khác). Nay `staffId` phải là nhân sự chưa lưu trữ của cùng tenant | `createLeaveRequest` (`hr-service.ts`) |
 
 ## 3. Hiện trạng từng phân hệ
 
@@ -115,7 +116,7 @@ Các mục cần thay đổi mô hình dữ liệu (F-06, F-09, F-10) không g�
 | B-05 | P2 | Khi hủy lịch/đơn: giải phóng phiếu thuê chưa lấy, cảnh báo phiếu đang mượn (F-11) | — |
 | B-06 | P2 | ĐÃ BỎ theo mặc định (chỉ ảnh hưởng album tải thư mục/ZIP; mở lại nếu studio giao ảnh qua luồng này): giữ file gốc và watermark preview trên R2 (F-12) | dung lượng R2 |
 | B-07 | P3 | F-13, F-14, F-15, F-16 | — |
-| B-08 | P3 | Test tích hợp cô lập tenant qua route handler (gọi API trực tiếp bằng phiên tenant khác) cho các phân hệ đánh dấu "Lướt". ĐÃ LÀM cho tải tài liệu, xuất ghi chú/ZIP album, xuất khách hàng, xuất báo cáo (`tests/integration/route-tenant-isolation.test.ts`); và route upload ảnh/ZIP/tài liệu; CÒN LẠI: `api/drive/agent/*` và các server action của kho trang phục, nhân sự, công việc | — |
+| B-08 | P3 | ĐÃ LÀM: test tích hợp cô lập tenant gọi trực tiếp bằng phiên/thiết bị của tenant khác. Route tải tài liệu, xuất ghi chú/ZIP album, xuất khách hàng, xuất báo cáo, upload ảnh/ZIP/tài liệu (`tests/integration/route-tenant-isolation.test.ts`); kho trang phục, công việc, nhân sự/HR ở tầng service và `api/drive/agent/*` (`tests/integration/action-tenant-isolation.test.ts`). Tìm ra F-18. Chưa phủ: gửi form server action qua trình duyệt | — |
 
 ## 6. Chưa kiểm chứng
 - Chưa chạy E2E Playwright và chưa thử trên trình duyệt các form Thu tiền/Hoàn tiền sau khi thêm `requestId`.
