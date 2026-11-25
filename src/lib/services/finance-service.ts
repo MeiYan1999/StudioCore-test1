@@ -687,7 +687,7 @@ export function createInvoiceForOrder(
           vatRate: input.vatRate,
           vatAmount,
           total: order.total,
-          status: order.total > 0 && order.paid >= order.total ? "paid" : "issued",
+          status: order.paid >= order.total ? "paid" : "issued",
           issuedAt: now,
           notes: input.notes.trim() || null,
           createdBy: actor.staffId,
