@@ -15,10 +15,18 @@ import { getTenantSettings } from "./settings-service";
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_DRIVE_API = "https://www.googleapis.com/drive/v3";
+// Scope "drive" (toàn quyền) cần để gỡ/bật lại quyền "Bất kỳ ai có đường liên kết"
+// trên thư mục ảnh của studio khi link album bị thu hồi; drive.readonly và
+// drive.file không sửa được quyền chia sẻ của thư mục do studio tự tạo.
+export const DRIVE_SHARING_SCOPE = "https://www.googleapis.com/auth/drive";
 export const DRIVE_SCOPES = [
   "https://www.googleapis.com/auth/drive.file",
-  "https://www.googleapis.com/auth/drive.readonly",
+  DRIVE_SHARING_SCOPE,
 ].join(" ");
+
+export function hasDriveSharingScope(scopes: string | null | undefined): boolean {
+  return (scopes ?? "").split(/\s+/).includes(DRIVE_SHARING_SCOPE);
+}
 const STATE_TTL_SECONDS = 10 * 60;
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
@@ -105,6 +113,7 @@ type GoogleTokenResponse = {
   access_token?: string;
   refresh_token?: string;
   expires_in?: number;
+  scope?: string;
   error?: string;
   error_description?: string;
 };
@@ -113,6 +122,7 @@ export async function exchangeGoogleCode(code: string): Promise<{
   refreshToken: string;
   accessToken?: string;
   expiresIn?: number;
+  scopes?: string;
 }> {
   const config = getGoogleOAuthConfig();
   if (!config.configured) {
@@ -142,6 +152,7 @@ export async function exchangeGoogleCode(code: string): Promise<{
     refreshToken: payload.refresh_token,
     accessToken: payload.access_token,
     expiresIn: payload.expires_in,
+    scopes: payload.scope,
   };
 }
 
@@ -165,13 +176,27 @@ export function saveGoogleConnectionDirect(
   tenantId: string,
   staffId: string,
   refreshToken: string,
+  grantedScopes?: string,
+  options: { keepExistingSharingAccess?: boolean } = {},
 ): void {
   const existing = getGoogleConnection(db, tenantId);
+  // Đăng nhập Google chỉ xin quyền đọc Drive: không ghi đè kết nối đang có
+  // quyền quản lý chia sẻ bằng một token yếu hơn.
+  if (
+    options.keepExistingSharingAccess &&
+    existing &&
+    existing.status === "connected" &&
+    hasDriveSharingScope(existing.scopes) &&
+    !hasDriveSharingScope(grantedScopes)
+  ) {
+    return;
+  }
   const encrypted = encryptSecret(refreshToken);
   if (existing) {
     db.update(driveConnections)
       .set({
         refreshTokenEncrypted: encrypted,
+        scopes: grantedScopes ?? null,
         status: "connected",
         updatedAt: new Date(),
       })
@@ -184,6 +209,7 @@ export function saveGoogleConnectionDirect(
         tenantId,
         provider: "google",
         refreshTokenEncrypted: encrypted,
+        scopes: grantedScopes ?? null,
         status: "connected",
       })
       .run();
@@ -200,9 +226,16 @@ export function saveGoogleConnection(
   db: AppDb,
   actor: ActorContext,
   refreshToken: string,
+  grantedScopes?: string,
 ): void {
   assertPermission(actor, "integrations.manage");
-  saveGoogleConnectionDirect(db, actor.tenantId, actor.staffId, refreshToken);
+  saveGoogleConnectionDirect(
+    db,
+    actor.tenantId,
+    actor.staffId,
+    refreshToken,
+    grantedScopes,
+  );
 }
 
 export function disconnectGoogleConnection(
@@ -653,6 +686,7 @@ export function formatDriveBytes(bytes: number): string {
 
 export type GoogleDriveWorkspaceInfo = {
   connected: boolean;
+  canManageSharing: boolean;
   configured: boolean;
   status: string;
   accountEmail: string;
@@ -982,6 +1016,7 @@ export function getGoogleDriveWorkspaceInfo(
 
   return {
     connected: isConnected,
+    canManageSharing: isConnected && hasDriveSharingScope(conn?.scopes),
     configured: config.configured,
     status: conn?.status || "disconnected",
     accountEmail,

@@ -157,6 +157,8 @@ export async function GET(request: Request): Promise<Response> {
         row.tenant.id,
         row.staff.id,
         tokens.refreshToken,
+        tokens.scopes,
+        { keepExistingSharingAccess: true },
       );
     } catch (err) {
       console.warn("[Google Auth] Không thể tự động lưu kết nối Google Drive:", err);

@@ -21,6 +21,7 @@ import {
   type AlbumSourcePreview,
 } from "@/lib/services/album-service";
 import { getDb } from "@/lib/db/client";
+import { syncAlbumDriveSharing } from "@/lib/services/drive-sharing-service";
 import {
   albumIdSchema,
   albumStatusSchema,
@@ -225,10 +226,24 @@ export async function updateAlbumAction(
   } catch (error) {
     return { status: "error", message: errorMessage(error), values };
   }
+  // Gia hạn album đã hết hạn thì bật lại quyền Drive đã gỡ trước đó.
+  const driveNote = await driveSharingNote(actor, parsed.data.albumId);
 
   revalidatePath("/manage/photos");
   revalidatePath(`/manage/albums/${parsed.data.albumId}`);
-  return { status: "success", message: "Đã lưu cấu hình album." };
+  return { status: "success", message: `Đã lưu cấu hình album.${driveNote}` };
+}
+
+async function driveSharingNote(
+  actor: NonNullable<Awaited<ReturnType<typeof getActorContext>>>,
+  albumId: string,
+): Promise<string> {
+  try {
+    const result = await syncAlbumDriveSharing(getDb(), actor, albumId);
+    return result.message ? ` ${result.message}` : "";
+  } catch (error) {
+    return ` Chưa đổi được quyền trên Google Drive: ${errorMessage(error)}`;
+  }
 }
 
 export async function updateAlbumStatusAction(
@@ -251,10 +266,14 @@ export async function updateAlbumStatusAction(
   } catch (error) {
     return { status: "error", message: errorMessage(error) };
   }
+  const driveNote = await driveSharingNote(actor, parsed.data.albumId);
 
   revalidatePath("/manage/photos");
   revalidatePath(`/manage/albums/${parsed.data.albumId}`);
-  return { status: "success", message: "Đã cập nhật trạng thái album." };
+  return {
+    status: "success",
+    message: `Đã cập nhật trạng thái album.${driveNote}`,
+  };
 }
 
 export async function rotateShareLinkAction(
@@ -273,10 +292,11 @@ export async function rotateShareLinkAction(
 
   try {
     const result = rotateAlbumShareToken(getDb(), actor, parsed.data.albumId);
+    const driveNote = await driveSharingNote(actor, parsed.data.albumId);
     revalidatePath(`/manage/albums/${parsed.data.albumId}`);
     return {
       status: "success",
-      message: "Đã tạo link chia sẻ mới. Link cũ không còn hiệu lực.",
+      message: `Đã tạo link chia sẻ mới. Link cũ không còn hiệu lực.${driveNote}`,
       shareLink: result.shareLink,
     };
   } catch (error) {
@@ -310,12 +330,14 @@ export async function setShareRevokedAction(
     return { status: "error", message: errorMessage(error) };
   }
 
+  const driveNote = await driveSharingNote(actor, parsed.data.albumId);
+
   revalidatePath(`/manage/albums/${parsed.data.albumId}`);
   return {
     status: "success",
-    message: parsed.data.revoked
-      ? "Đã thu hồi link chia sẻ."
-      : "Đã mở lại link chia sẻ.",
+    message: `${
+      parsed.data.revoked ? "Đã thu hồi link chia sẻ." : "Đã mở lại link chia sẻ."
+    }${driveNote}`,
   };
 }
 

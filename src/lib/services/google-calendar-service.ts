@@ -45,7 +45,7 @@ type Config = NonNullable<ReturnType<typeof getGoogleCalendarConfig>>;
 type Connection = typeof googleCalendarConnections.$inferSelect;
 
 export function canManageGoogleCalendar(actor: ActorContext | null): actor is ActorContext {
-  return !!actor && actor.role === "owner" && !actor.readOnly &&
+  return !!actor && actor.role === "owner" && !(actor.readOnly || actor.planLapsed) &&
     hasPermission(actor.permissions, "schedule.manage") && hasPermission(actor.permissions, "schedule.view");
 }
 

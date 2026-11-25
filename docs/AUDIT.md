@@ -34,7 +34,7 @@ Trạng thái dùng trong tài liệu: `ĐÃ XÁC MINH` · `ĐÃ TRIỂN KHAI, C
 - Ảnh hưởng: khách (hoặc người có link) tải ảnh gốc, bỏ qua `authorizeShareDownload` (mật khẩu, hết hạn, thu hồi, quyền tải); không cần phiên đăng nhập, không phân biệt tenant.
 - Sửa: `resolveFileAccess` (`src/lib/storage/file-access.ts`): chỉ thumbnail/preview và album demo là công khai; key khác cần phiên nhân sự cùng tenant (`<tenantId>/…`) hoặc `tenants.manage`, trả `Cache-Control: private, no-store`.
 - Tiêu chí: ảnh gốc 404 khi chưa đăng nhập hoặc khác tenant. Test: `tests/unit/file-access.test.ts`.
-- Còn lại (P2, B-01): thumbnail/preview vẫn đọc được bằng URL trực tiếp sau khi link share bị thu hồi/hết hạn; cần URL ký hoặc route theo token.
+- B-01 ĐÃ SỬA: thumbnail/preview của link share dùng URL ký (`signedFileUrl`, HMAC theo `AUTH_SECRET`), hết hạn trong tối đa 2 giờ; `/api/files` còn kiểm tra link của album chưa bị thu hồi, chưa hết hạn, album chưa lưu trữ, nên thu hồi có hiệu lực ngay (trừ bản trình duyệt đã cache). URL không ký chỉ dành cho nhân sự cùng studio. Chỉ áp dụng cho album tạo bằng "Tải thư mục/ZIP"; album từ link Drive lưu thẳng URL Google Drive (`prepareGoogleImport`, `album-service.ts`), ảnh do Google phát theo quyền chia sẻ trên Drive nên thu hồi link trong StudioCore không chặn được URL ảnh Google đã phát.
 
 ### F-07 · P1 · LỖI LOGIC · ĐÃ SỬA — Bấm đúp "Thu tiền" ghi hai khoản thu
 - Bằng chứng: `recordOrderPayment` (`src/lib/services/order-service.ts`) tự sinh `idempotencyKey: crypto.randomUUID()`; chặn duy nhất là `amount <= remaining`, nên hai lần gửi một khoản thu một phần đều hợp lệ.
@@ -60,17 +60,22 @@ Trạng thái dùng trong tài liệu: `ĐÃ XÁC MINH` · `ĐÃ TRIỂN KHAI, C
 - Bằng chứng: `checkSubscriptionStatusAction` (`src/lib/actions/subscription-actions.ts`) gọi `getSubscriptionById` không có actor, không lọc tenant.
 - Sửa: yêu cầu đăng nhập và đúng tenant (hoặc `tenants.manage`).
 
+### F-17 · P0 · LỖI PHÂN QUYỀN · ĐÃ SỬA — Chủ studio tự cấp quyền quản trị nền tảng
+- Bằng chứng: `updateRolePermissions` (`src/lib/services/staff-service.ts`) lưu mọi quyền hợp lệ kể cả `tenants.manage`; trang phân quyền chỉ ẩn quyền này ở giao diện. `getActorFromToken` nạp quyền theo `role_permissions` của studio, nên một vai trò studio có dòng `tenants.manage` vào được `/platform`, các action trong `platform-actions.ts` và `api/exports/platform-backup`.
+- Sửa: `updateRolePermissions` bỏ `tenants.manage`; `getActorFromToken` chỉ giữ `tenants.manage` cho vai trò `platform_admin` (`mayManagePlatform`), nên dòng đã lưu sẵn trong DB mất hiệu lực mà không cần migration. Tài khoản quản trị nền tảng demo (mật khẩu công khai) mất quyền nền tảng khi `NODE_ENV=production`. `savePlatformBillingConfigAction` và `simulateSubscriptionPaymentAction` kiểm tra quyền thay vì tên vai trò.
+- Test: `tests/integration/platform-boundary.test.ts`.
+
 ### Chưa sửa (đưa vào backlog)
 | ID | Mức | Trạng thái | Phát hiện | Bằng chứng |
 | --- | --- | --- | --- | --- |
 | F-06 | P2 | ĐÃ SỬA (chặn) | Hóa đơn chuyển `issued → paid` bằng tay dù đơn còn nợ. Nay chỉ chuyển được khi đơn đã thu đủ (`orders.remaining = 0`) và chưa hủy. Bảng phân bổ khoản thu–hóa đơn vẫn chưa có (B-02) | `updateInvoiceStatus` (`finance-service.ts`) |
-| F-09 | P2 | CHƯA CÓ | Hạn mức gói (nhân sự, chi nhánh, dung lượng, số album) và ngày hết hạn gói không được kiểm tra ở backend; gói chỉ là nhãn | `SUBSCRIPTION_PLANS`, `tenants.planExpiresAt` chỉ được ghi trong `subscription-service.ts`/`platform-actions.ts`, không nơi nào đọc để chặn |
-| F-10 | P2 | CHƯA CÓ | Thiết bị không có luồng mượn/trả: `equipment_usages` chỉ được đọc (`getEquipmentDetail`), không có hàm ghi ngoài seed | `src/lib/services/equipment-service.ts` |
+| F-09 | P2 | CHƯA CÓ · ĐÃ SỬA (chi nhánh, nhân sự, hết hạn; `plan-limits.ts`) | Hạn mức gói (nhân sự, chi nhánh, dung lượng, số album) và ngày hết hạn gói không được kiểm tra ở backend; gói chỉ là nhãn | `SUBSCRIPTION_PLANS`, `tenants.planExpiresAt` chỉ được ghi trong `subscription-service.ts`/`platform-actions.ts`, không nơi nào đọc để chặn |
+| F-10 | P2 | CHƯA CÓ · ĐÃ SỬA | Thiết bị không có luồng mượn/trả: `equipment_usages` chỉ được đọc (`getEquipmentDetail`), không có hàm ghi ngoài seed. Nay có `checkOutEquipment`/`checkInEquipment` gắn lịch chụp, thao tác trên trang chi tiết lịch | `src/lib/services/equipment-service.ts` |
 | F-11 | P2 | ĐÃ SỬA (cảnh báo) | Hủy lịch không nhắc gì về trang phục của đơn đang mượn. Phiếu thuê là phiếu đã xuất đồ (không có đặt trước), nên hủy lịch không tự đánh dấu trả; nay người hủy nhận thông báo và trang lịch đã hủy hiện cảnh báo | `cancelAppointment` (`appointment-service.ts`), `updateBooking` (`omnichannel/booking.ts`), `notifyUnreturnedRentals` (`wardrobe-service.ts`) |
-| F-12 | P2 | LỖI LOGIC | Trên R2, bản "gốc" là WebP nén lại và preview không có watermark (local có) | `processImage` (`r2-storage.ts`) |
+| F-12 | P2 | LỖI LOGIC | Chỉ với album tạo bằng "Tải thư mục/ZIP" lưu trên R2: bản "gốc" là WebP nén lại và preview không có watermark (local có). Album từ link Drive không qua R2, ảnh gốc là file thật trên Google Drive | `processImage` (`r2-storage.ts`) |
 | F-13 | P3 | ĐÃ SỬA | Mọi nhân sự đã đăng nhập đều tạo được đơn mua gói cho studio | `createSubscriptionInvoiceAction` |
-| F-14 | P3 | LỖI LOGIC | Nhật ký hoạt động không lọc theo chi nhánh; quản lý chi nhánh có `audit.view` thấy toàn tenant | `listActivityLogs` (`audit-service.ts`) |
-| F-15 | P3 | LỖI LOGIC | `getPlatformBillingConfig` đọc setting `platform.*` không lọc tenant | `subscription-service.ts` |
+| F-14 | P3 | LỖI LOGIC · ĐÃ SỬA | Nhật ký hoạt động không lọc theo chi nhánh; quản lý chi nhánh có `audit.view` thấy toàn tenant. Nay `activity_logs.branch_id` (migration 0013, có điền lại dữ liệu cũ) và `listActivityLogs`/`listAuditActions` lọc theo chi nhánh đang chọn; dòng không thuộc chi nhánh nào chỉ chủ studio và chính người thực hiện thấy | `listActivityLogs` (`audit-service.ts`) |
+| F-15 | P3 | ĐÃ SỬA | `getPlatformBillingConfig` đọc setting `platform.*` không lọc tenant | `subscription-service.ts` |
 | F-16 | P3 | ĐÃ SỬA (phần mở khóa) | Kích hoạt gói đặt lại `tenants.status = active` kể cả studio đang bị khóa (đã sửa). Đơn quá `expiresAt` vẫn kích hoạt khi tiền tới: giữ nguyên có chủ ý, vì khách đã chuyển tiền | `activateSubscription` |
 
 ## 3. Hiện trạng từng phân hệ
@@ -80,7 +85,7 @@ Trạng thái dùng trong tài liệu: `ĐÃ XÁC MINH` · `ĐÃ TRIỂN KHAI, C
 | 1 | StudioCore Drive | `/manage/drive`, `/drive/[slug]`, `api/drive/agent/*`, `api/drive/s/[slug]/*` | `drive-service.ts`, `lib/drive/relay.ts`; file nằm trên máy studio, server chỉ relay | Agent xác thực bằng token thiết bị (`authenticateDriveDevice`); link công khai qua `resolveDrivePublicAccess` (thu hồi, PIN, `allowOriginal`) | Lướt · ĐÃ TRIỂN KHAI, CHƯA XÁC MINH ĐỦ (cần máy agent thật) |
 | 2 | Lọc ảnh / Proofing | `/manage/albums/[id]`, `/manage/photos`, `/share/[token]`, `api/uploads/*`, `api/share/[token]/download` | `album-service.ts`, `share-service.ts`, `photo-filter-service.ts`; bảng albums/photos/selections; storage local/R2 | Upload cần actor + same-origin; share kiểm tra thu hồi/hết hạn/mật khẩu; giới hạn chọn và khóa chọn kiểm tra trong transaction (`updateSharePhotoSelection`, `submitShareSelection`) | Sâu · ĐÃ XÁC MINH phần chọn ảnh; F-01 đã sửa; B-01, F-12 còn mở |
 | 3 | Kho trang phục | `/manage/wardrobe`, `/manage/wardrobe/rentals` | `wardrobe-service.ts`; `wardrobe_items`, `wardrobe_rentals` | `schedule.manage`, lọc tenant + chi nhánh; tạo/trả phiếu trong transaction `immediate` | Lướt · ĐÃ TRIỂN KHAI, CHƯA XÁC MINH ĐỦ; F-11 |
-| 4 | Thiết bị | `/manage/equipment` | `equipment-service.ts`; `equipment`, `equipment_usages` | `schedule.view/manage`, lọc tenant + chi nhánh | Sâu · DANG DỞ: chỉ danh mục, chưa có mượn/trả (F-10) |
+| 4 | Thiết bị | `/manage/equipment` | `equipment-service.ts`; `equipment`, `equipment_usages` | `schedule.view/manage`, lọc tenant + chi nhánh | Sâu · ĐÃ XÁC MINH: danh mục và mượn/trả theo lịch chụp (F-10 đã sửa) |
 | 5 | Công việc / Lịch / Booking | `/manage/calendar`, `/manage/tasks`, `/book/[serviceId]`, `api/booking` | `appointment-service.ts` (`findConflict`, `createAppointment` có `idempotency_key` duy nhất), `task-service.ts`, `omnichannel/booking.ts` | `schedule.*`, `tasks.*`, scope chi nhánh | Lướt · ĐÃ TRIỂN KHAI, CHƯA XÁC MINH ĐỦ; F-11 |
 | 6 | Tài liệu / Hợp đồng | `/manage/documents`, in hợp đồng `/manage/orders/[id]/contract`, `api/documents/*` | `document-service.ts`, `contract-service.ts`; `documents`, storage `documents/<key>` | Tải file qua `getDocumentFile` (tenant + chi nhánh); `/api/files` chặn `documents/` | Lướt · ĐÃ XÁC MINH phần tải file |
 | 7 | Nhân sự | `/manage/staff`, `/manage/staff/attendance`, `/manage/staff/leave`, `/manage/settings/users` | `staff-service.ts`, `hr-service.ts`; `staff`, `attendance`, `leave_requests` | `staff.view/manage`, scope chi nhánh | Lướt · ĐÃ TRIỂN KHAI, CHƯA XÁC MINH ĐỦ |
@@ -103,14 +108,14 @@ Các mục cần thay đổi mô hình dữ liệu (F-06, F-09, F-10) không g�
 ## 5. Backlog đề xuất
 | ID | Mức | Việc | Phụ thuộc |
 | --- | --- | --- | --- |
-| B-01 | P2 | URL ký/hết hạn cho thumbnail và preview của link share | F-01 |
+| B-01 | P2 | ĐÃ SỬA: URL ký/hết hạn cho thumbnail và preview của link share | F-01 |
 | B-02 | P2 | Phân bổ khoản thu vào hóa đơn; trạng thái hóa đơn suy ra từ khoản thu (F-06) | migration bổ sung |
-| B-03 | P2 | Thực thi hạn mức gói và ngày hết hạn ở backend, có kiểm tra đồng thời (F-09) | quyết định hạn mức từng gói |
-| B-04 | P2 | Mượn/trả thiết bị theo lịch chụp, chống đặt trùng (F-10) | — |
+| B-03 | P2 | ĐÃ SỬA: Cơ bản 1 chi nhánh/10 nhân sự, Pro và Dùng thử 3/30, Doanh nghiệp không giới hạn; chỉ chặn tạo mới; hết hạn quá 7 ngày thì chỉ xem (F-09). Còn lại: studio dùng thử đăng ký mới chưa được gán ngày hết hạn | quyết định có đặt hạn 30 ngày cho dùng thử |
+| B-04 | P2 | ĐÃ SỬA: mượn/trả thiết bị theo lịch chụp, chống xuất trùng (F-10). Chưa có đặt trước thiết bị theo khung giờ | — |
 | B-05 | P2 | Khi hủy lịch/đơn: giải phóng phiếu thuê chưa lấy, cảnh báo phiếu đang mượn (F-11) | — |
-| B-06 | P2 | Giữ file gốc và watermark preview trên R2 (F-12) | dung lượng R2 |
+| B-06 | P2 | ĐÃ BỎ theo mặc định (chỉ ảnh hưởng album tải thư mục/ZIP; mở lại nếu studio giao ảnh qua luồng này): giữ file gốc và watermark preview trên R2 (F-12) | dung lượng R2 |
 | B-07 | P3 | F-13, F-14, F-15, F-16 | — |
-| B-08 | P3 | Test tích hợp cô lập tenant qua route handler (gọi API trực tiếp bằng phiên tenant khác) cho các phân hệ đánh dấu "Lướt" | — |
+| B-08 | P3 | Test tích hợp cô lập tenant qua route handler (gọi API trực tiếp bằng phiên tenant khác) cho các phân hệ đánh dấu "Lướt". ĐÃ LÀM cho tải tài liệu, xuất ghi chú/ZIP album, xuất khách hàng, xuất báo cáo (`tests/integration/route-tenant-isolation.test.ts`); và route upload ảnh/ZIP/tài liệu; CÒN LẠI: `api/drive/agent/*` và các server action của kho trang phục, nhân sự, công việc | — |
 
 ## 6. Chưa kiểm chứng
 - Chưa chạy E2E Playwright và chưa thử trên trình duyệt các form Thu tiền/Hoàn tiền sau khi thêm `requestId`.

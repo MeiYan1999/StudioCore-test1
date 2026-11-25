@@ -1,8 +1,8 @@
-import { and, count, desc, eq, gte, lte, or, sql, type SQL } from "drizzle-orm";
+import { and, count, desc, eq, gte, isNull, lte, or, sql, type SQL } from "drizzle-orm";
 import type { AppDb } from "../db/client";
 import { activityLogs, staff } from "../db/schema";
 import type { ActorContext } from "../auth/types";
-import { assertPermission } from "../auth/permissions";
+import { assertPermission, getBranchScope } from "../auth/permissions";
 
 export type AuditFilters = {
   q?: string;
@@ -24,13 +24,30 @@ export type AuditView = {
   createdAt: Date;
 };
 
+/**
+ * A branch-scoped viewer sees entries about their branch plus entries that
+ * have no branch (logins, staff, settings): all of them for the owner, only
+ * their own for anyone else.
+ */
+function auditBranchConditions(actor: ActorContext): SQL[] {
+  const scope = getBranchScope(actor);
+  if (scope.mode === "all") return [];
+  const tenantWide =
+    actor.role === "owner"
+      ? isNull(activityLogs.branchId)
+      : and(isNull(activityLogs.branchId), eq(activityLogs.actorId, actor.staffId));
+  const visible =
+    scope.mode === "branch" ? or(eq(activityLogs.branchId, scope.branchId), tenantWide) : tenantWide;
+  return visible ? [visible] : [];
+}
+
 export function listActivityLogs(
   db: AppDb,
   actor: ActorContext,
   filters: AuditFilters,
 ): { items: AuditView[]; total: number; page: number; pageSize: number } {
   assertPermission(actor, "audit.view");
-  const conditions: SQL[] = [eq(activityLogs.tenantId, actor.tenantId)];
+  const conditions: SQL[] = [eq(activityLogs.tenantId, actor.tenantId), ...auditBranchConditions(actor)];
   if (filters.action) conditions.push(eq(activityLogs.action, filters.action));
   if (filters.entity) conditions.push(eq(activityLogs.entity, filters.entity));
   if (filters.from) {
@@ -76,7 +93,7 @@ export function listAuditActions(db: AppDb, actor: ActorContext): string[] {
   return db
     .selectDistinct({ action: activityLogs.action })
     .from(activityLogs)
-    .where(eq(activityLogs.tenantId, actor.tenantId))
+    .where(and(eq(activityLogs.tenantId, actor.tenantId), ...auditBranchConditions(actor)))
     .orderBy(activityLogs.action)
     .all()
     .map((row) => row.action);

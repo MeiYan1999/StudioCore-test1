@@ -9,7 +9,7 @@ export async function GET(request: Request) {
   const actor = await requireActor();
   const db = getDb();
   try {
-    if (actor.role !== "owner" || actor.readOnly)
+    if (actor.role !== "owner" || (actor.readOnly || actor.planLapsed))
       throw new Error("Chỉ chủ studio được kết nối.");
     const params = new URL(request.url).searchParams;
     const state = digest(params.get("state") ?? "");

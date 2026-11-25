@@ -137,6 +137,8 @@ export type ShellActor = {
   activeBranchId: string | null;
   isOwner: boolean;
   readOnly?: boolean;
+  planLapsed?: boolean;
+  canRenewPlan?: boolean;
   canChangePassword: boolean;
   branches: { id: string; name: string }[];
 };
@@ -608,6 +610,23 @@ export function AppShell({
             </div>
           </header>
 
+          {actor.planLapsed ? (
+            <div className="border-b border-amber-300 bg-amber-50 px-4 py-2 text-sm text-[var(--warning)] sm:px-6 lg:px-8 dark:border-amber-900 dark:bg-amber-950/40">
+              <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-2">
+                <span>
+                  Gói dịch vụ đã hết hạn quá 7 ngày. Studio đang ở chế độ chỉ xem: vẫn xem và xuất
+                  được dữ liệu, các thao tác ghi bị chặn cho đến khi gia hạn.
+                </span>
+                {actor.canRenewPlan ? (
+                  <a href="/manage/settings/billing" className="font-semibold underline">
+                    Gia hạn gói
+                  </a>
+                ) : (
+                  <span>Liên hệ chủ studio để gia hạn.</span>
+                )}
+              </div>
+            </div>
+          ) : null}
           {actor.readOnly ? (
             <div className="border-b border-amber-300 bg-amber-50 px-4 py-2 text-sm text-[var(--warning)] sm:px-6 lg:px-8 dark:border-amber-900 dark:bg-amber-950/40">
               <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-2">

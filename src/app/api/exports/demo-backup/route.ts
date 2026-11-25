@@ -28,7 +28,11 @@ export const dynamic = "force-dynamic";
 export async function GET(): Promise<Response> {
   const actor = await getActorContext();
   if (!actor) return new Response("Unauthorized", { status: 401 });
-  if (!hasPermission(actor.permissions, "settings.manage")) {
+  // A lapsed plan strips manage permissions but must still allow exporting data.
+  if (
+    !hasPermission(actor.permissions, "settings.manage") &&
+    !(actor.planLapsed && actor.canRenewPlan)
+  ) {
     return new Response("Forbidden", { status: 403 });
   }
   const db = getDb();

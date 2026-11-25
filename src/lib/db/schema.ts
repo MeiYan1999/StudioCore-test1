@@ -221,6 +221,8 @@ export const activityLogs = sqliteTable(
   {
     id: text("id").primaryKey(),
     tenantId: text("tenant_id").references(() => tenants.id),
+    // Branch of the record the action touched; null for tenant-wide actions.
+    branchId: text("branch_id"),
     actorId: text("actor_id").references(() => staff.id),
     action: text("action").notNull(),
     entity: text("entity").notNull(),
@@ -935,6 +937,9 @@ export const albumSources = sqliteTable(
     status: text("status").notNull().default("pending"),
     lastSyncedAt: integer("last_synced_at", { mode: "timestamp_ms" }),
     error: text("error"),
+    driveAccessRevokedAt: integer("drive_access_revoked_at", {
+      mode: "timestamp_ms",
+    }),
     createdAt: createdAtColumn(),
     updatedAt: updatedAtColumn(),
   },
@@ -1046,6 +1051,7 @@ export const driveConnections = sqliteTable(
       .references(() => tenants.id),
     provider: text("provider").notNull().default("google"),
     refreshTokenEncrypted: text("refresh_token_encrypted").notNull(),
+    scopes: text("scopes"),
     folderId: text("folder_id"),
     status: text("status").notNull().default("connected"),
     lastSyncedAt: integer("last_synced_at", { mode: "timestamp_ms" }),

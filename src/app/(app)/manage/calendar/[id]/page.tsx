@@ -12,7 +12,9 @@ import { BookingSheet } from "@/components/scheduling/booking-sheet";
 import { CancelAppointmentDialog } from "@/components/scheduling/cancel-appointment-dialog";
 import {
   checkInAppointmentAction,
+  checkInEquipmentAction,
   checkOutAppointmentAction,
+  checkOutEquipmentAction,
 } from "@/lib/actions/scheduling-actions";
 import { hasPermission } from "@/lib/auth/permissions";
 import { requireActor } from "@/lib/auth/session";
@@ -24,6 +26,7 @@ import {
 import { formatDateKey, getVietnamDateKey } from "@/lib/scheduling/time";
 import { formatDateTime } from "@/lib/utils";
 import { getAppointmentDetail } from "@/lib/services/appointment-service";
+import { listAppointmentEquipment, listEquipment } from "@/lib/services/equipment-service";
 import { listUnreturnedRentalItems } from "@/lib/services/wardrobe-service";
 import { buildGoogleCalendarEventUrl } from "@/lib/services/ical-service";
 import { listOrderOptions, orderAssigneeOptions } from "@/lib/services/order-service";
@@ -43,6 +46,7 @@ export default async function AppointmentDetailPage({
     checkedIn?: string;
     checkedOut?: string;
     cancelled?: string;
+    equipment?: string;
   }>;
 }) {
   const actor = await requireActor();
@@ -63,6 +67,16 @@ export default async function AppointmentDetailPage({
   const canManage = hasPermission(actor.permissions, "schedule.manage");
   const canCheck =
     canManage || appointment.photographer?.id === actor.staffId;
+  const equipmentUsages = listAppointmentEquipment(getDb(), actor, appointment.id);
+  const openEquipment = equipmentUsages.filter((usage) => !usage.returnedAt);
+  // An inactive branch is not in the actor's branches; lending there is not offered.
+  const canLendEquipment =
+    canManage &&
+    (appointment.status === "scheduled" || appointment.status === "checked_in") &&
+    actor.branches.some((branch) => branch.id === appointment.branchId);
+  const availableEquipment = canLendEquipment
+    ? listEquipment(getDb(), actor, { status: "available", branchId: appointment.branchId })
+    : [];
   const statusMeta = APPOINTMENT_STATUS_META[appointment.status];
   const dateKey = getVietnamDateKey(appointment.startAt);
   const rooms = listRooms(getDb(), actor);
@@ -130,6 +144,20 @@ export default async function AppointmentDetailPage({
       ) : null}
       {messages.cancelled ? (
         <Alert tone="success" className="mb-4">Đã hủy lịch chụp.</Alert>
+      ) : null}
+      {messages.equipment === "out" ? (
+        <Alert tone="success" className="mb-4">Đã xuất thiết bị cho buổi chụp.</Alert>
+      ) : null}
+      {messages.equipment === "in" ? (
+        <Alert tone="success" className="mb-4">Đã nhận lại thiết bị.</Alert>
+      ) : null}
+      {openEquipment.length > 0 &&
+      (appointment.status === "cancelled" || appointment.status === "completed") ? (
+        <Alert tone="warning" className="mb-4">
+          Buổi chụp đã {appointment.status === "cancelled" ? "hủy" : "hoàn tất"} nhưng còn{" "}
+          {openEquipment.length} thiết bị chưa nhận lại:{" "}
+          {openEquipment.map((usage) => usage.equipmentName).join(", ")}.
+        </Alert>
       ) : null}
       {unreturnedItems.length > 0 ? (
         <Alert tone="warning" className="mb-4">
@@ -236,6 +264,82 @@ export default async function AppointmentDetailPage({
                   {appointment.checkOutAt ? formatDateTime(appointment.checkOutAt) : "Chưa check-out"}
                 </p>
               </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Thiết bị của buổi chụp</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              {equipmentUsages.length === 0 ? (
+                <p className="text-muted-foreground">Chưa xuất thiết bị nào cho buổi chụp này.</p>
+              ) : (
+                <ul className="divide-y divide-border">
+                  {equipmentUsages.map((usage) => (
+                    <li key={usage.id} className="flex flex-wrap items-center justify-between gap-3 py-2">
+                      <div>
+                        <Link
+                          href={`/manage/equipment/${usage.equipmentId}`}
+                          className="font-medium text-foreground hover:text-primary"
+                        >
+                          {usage.equipmentName}
+                        </Link>
+                        <p className="text-xs text-muted-foreground">
+                          {usage.serialNumber} · xuất {formatDateTime(usage.checkedOutAt)}
+                          {usage.returnedAt
+                            ? ` · nhận lại ${formatDateTime(usage.returnedAt)}${usage.conditionIn === "damaged" ? " (hư hỏng)" : ""}`
+                            : ""}
+                        </p>
+                      </div>
+                      {usage.returnedAt ? (
+                        <Badge tone="success">Đã nhận lại</Badge>
+                      ) : canManage ? (
+                        <form action={checkInEquipmentAction} className="flex items-center gap-2">
+                          <input type="hidden" name="appointmentId" value={appointment.id} />
+                          <input type="hidden" name="usageId" value={usage.id} />
+                          <select
+                            name="conditionIn"
+                            aria-label={`Tình trạng khi nhận lại ${usage.equipmentName}`}
+                            defaultValue="good"
+                            className="h-9 rounded-md border border-border bg-background px-2 text-sm"
+                          >
+                            <option value="good">Tốt</option>
+                            <option value="damaged">Hư hỏng</option>
+                          </select>
+                          <SubmitButton pendingLabel="Đang nhận...">Nhận lại</SubmitButton>
+                        </form>
+                      ) : (
+                        <Badge tone="info">Đang mượn</Badge>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {canLendEquipment ? (
+                availableEquipment.length > 0 ? (
+                  <form action={checkOutEquipmentAction} className="flex flex-wrap items-center gap-2">
+                    <input type="hidden" name="appointmentId" value={appointment.id} />
+                    <select
+                      name="equipmentId"
+                      aria-label="Thiết bị cần xuất"
+                      required
+                      className="h-9 min-w-56 rounded-md border border-border bg-background px-2 text-sm"
+                    >
+                      {availableEquipment.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.name} · {item.serialNumber}
+                        </option>
+                      ))}
+                    </select>
+                    <SubmitButton pendingLabel="Đang xuất...">Xuất thiết bị</SubmitButton>
+                  </form>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Chi nhánh không còn thiết bị sẵn sàng.
+                  </p>
+                )
+              ) : null}
             </CardContent>
           </Card>
         </div>

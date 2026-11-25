@@ -1,12 +1,14 @@
 import { getActorContext } from "@/lib/auth/session";
 import { hasPermission } from "@/lib/auth/permissions";
 import { writeAudit } from "@/lib/audit";
+import { getBranchScope } from "@/lib/auth/permissions";
 import {
   CUSTOMER_SOURCE_LABELS,
   CUSTOMER_STATUS_LABELS,
   CUSTOMER_TIER_LABELS,
 } from "@/lib/crm/constants";
 import { getDb } from "@/lib/db/client";
+import { AuthorizationError } from "@/lib/errors";
 import { customerCsvRows } from "@/lib/services/customer-service";
 import { formatDate } from "@/lib/utils";
 
@@ -47,7 +49,15 @@ export async function GET(request: Request): Promise<Response> {
     segment: url.searchParams.get("segment") ?? undefined,
   };
 
-  const rows = customerCsvRows(getDb(), actor, filters);
+  let rows: ReturnType<typeof customerCsvRows>;
+  try {
+    rows = customerCsvRows(getDb(), actor, filters);
+  } catch (error) {
+    if (error instanceof AuthorizationError) {
+      return new Response(error.message, { status: 403 });
+    }
+    throw error;
+  }
   const headers = [
     "Họ tên",
     "Số điện thoại",
@@ -85,11 +95,13 @@ export async function GET(request: Request): Promise<Response> {
     ),
   ];
 
+  const exportScope = getBranchScope(actor);
   writeAudit(getDb(), {
     tenantId: actor.tenantId,
     actorId: actor.staffId,
     action: "customers.export",
     entity: "customer",
+    branchId: exportScope.mode === "branch" ? exportScope.branchId : null,
     metadata: { count: rows.length, filters },
   });
 
