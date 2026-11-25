@@ -115,7 +115,7 @@ Các mục cần thay đổi mô hình dữ liệu (F-06, F-09, F-10) không g�
 | B-05 | P2 | Khi hủy lịch/đơn: giải phóng phiếu thuê chưa lấy, cảnh báo phiếu đang mượn (F-11) | — |
 | B-06 | P2 | ĐÃ BỎ theo mặc định (chỉ ảnh hưởng album tải thư mục/ZIP; mở lại nếu studio giao ảnh qua luồng này): giữ file gốc và watermark preview trên R2 (F-12) | dung lượng R2 |
 | B-07 | P3 | F-13, F-14, F-15, F-16 | — |
-| B-08 | P3 | Test tích hợp cô lập tenant qua route handler (gọi API trực tiếp bằng phiên tenant khác) cho các phân hệ đánh dấu "Lướt" | — |
+| B-08 | P3 | Test tích hợp cô lập tenant qua route handler (gọi API trực tiếp bằng phiên tenant khác) cho các phân hệ đánh dấu "Lướt". ĐÃ LÀM cho tải tài liệu, xuất ghi chú/ZIP album, xuất khách hàng, xuất báo cáo (`tests/integration/route-tenant-isolation.test.ts`); và route upload ảnh/ZIP/tài liệu; CÒN LẠI: `api/drive/agent/*` và các server action của kho trang phục, nhân sự, công việc | — |
 
 ## 6. Chưa kiểm chứng
 - Chưa chạy E2E Playwright và chưa thử trên trình duyệt các form Thu tiền/Hoàn tiền sau khi thêm `requestId`.
