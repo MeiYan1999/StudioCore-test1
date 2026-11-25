@@ -919,6 +919,11 @@ export function ShareGallery({
                       </button>
                     </div>
                   </div>
+                  {photo.note ? (
+                    <p className="line-clamp-2 break-words border-t border-slate-100 px-2.5 py-1.5 text-xs text-slate-600 dark:border-neutral-800 dark:text-neutral-300">
+                      {photo.note}
+                    </p>
+                  ) : null}
                 </article>
               ))}
             </div>
