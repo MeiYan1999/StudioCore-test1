@@ -8,7 +8,7 @@ import { authenticate } from "@/lib/auth/login-service";
 import { getActorFromToken } from "@/lib/auth/session-core";
 import type { ActorContext } from "@/lib/auth/types";
 import type { AppDb } from "@/lib/db/client";
-import { paymentRequests, photos } from "@/lib/db/schema";
+import { albums, paymentRequests, photos } from "@/lib/db/schema";
 import {
   addUploadedPhotos,
   createAlbum,
@@ -25,6 +25,7 @@ import {
   authorizeShareDownload,
   evaluateShareAccess,
   getShareGalleryPage,
+  isLiveShareDerivative,
   submitShareSelection,
   updateSharePhotoSelection,
   verifySharePassword,
@@ -398,6 +399,17 @@ describe("album và PhotoShare", () => {
     if (uploadedKey) {
       const key = uploadedKey.thumbnailUrl.split("/api/files/")[1] ?? "";
       const segments = key.split("/").map(decodeURIComponent);
+      const thumbKey = segments.join("/");
+      const stored = db.select().from(photos).where(eq(photos.thumbnailKey, thumbKey)).get();
+      expect(isLiveShareDerivative(db, thumbKey)).toBe(true);
+      expect(isLiveShareDerivative(db, stored?.storageKey ?? "")).toBe(false);
+      setAlbumShareRevoked(db, owner, created.albumId, true);
+      expect(isLiveShareDerivative(db, thumbKey)).toBe(false);
+      setAlbumShareRevoked(db, owner, created.albumId, false);
+      const soon = new Date(Date.now() + 60_000);
+      db.update(albums).set({ expiresAt: soon }).where(eq(albums.id, created.albumId)).run();
+      expect(isLiveShareDerivative(db, thumbKey)).toBe(true);
+      expect(isLiveShareDerivative(db, thumbKey, new Date(soon.getTime() + 1))).toBe(false);
       const albumFolder = segments.slice(0, -1).join("/");
       fs.rmSync(
         path.join(process.cwd(), "public", "uploads", ...albumFolder.split("/")),

@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "ee40277d-5cef-4717-aa4a-4dc14ac3392e",
-  "prevId": "7786e12a-3050-416a-b79d-7f85aaf7b615",
+  "id": "6a0fd770-b30c-4e5f-98fd-fbd2b3a126a9",
+  "prevId": "b1d9ea84-bb47-4305-97df-9292dca71f70",
   "tables": {
     "activity_logs": {
       "name": "activity_logs",
@@ -16,6 +16,13 @@
         },
         "tenant_id": {
           "name": "tenant_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "branch_id": {
+          "name": "branch_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false,

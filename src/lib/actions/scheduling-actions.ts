@@ -21,6 +21,7 @@ import {
   createAppointment,
   updateAppointment,
 } from "@/lib/services/appointment-service";
+import { checkInEquipment, checkOutEquipment } from "@/lib/services/equipment-service";
 import { regenerateCalendarFeedToken } from "@/lib/services/ical-service";
 import { createRoom, updateRoom } from "@/lib/services/room-service";
 import { getDb } from "@/lib/db/client";
@@ -315,6 +316,43 @@ export async function checkInAppointmentAction(formData: FormData): Promise<void
 
 export async function checkOutAppointmentAction(formData: FormData): Promise<void> {
   await checkInOutAction(formData, "checkOut");
+}
+
+export async function checkOutEquipmentAction(formData: FormData): Promise<void> {
+  const actor = await getActorContext();
+  if (!actor) redirect("/login");
+  const appointmentId = getFormString(formData, "appointmentId");
+  try {
+    checkOutEquipment(getDb(), actor, {
+      appointmentId,
+      equipmentId: getFormString(formData, "equipmentId"),
+    });
+  } catch (error) {
+    redirect(
+      `/manage/calendar/${appointmentId}?error=${encodeURIComponent(errorMessage(error))}`,
+    );
+  }
+  revalidatePath("/manage/equipment");
+  revalidatePath(`/manage/calendar/${appointmentId}`);
+  redirect(`/manage/calendar/${appointmentId}?equipment=out`);
+}
+
+export async function checkInEquipmentAction(formData: FormData): Promise<void> {
+  const actor = await getActorContext();
+  if (!actor) redirect("/login");
+  const appointmentId = getFormString(formData, "appointmentId");
+  try {
+    checkInEquipment(getDb(), actor, getFormString(formData, "usageId"), {
+      conditionIn: getFormString(formData, "conditionIn") === "damaged" ? "damaged" : "good",
+    });
+  } catch (error) {
+    redirect(
+      `/manage/calendar/${appointmentId}?error=${encodeURIComponent(errorMessage(error))}`,
+    );
+  }
+  revalidatePath("/manage/equipment");
+  revalidatePath(`/manage/calendar/${appointmentId}`);
+  redirect(`/manage/calendar/${appointmentId}?equipment=in`);
 }
 
 export async function regenerateCalendarFeedTokenAction(): Promise<{
