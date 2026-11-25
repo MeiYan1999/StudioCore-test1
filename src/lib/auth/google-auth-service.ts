@@ -150,7 +150,12 @@ export type GoogleUserProfile = {
 export async function exchangeGoogleLoginCode(
   code: string,
   redirectUri: string,
-): Promise<{ accessToken: string; refreshToken?: string; idToken?: string }> {
+): Promise<{
+  accessToken: string;
+  refreshToken?: string;
+  idToken?: string;
+  scopes?: string;
+}> {
   const config = getGoogleLoginConfig();
   if (!config.configured) {
     throw new ValidationError("Google OAuth chưa được cấu hình.");
@@ -172,6 +177,7 @@ export async function exchangeGoogleLoginCode(
     access_token?: string;
     refresh_token?: string;
     id_token?: string;
+    scope?: string;
     error?: string;
     error_description?: string;
   };
@@ -186,6 +192,7 @@ export async function exchangeGoogleLoginCode(
     accessToken: payload.access_token,
     refreshToken: payload.refresh_token,
     idToken: payload.id_token,
+    scopes: payload.scope,
   };
 }
 

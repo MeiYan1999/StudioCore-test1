@@ -200,7 +200,7 @@ function requireConversation(
   assertBranchAccess(actor, row.branchId);
   const facebook = db.select().from(facebookThreads).where(eq(facebookThreads.conversationId, row.id)).get();
   if (facebook && actor.role !== "owner" && row.assignedTo !== actor.staffId) throw new ValidationError("Hội thoại chưa được phân công cho bạn.");
-  if (actor.readOnly) throw new ValidationError("Tài khoản chỉ đọc.");
+  if (actor.readOnly || actor.planLapsed) throw new ValidationError("Tài khoản chỉ đọc.");
   return row;
 }
 

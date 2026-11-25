@@ -233,7 +233,7 @@ export async function POST(request: Request) {
       { status: 403 },
     );
   try {
-    if (actor.readOnly) throw new Error("Tài khoản chỉ đọc.");
+    if (actor.readOnly || actor.planLapsed) throw new Error("Tài khoản chỉ đọc.");
     const input = commands.parse(await request.json());
     const db = getDb();
     if (input.action === "page") {

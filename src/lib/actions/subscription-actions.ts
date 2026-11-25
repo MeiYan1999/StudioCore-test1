@@ -25,7 +25,7 @@ export async function createSubscriptionInvoiceAction(
     };
   }
 
-  if (!hasPermission(actor.permissions, "settings.manage")) {
+  if (!hasPermission(actor.permissions, "settings.manage") && !actor.canRenewPlan) {
     return {
       success: false,
       error: "Chỉ người có quyền quản lý cài đặt mới được mua hoặc gia hạn gói.",
