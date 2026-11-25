@@ -69,7 +69,7 @@ Trạng thái dùng trong tài liệu: `ĐÃ XÁC MINH` · `ĐÃ TRIỂN KHAI, C
 | F-11 | P2 | ĐÃ SỬA (cảnh báo) | Hủy lịch không nhắc gì về trang phục của đơn đang mượn. Phiếu thuê là phiếu đã xuất đồ (không có đặt trước), nên hủy lịch không tự đánh dấu trả; nay người hủy nhận thông báo và trang lịch đã hủy hiện cảnh báo | `cancelAppointment` (`appointment-service.ts`), `updateBooking` (`omnichannel/booking.ts`), `notifyUnreturnedRentals` (`wardrobe-service.ts`) |
 | F-12 | P2 | LỖI LOGIC | Chỉ với album tạo bằng "Tải thư mục/ZIP" lưu trên R2: bản "gốc" là WebP nén lại và preview không có watermark (local có). Album từ link Drive không qua R2, ảnh gốc là file thật trên Google Drive | `processImage` (`r2-storage.ts`) |
 | F-13 | P3 | ĐÃ SỬA | Mọi nhân sự đã đăng nhập đều tạo được đơn mua gói cho studio | `createSubscriptionInvoiceAction` |
-| F-14 | P3 | LỖI LOGIC | Nhật ký hoạt động không lọc theo chi nhánh; quản lý chi nhánh có `audit.view` thấy toàn tenant | `listActivityLogs` (`audit-service.ts`) |
+| F-14 | P3 | LỖI LOGIC · ĐÃ SỬA | Nhật ký hoạt động không lọc theo chi nhánh; quản lý chi nhánh có `audit.view` thấy toàn tenant. Nay `activity_logs.branch_id` (migration 0013, có điền lại dữ liệu cũ) và `listActivityLogs`/`listAuditActions` lọc theo chi nhánh đang chọn; dòng không thuộc chi nhánh nào chỉ chủ studio và chính người thực hiện thấy | `listActivityLogs` (`audit-service.ts`) |
 | F-15 | P3 | LỖI LOGIC | `getPlatformBillingConfig` đọc setting `platform.*` không lọc tenant | `subscription-service.ts` |
 | F-16 | P3 | ĐÃ SỬA (phần mở khóa) | Kích hoạt gói đặt lại `tenants.status = active` kể cả studio đang bị khóa (đã sửa). Đơn quá `expiresAt` vẫn kích hoạt khi tiền tới: giữ nguyên có chủ ý, vì khách đã chuyển tiền | `activateSubscription` |
 
