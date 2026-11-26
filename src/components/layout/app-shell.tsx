@@ -539,8 +539,8 @@ export function AppShell({
         Bỏ qua điều hướng
       </a>
 
-      <div className="min-h-screen lg:flex">
-        <aside className="hidden w-60 shrink-0 border-r border-border bg-surface lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col">
+      <div className="studio-workspace min-h-screen lg:flex">
+        <aside className="hidden w-60 shrink-0 border-r border-border bg-surface dark:bg-surface/80 lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col">
           <SidebarContent actor={actor} nav={nav} />
         </aside>
 

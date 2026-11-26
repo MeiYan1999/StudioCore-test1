@@ -45,6 +45,37 @@
   --info: hsl(210 100% 65%);
 }
 
+/* Set workspace colors on the root so menus and dialogs share them in portals. */
+html.dark:has(.studio-workspace) {
+  --background: #09090b;
+  --surface: #18181c;
+  --surface-muted: #202127;
+  --foreground: #f4f4f5;
+  --muted-foreground: #aaaab5;
+  --border: #303138;
+  --input-border: #717480;
+  --primary: #80baff;
+  --primary-hover: #a2cdff;
+  --primary-foreground: #0b1930;
+  --secondary: #232a39;
+  --accent: #1a2b48;
+  --accent-foreground: #bfdbfe;
+  --focus: #80baff;
+}
+
+@media screen {
+  .dark .studio-workspace {
+    background-color: var(--background);
+    background-image:
+      linear-gradient(to right, rgb(255 255 255 / 2%), transparent 1px),
+      linear-gradient(to bottom, rgb(255 255 255 / 2%), transparent 1px),
+      radial-gradient(ellipse at top left, #142553, transparent 46%),
+      radial-gradient(ellipse at bottom right, #172c62, transparent 54%);
+    background-size: 44px 44px, 44px 44px, 100% 100%, 100% 100%;
+    background-attachment: fixed;
+  }
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-surface: var(--surface);
