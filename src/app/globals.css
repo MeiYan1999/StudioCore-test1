@@ -4,45 +4,45 @@
 
 :root {
   --app-font-sans: "Be Vietnam Pro", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --background: hsl(240 10% 98%);
-  --surface: #ffffff;
-  --surface-muted: hsl(245 25% 97%);
-  --foreground: #1e1b2e;
-  --muted-foreground: hsl(245 15% 45%);
-  --border: hsl(245 15% 91%);
-  --input-border: #7c728a;
-  --primary: hsl(254 80% 56%);
-  --primary-hover: hsl(254 82% 48%);
-  --primary-foreground: #ffffff;
-  --secondary: hsl(250 65% 68%);
-  --accent: hsl(254 95% 96%);
-  --accent-foreground: hsl(254 80% 48%);
-  --focus: hsl(254 80% 56%);
+  --background: hsl(220 20% 96%);
+  --surface: hsl(0 0% 100%);
+  --surface-muted: hsl(220 14% 96%);
+  --foreground: hsl(0 0% 20%);
+  --muted-foreground: hsl(215 16% 47%);
+  --border: hsl(220 13% 91%);
+  --input-border: #788494;
+  --primary: hsl(211 100% 35%);
+  --primary-hover: hsl(211 100% 30%);
+  --primary-foreground: hsl(0 0% 100%);
+  --secondary: hsl(210 100% 65%);
+  --accent: hsl(210 100% 95%);
+  --accent-foreground: hsl(211 100% 35%);
+  --focus: hsl(211 100% 35%);
   --danger: #dc2626;
   --success: #059669;
   --warning: #d97706;
-  --info: #6366f1;
+  --info: hsl(210 100% 65%);
 }
 
 .dark {
-  --background: hsl(248 24% 8%);
-  --surface: hsl(248 22% 12%);
-  --surface-muted: hsl(248 20% 16%);
-  --foreground: hsl(240 20% 95%);
-  --muted-foreground: hsl(245 15% 65%);
-  --border: hsl(248 20% 18%);
-  --input-border: #8b8599;
-  --primary: hsl(254 85% 65%);
-  --primary-hover: hsl(254 85% 60%);
-  --primary-foreground: #0d0a1a;
-  --secondary: hsl(248 20% 22%);
-  --accent: hsl(254 30% 22%);
-  --accent-foreground: hsl(240 20% 95%);
-  --focus: hsl(254 85% 65%);
+  --background: hsl(220 20% 7%);
+  --surface: hsl(220 20% 10%);
+  --surface-muted: hsl(215 28% 17%);
+  --foreground: hsl(213 31% 91%);
+  --muted-foreground: hsl(215 20% 65%);
+  --border: hsl(215 28% 17%);
+  --input-border: #8594a9;
+  --primary: hsl(210 100% 50%);
+  --primary-hover: hsl(210 100% 45%);
+  --primary-foreground: hsl(0 0% 100%);
+  --secondary: hsl(215 28% 17%);
+  --accent: hsl(215 28% 17%);
+  --accent-foreground: hsl(213 31% 91%);
+  --focus: hsl(210 100% 50%);
   --danger: #f87171;
   --success: #34d399;
   --warning: #fbbf24;
-  --info: #818cf8;
+  --info: hsl(210 100% 65%);
 }
 
 @theme inline {
@@ -223,7 +223,7 @@
     inset 0 1px 1px 0 rgba(255, 255, 255, 0.25),
     inset 0 -1px 1px 0 rgba(0, 0, 0, 0.4),
     0 20px 40px -15px rgba(0, 0, 0, 0.5),
-    0 0 20px 0 rgba(99, 102, 241, 0.1);
+    0 0 20px 0 rgba(0, 86, 179, 0.1);
 }
 
 .liquid-glass-card {
@@ -253,15 +253,15 @@
 }
 
 .liquid-glass-card:hover {
-  border-color: rgba(99, 102, 241, 0.4);
+  border-color: rgba(0, 86, 179, 0.4);
   box-shadow:
     inset 0 1px 2px 0 rgba(255, 255, 255, 1),
-    0 25px 50px -12px rgba(67, 56, 202, 0.12);
+    0 25px 50px -12px rgba(0, 86, 179, 0.12);
   transform: translateY(-2px);
 }
 
 .dark .liquid-glass-card:hover {
-  border-color: rgba(129, 140, 248, 0.45);
+  border-color: rgba(77, 166, 255, 0.45);
   box-shadow:
     inset 0 1px 1.5px 0 rgba(255, 255, 255, 0.35),
     0 25px 50px -12px rgba(0, 0, 0, 0.65);

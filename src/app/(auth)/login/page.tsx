@@ -35,8 +35,8 @@ export default async function LoginPage({
   return (
     <div>
       <div className="mb-7">
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-indigo-500/20 bg-indigo-500/[0.07] px-2.5 py-1 text-xs font-medium text-indigo-600 dark:text-indigo-300">
-          <span className="h-1.5 w-1.5 rounded-full bg-indigo-500" aria-hidden="true" />
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-500/20 bg-blue-500/[0.07] px-2.5 py-1 text-xs font-medium text-blue-600 dark:text-blue-300">
+          <span className="h-1.5 w-1.5 rounded-full bg-blue-500" aria-hidden="true" />
           Chào mừng trở lại
         </span>
         <h1 className="mt-4 text-[28px] font-semibold leading-9 tracking-tight text-foreground">
@@ -127,16 +127,16 @@ export default async function LoginPage({
       <div className="mt-4 flex flex-wrap items-center justify-between gap-2 px-1 text-sm">
         <Link
           href="/reset-password"
-          className="rounded font-medium text-muted-foreground transition-colors hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/30 dark:hover:text-indigo-300"
+          className="rounded font-medium text-muted-foreground transition-colors hover:text-blue-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30 dark:hover:text-blue-300"
         >
           Quên mật khẩu?
         </Link>
         <Link
           href="/register"
-          className="rounded text-muted-foreground transition-colors hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/30 dark:hover:text-indigo-300"
+          className="rounded text-muted-foreground transition-colors hover:text-blue-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30 dark:hover:text-blue-300"
         >
           Chưa có tài khoản?{" "}
-          <span className="font-semibold text-indigo-600 dark:text-indigo-300">Đăng ký dùng thử</span>
+          <span className="font-semibold text-blue-600 dark:text-blue-300">Đăng ký dùng thử</span>
         </Link>
       </div>
 

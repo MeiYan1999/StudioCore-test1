@@ -4,15 +4,15 @@ import { CalendarCheck2, Phone, TrendingUp } from "lucide-react";
 import { BrandIcon } from "@/components/brand/brand-logo";
 
 const SHOOT_SLOTS = [
-  { time: "08:00", name: "Cưới Minh & Lan", initials: "ML", tone: "from-violet-400 to-indigo-500" },
-  { time: "10:30", name: "Kỷ yếu 12A1", initials: "KY", tone: "from-sky-400 to-indigo-500" },
-  { time: "14:00", name: "Gia đình chị Hà", initials: "GH", tone: "from-fuchsia-400 to-violet-500" },
+  { time: "08:00", name: "Cưới Minh & Lan", initials: "ML", tone: "from-blue-400 to-blue-500" },
+  { time: "10:30", name: "Kỷ yếu 12A1", initials: "KY", tone: "from-sky-400 to-blue-500" },
+  { time: "14:00", name: "Gia đình chị Hà", initials: "GH", tone: "from-sky-400 to-blue-500" },
 ];
 
 const TRUSTED_AVATARS = [
-  { initials: "AN", tone: "from-violet-400 to-indigo-600" },
+  { initials: "AN", tone: "from-blue-400 to-blue-600" },
   { initials: "TP", tone: "from-sky-400 to-blue-600" },
-  { initials: "HL", tone: "from-fuchsia-400 to-purple-600" },
+  { initials: "HL", tone: "from-sky-400 to-slate-600" },
   { initials: "MK", tone: "from-emerald-400 to-teal-600" },
 ];
 
@@ -34,8 +34,8 @@ function BrandMark({ inverted = false }: { inverted?: boolean }) {
           <span
             className={
               inverted
-                ? "rounded-full border border-white/15 bg-white/10 px-1.5 py-px text-[10px] font-semibold leading-4 text-indigo-100"
-                : "rounded-full border border-indigo-500/20 bg-indigo-500/10 px-1.5 py-px text-[10px] font-semibold leading-4 text-indigo-600 dark:text-indigo-300"
+                ? "rounded-full border border-white/15 bg-white/10 px-1.5 py-px text-[10px] font-semibold leading-4 text-blue-100"
+                : "rounded-full border border-blue-500/20 bg-blue-500/10 px-1.5 py-px text-[10px] font-semibold leading-4 text-blue-600 dark:text-blue-300"
             }
           >
             v2.0
@@ -61,7 +61,7 @@ function StudioPreviewCard() {
       <div className="animate-float rounded-2xl border border-white/10 bg-white/[0.06] p-5 shadow-2xl shadow-black/40 backdrop-blur-md">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-500/20 text-indigo-200 ring-1 ring-indigo-400/30">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500/20 text-blue-200 ring-1 ring-blue-400/30">
               <CalendarCheck2 className="h-4 w-4" />
             </span>
             <div>
@@ -75,7 +75,7 @@ function StudioPreviewCard() {
         </div>
 
         <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/10">
-          <div className="h-full w-full rounded-full bg-gradient-to-r from-indigo-400 via-violet-400 to-fuchsia-400" />
+          <div className="h-full w-full rounded-full bg-gradient-to-r from-blue-400 via-blue-400 to-sky-400" />
         </div>
 
         <ul className="mt-4 space-y-2.5">
@@ -115,36 +115,36 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-background">
       <div className="grid min-h-screen w-full lg:grid-cols-[1.1fr_1fr]">
-        <aside className="relative hidden overflow-hidden bg-gradient-to-br from-zinc-950 via-zinc-950 to-violet-950 text-white lg:flex lg:flex-col lg:justify-between lg:p-10 xl:p-14">
+        <aside className="relative hidden overflow-hidden bg-gradient-to-br from-zinc-950 via-zinc-950 to-blue-950 text-white lg:flex lg:flex-col lg:justify-between lg:p-10 xl:p-14">
           <div
             className="pointer-events-none absolute inset-0 opacity-[0.35] [background-image:linear-gradient(to_right,rgba(255,255,255,0.06)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.06)_1px,transparent_1px)] [background-size:44px_44px] [mask-image:radial-gradient(ellipse_at_top_left,black_30%,transparent_75%)]"
             aria-hidden="true"
           />
           <div
-            className="pointer-events-none absolute -left-32 -top-32 h-96 w-96 rounded-full bg-indigo-600/25 blur-3xl"
+            className="pointer-events-none absolute -left-32 -top-32 h-96 w-96 rounded-full bg-blue-600/25 blur-3xl"
             aria-hidden="true"
           />
           <div
-            className="pointer-events-none absolute -bottom-40 right-0 h-[28rem] w-[28rem] rounded-full bg-violet-600/20 blur-3xl"
+            className="pointer-events-none absolute -bottom-40 right-0 h-[28rem] w-[28rem] rounded-full bg-blue-600/20 blur-3xl"
             aria-hidden="true"
           />
 
           <div className="relative">
             <Link
               href="/"
-              className="inline-flex rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/60 focus-visible:ring-offset-4 focus-visible:ring-offset-zinc-950"
+              className="inline-flex rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60 focus-visible:ring-offset-4 focus-visible:ring-offset-zinc-950"
             >
               <BrandMark inverted />
             </Link>
           </div>
 
           <div className="relative my-12 max-w-xl">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-indigo-300/80">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-300/80">
               Vận hành tập trung
             </p>
             <h2 className="mt-4 text-4xl font-semibold leading-[1.15] tracking-tight text-white xl:text-[2.75rem]">
               Một hệ thống cho khách hàng, lịch chụp, album{" "}
-              <span className="bg-gradient-to-r from-indigo-300 via-violet-300 to-fuchsia-300 bg-clip-text text-transparent">
+              <span className="bg-gradient-to-r from-blue-300 via-blue-300 to-sky-300 bg-clip-text text-transparent">
                 và tài chính.
               </span>
             </h2>
@@ -187,7 +187,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
               </div>
               <a
                 href="tel:0976181859"
-                className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-zinc-300 transition-colors hover:border-indigo-400/40 hover:text-white"
+                className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-zinc-300 transition-colors hover:border-blue-400/40 hover:text-white"
               >
                 <Phone className="h-3 w-3" aria-hidden="true" />
                 Hỗ trợ kỹ thuật 24/7 qua Hotline 0976 181 859
@@ -198,11 +198,11 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
 
         <main className="relative flex min-h-screen min-w-0 flex-col justify-center overflow-hidden px-4 py-10 sm:px-8 lg:px-12">
           <div
-            className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-indigo-500/10 blur-3xl dark:bg-indigo-500/15"
+            className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-blue-500/10 blur-3xl dark:bg-blue-500/15"
             aria-hidden="true"
           />
           <div
-            className="pointer-events-none absolute -bottom-24 -left-24 h-72 w-72 rounded-full bg-violet-500/10 blur-3xl lg:hidden"
+            className="pointer-events-none absolute -bottom-24 -left-24 h-72 w-72 rounded-full bg-blue-500/10 blur-3xl lg:hidden"
             aria-hidden="true"
           />
           <div className="relative mx-auto w-full min-w-0 max-w-[440px]">

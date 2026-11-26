@@ -89,7 +89,7 @@ export default function HomePage() {
             {/* Display Typography */}
             <h1 className="mt-6 text-4xl font-extrabold tracking-tight text-foreground sm:text-5xl lg:text-6xl sm:leading-[1.12]">
               Vận hành Studio Tinh gọn.{" "}
-              <span className="block mt-1 bg-gradient-to-r from-violet-600 via-indigo-600 to-fuchsia-500 bg-clip-text text-transparent">
+              <span className="block mt-1 bg-gradient-to-r from-primary via-primary to-blue-600 bg-clip-text text-transparent">
                 Trao khoảnh khắc trọn vẹn.
               </span>
             </h1>
@@ -425,7 +425,7 @@ export default function HomePage() {
                 </div>
                 <div className="mt-6 border-t border-border/60 pt-4 flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-tr from-violet-600 to-indigo-600 text-sm font-bold text-white shadow-xs">
+                    <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-tr from-blue-600 to-blue-600 text-sm font-bold text-white shadow-xs">
                       {item.name.split(" ").slice(0, 2).map((word) => word[0]).join("")}
                     </span>
                     <div>
@@ -509,7 +509,7 @@ export default function HomePage() {
       {/* =========================================================================
           FINAL CALL TO ACTION BANNER: Vibrant Royal Violet Aurora
           ========================================================================= */}
-      <section className="relative overflow-hidden bg-gradient-to-r from-violet-700 via-indigo-700 to-purple-800 py-20 text-white sm:py-24">
+      <section className="relative overflow-hidden bg-gradient-to-r from-blue-700 via-blue-700 to-slate-800 py-20 text-white sm:py-24">
         <div className="pointer-events-none absolute inset-0 -z-0 opacity-25">
           <div className="absolute -left-20 -top-20 h-96 w-96 rounded-full bg-white blur-3xl" />
           <div className="absolute -right-20 -bottom-20 h-96 w-96 rounded-full bg-pink-400 blur-3xl" />
@@ -526,7 +526,7 @@ export default function HomePage() {
               <Button
                 asChild
                 size="lg"
-                className="bg-white text-violet-950 shadow-xl transition-all duration-300 hover:bg-white/95 hover:scale-105 active:scale-95"
+                className="bg-white text-blue-950 shadow-xl transition-all duration-300 hover:bg-white/95 hover:scale-105 active:scale-95"
               >
                 <Link href="/register">Tạo tài khoản miễn phí</Link>
               </Button>

@@ -12,16 +12,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 
 const fieldClassName =
-  "h-11 rounded-xl border-zinc-300 bg-white/80 text-[15px] shadow-none transition-all placeholder:text-zinc-400 hover:border-zinc-400 focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-500/20 focus-visible:ring-offset-0 aria-[invalid=true]:border-[var(--danger)] aria-[invalid=true]:focus-visible:ring-red-500/20 dark:border-zinc-700 dark:bg-zinc-950/40 dark:placeholder:text-zinc-500 dark:hover:border-zinc-600 dark:focus-visible:border-indigo-400 sm:text-sm";
+  "h-11 rounded-xl border-zinc-300 bg-white/80 text-[15px] shadow-none transition-all placeholder:text-zinc-400 hover:border-zinc-400 focus-visible:border-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500/20 focus-visible:ring-offset-0 aria-[invalid=true]:border-[var(--danger)] aria-[invalid=true]:focus-visible:ring-red-500/20 dark:border-zinc-700 dark:bg-zinc-950/40 dark:placeholder:text-zinc-500 dark:hover:border-zinc-600 dark:focus-visible:border-blue-400 sm:text-sm";
 
 const fieldIconClassName =
-  "pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400 transition-colors group-focus-within:text-indigo-500 dark:text-zinc-500";
+  "pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400 transition-colors group-focus-within:text-blue-500 dark:text-zinc-500";
 
 const revealButtonClassName =
-  "absolute right-1 top-1/2 h-9 w-9 -translate-y-1/2 rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-foreground focus-visible:ring-indigo-500/30 focus-visible:ring-offset-0 dark:hover:bg-zinc-800";
+  "absolute right-1 top-1/2 h-9 w-9 -translate-y-1/2 rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-foreground focus-visible:ring-blue-500/30 focus-visible:ring-offset-0 dark:hover:bg-zinc-800";
 
 const submitClassName =
-  "h-11 w-full rounded-xl bg-gradient-to-b from-indigo-500 to-indigo-600 text-[15px] font-semibold text-white shadow-lg shadow-indigo-600/25 ring-1 ring-inset ring-white/10 transition-all hover:from-indigo-400 hover:to-indigo-500 hover:shadow-indigo-500/30 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-indigo-500/40 disabled:opacity-70 sm:text-sm";
+  "h-11 w-full rounded-xl bg-gradient-to-b from-blue-500 to-blue-600 text-[15px] font-semibold text-white shadow-lg shadow-blue-600/25 ring-1 ring-inset ring-white/10 transition-all hover:from-blue-400 hover:to-blue-500 hover:shadow-blue-500/30 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-blue-500/40 disabled:opacity-70 sm:text-sm";
 
 function SubmitButton({ pending, label }: { pending: boolean; label: string }) {
   return (
@@ -216,7 +216,7 @@ function PinLoginForm({ initialCode = "" }: { initialCode?: string }) {
 type LoginTab = "owner" | "pin";
 
 const segmentTriggerClassName =
-  "relative z-10 h-full min-w-0 flex-1 rounded-lg px-1.5 text-xs font-medium text-zinc-500 transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-indigo-500/30 data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none dark:text-zinc-400 sm:text-sm";
+  "relative z-10 h-full min-w-0 flex-1 rounded-lg px-1.5 text-xs font-medium text-zinc-500 transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-blue-500/30 data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none dark:text-zinc-400 sm:text-sm";
 
 export function LoginForm({
   initialTab = "owner",
@@ -252,7 +252,7 @@ export function LoginForm({
 
         <a
           href="/api/auth/google/login"
-          className="group flex h-11 w-full items-center justify-center gap-3 rounded-xl border border-zinc-200 bg-white px-4 text-sm font-semibold text-foreground shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-md active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/30 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-zinc-600"
+          className="group flex h-11 w-full items-center justify-center gap-3 rounded-xl border border-zinc-200 bg-white px-4 text-sm font-semibold text-foreground shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-md active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-zinc-600"
         >
           <GoogleIcon />
           <span>Đăng nhập bằng Google</span>

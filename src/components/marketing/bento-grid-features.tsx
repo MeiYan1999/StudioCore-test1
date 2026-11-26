@@ -34,7 +34,7 @@ export function BentoGridFeatures() {
         <div>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-600/10 text-violet-600 dark:bg-violet-400/10 dark:text-violet-400">
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600/10 text-blue-600 dark:bg-blue-400/10 dark:text-blue-400">
                 <Camera className="h-5 w-5" />
               </span>
               <Badge tone="info">Độc quyền StudioCore</Badge>
@@ -177,7 +177,7 @@ export function BentoGridFeatures() {
       <SpotlightCard className="flex flex-col justify-between p-7">
         <div>
           <div className="flex items-center justify-between">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-500">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/10 text-blue-500">
               <FileCheck2 className="h-5 w-5" />
             </span>
             <Badge tone="info">Hợp đồng điện tử</Badge>
@@ -300,11 +300,11 @@ export function BentoGridFeatures() {
       </SpotlightCard>
 
       {/* Bento Card 6: Tự động tính Hoa hồng & Lương Ekip (Wide - 2 columns on lg) */}
-      <SpotlightCard className="flex flex-col justify-between p-7 lg:col-span-2 bg-gradient-to-br from-surface via-surface to-violet-500/[0.03]">
+      <SpotlightCard className="flex flex-col justify-between p-7 lg:col-span-2 bg-gradient-to-br from-surface via-surface to-blue-500/[0.03]">
         <div>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-fuchsia-500/10 text-fuchsia-500">
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-500/10 text-sky-500">
                 <Users2 className="h-5 w-5" />
               </span>
               <Badge tone="info">Minh bạch 100%</Badge>
