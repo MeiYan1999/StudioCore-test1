@@ -468,7 +468,9 @@ export function MessagingSettingsView({
                     holdMinutes: Number(f.get("holdMinutes")),
                     deposit: Number(f.get("deposit")),
                     active: Number(f.get("active")),
-                  }).then(() => toast.success("Đã lưu cấu hình gói đặt lịch!"));
+                  }).then((saved) => {
+                    if (saved) toast.success("Đã lưu cấu hình gói đặt lịch!");
+                  });
                 }}
                 className="space-y-4 text-xs"
               >
