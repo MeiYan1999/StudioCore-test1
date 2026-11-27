@@ -1,5 +1,4 @@
 import { and, eq } from "drizzle-orm";
-import { NextResponse } from "next/server";
 import { requireActor } from "@/lib/auth/session";
 import { getDb, facebookOauth, facebookPages } from "@/lib/db/client";
 import { digest, graph, metaConfig, seal } from "@/lib/omnichannel/meta";
@@ -95,11 +94,10 @@ export async function GET(request: Request) {
       action: "facebook.oauth",
       entity: "integration",
     });
-    return redirectToPath("/manage/settings/facebook");
+    return redirectToPath("/manage/inbox");
   } catch (error) {
-    return NextResponse.json(
-      { error: (error as Error).message },
-      { status: 400 },
+    return redirectToPath(
+      `/manage/inbox?fb_error=${encodeURIComponent((error as Error).message)}`,
     );
   }
 }

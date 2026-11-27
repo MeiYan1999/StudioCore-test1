@@ -3,6 +3,7 @@ import {
   createDecipheriv,
   createHash,
   createHmac,
+  hkdfSync,
   randomBytes,
   timingSafeEqual,
 } from "node:crypto";
@@ -27,28 +28,46 @@ export function metaConfig() {
     META_TOKEN_KEY,
     META_VERIFY_TOKEN,
   } = process.env;
+  const site = process.env.APP_URL || process.env.NEXT_PUBLIC_SITE_URL;
+  const redirect =
+    META_REDIRECT_URI ||
+    (site ? `${site.replace(/\/+$/, "")}/api/facebook/callback` : "");
+  // Without a dedicated key, derive a stable one from AUTH_SECRET so setup needs fewer secrets.
+  const key = META_TOKEN_KEY
+    ? Buffer.from(META_TOKEN_KEY, "base64")
+    : process.env.AUTH_SECRET
+      ? Buffer.from(
+          hkdfSync(
+            "sha256",
+            process.env.AUTH_SECRET,
+            "",
+            "studiocore-meta-token-key",
+            32,
+          ),
+        )
+      : null;
   if (
     !META_APP_ID ||
     !META_APP_SECRET ||
     !META_GRAPH_VERSION?.match(/^v\d+\.0$/) ||
-    !META_REDIRECT_URI ||
-    !META_TOKEN_KEY ||
+    !redirect ||
+    !key ||
     !META_VERIFY_TOKEN
   ) {
     throw new Error(
       "Facebook chưa sẵn sàng. Chủ hệ thống cần cấu hình Meta App, phiên bản API, callback HTTPS và khóa mã hóa.",
     );
   }
-  if (!META_REDIRECT_URI.startsWith("https://"))
+  if (!redirect.startsWith("https://"))
     throw new Error("Meta callback phải dùng HTTPS.");
-  if (Buffer.from(META_TOKEN_KEY, "base64").length !== 32)
+  if (key.length !== 32)
     throw new Error("META_TOKEN_KEY phải là khóa base64 32 byte.");
   return {
     appId: META_APP_ID,
     secret: META_APP_SECRET,
     version: META_GRAPH_VERSION,
-    redirect: META_REDIRECT_URI,
-    key: Buffer.from(META_TOKEN_KEY, "base64"),
+    redirect,
+    key,
     verify: META_VERIFY_TOKEN,
   };
 }
@@ -139,7 +158,8 @@ export function ingestWebhook(
     entry?: { id: string; messaging?: MetaEvent[] }[];
   },
 ) {
-  if (payload.object !== "page") return;
+  const stale = new Set<string>();
+  if (payload.object !== "page") return [];
   db.transaction(
     (tx) => {
       for (const entry of payload.entry ?? []) {
@@ -188,6 +208,8 @@ export function ingestWebhook(
               .get();
           }
           if (!thread) continue;
+          if (!echo && thread.profileAt < Date.now() - PROFILE_TTL)
+            stale.add(thread.conversationId);
           for (const mid of event.delivery?.mids ?? [])
             tx.update(facebookDeliveries)
               .set({ status: "delivered" })
@@ -284,6 +306,57 @@ export function ingestWebhook(
     },
     { behavior: "immediate" },
   );
+  return [...stale];
+}
+const PROFILE_TTL = 3 * 86400000;
+// Messenger profile pictures are signed CDN links that expire, so they are refreshed periodically.
+export async function refreshProfiles(db: AppDb, conversationIds: string[]) {
+  for (const conversationId of conversationIds) {
+    const thread = db
+      .select()
+      .from(facebookThreads)
+      .where(eq(facebookThreads.conversationId, conversationId))
+      .get();
+    if (!thread) continue;
+    const page = db
+      .select()
+      .from(facebookPages)
+      .where(eq(facebookPages.id, thread.pageId))
+      .get();
+    if (!page?.token || page.status !== "connected") continue;
+    try {
+      const profile = await graph<{
+        first_name?: string;
+        last_name?: string;
+        profile_pic?: string;
+      }>(
+        `${thread.psid}?fields=first_name,last_name,profile_pic`,
+        unseal(page.token),
+      );
+      const name = [profile.last_name, profile.first_name]
+        .filter(Boolean)
+        .join(" ")
+        .trim();
+      db.update(facebookThreads)
+        .set({
+          avatar: profile.profile_pic ?? thread.avatar,
+          profileAt: Date.now(),
+        })
+        .where(eq(facebookThreads.conversationId, conversationId))
+        .run();
+      if (name)
+        db.update(conversations)
+          .set({ subject: name })
+          .where(eq(conversations.id, conversationId))
+          .run();
+    } catch {
+      // Meta may withhold a profile (privacy, missing permission); retry after an hour.
+      db.update(facebookThreads)
+        .set({ profileAt: Date.now() - PROFILE_TTL + 3600000 })
+        .where(eq(facebookThreads.conversationId, conversationId))
+        .run();
+    }
+  }
 }
 export function sendBlockReason(
   page: { status: string; token: string | null },

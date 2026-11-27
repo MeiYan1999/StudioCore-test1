@@ -25,6 +25,8 @@ import {
 } from "@/lib/omnichannel/booking";
 import {
   ingestWebhook,
+  metaConfig,
+  refreshProfiles,
   seal,
   sendFacebook,
   unseal,
@@ -258,5 +260,83 @@ describe("Facebook → booking → deposit", () => {
     await expect(
       sendFacebook(db, t.conversationId, "No", crypto.randomUUID()),
     ).rejects.toThrow("24 giờ");
+  });
+  it("stores the customer's Messenger name and avatar and schedules a refresh for stale profiles", async () => {
+    db.update(facebookPages).set({ status: "connected" }).run();
+    const page = db.select().from(facebookPages).get()!;
+    const stale = ingestWebhook(db, {
+      object: "page",
+      entry: [
+        {
+          id: page.id,
+          messaging: [
+            {
+              sender: { id: "psid-profile" },
+              timestamp: Date.now(),
+              message: { mid: "mid-profile", text: "Chào studio" },
+            },
+          ],
+        },
+      ],
+    });
+    expect(stale).toHaveLength(1);
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          first_name: "Lan",
+          last_name: "Nguyễn",
+          profile_pic: "https://cdn.example/lan.jpg",
+        }),
+      ),
+    );
+    await refreshProfiles(db, stale);
+    expect(String(fetchMock.mock.calls[0][0])).toContain(
+      "psid-profile?fields=first_name%2Clast_name%2Cprofile_pic",
+    );
+    fetchMock.mockRestore();
+    const thread = db
+      .select()
+      .from(facebookThreads)
+      .where(eq(facebookThreads.conversationId, stale[0]))
+      .get()!;
+    expect(thread.avatar).toBe("https://cdn.example/lan.jpg");
+    expect(
+      db
+        .select()
+        .from(conversations)
+        .where(eq(conversations.id, stale[0]))
+        .get()?.subject,
+    ).toBe("Nguyễn Lan");
+    expect(
+      ingestWebhook(db, {
+        object: "page",
+        entry: [
+          {
+            id: page.id,
+            messaging: [
+              {
+                sender: { id: "psid-profile" },
+                timestamp: Date.now(),
+                message: { mid: "mid-profile-2", text: "Còn lịch không ạ" },
+              },
+            ],
+          },
+        ],
+      }),
+    ).toEqual([]);
+  });
+  it("derives the callback URL and token key when only the Meta app values are set", () => {
+    const saved = { ...process.env };
+    delete process.env.META_REDIRECT_URI;
+    delete process.env.META_TOKEN_KEY;
+    process.env.APP_URL = "https://studio.example/";
+    process.env.AUTH_SECRET = "auth-secret-for-test";
+    const config = metaConfig();
+    expect(config.redirect).toBe(
+      "https://studio.example/api/facebook/callback",
+    );
+    expect(config.key).toHaveLength(32);
+    expect(unseal(seal("page-token"))).toBe("page-token");
+    process.env = saved;
   });
 });

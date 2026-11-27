@@ -1,9 +1,10 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { z } from "zod";
 import { getDb } from "@/lib/db/client";
 import {
   ingestWebhook,
   metaConfig,
+  refreshProfiles,
   validSignature,
 } from "@/lib/omnichannel/meta";
 export const runtime = "nodejs";
@@ -37,7 +38,9 @@ export async function POST(request: Request) {
         ),
       })
       .parse(JSON.parse(raw.toString("utf8")));
-    ingestWebhook(getDb(), payload);
+    const db = getDb();
+    const stale = ingestWebhook(db, payload);
+    if (stale.length) after(() => refreshProfiles(db, stale));
     return NextResponse.json({ received: true });
   } catch {
     return new Response("Webhook processing failed", { status: 500 });
