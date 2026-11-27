@@ -171,7 +171,12 @@ export function ingestWebhook(
           .from(facebookPages)
           .where(eq(facebookPages.id, entry.id))
           .get();
-        if (!page || page.status !== "connected") continue;
+        if (!page || page.status !== "connected") {
+          console.warn(
+            `[facebook webhook] skipped page ${entry.id}: ${page ? `status ${page.status}` : "not connected to any studio"}`,
+          );
+          continue;
+        }
         tx.update(facebookPages)
           .set({ lastEventAt: Date.now() })
           .where(eq(facebookPages.id, page.id))

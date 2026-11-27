@@ -25,8 +25,10 @@ export async function POST(request: Request) {
   const raw = Buffer.from(await request.arrayBuffer());
   if (raw.length > 1048576) return new Response("Too large", { status: 413 });
   try {
-    if (!validSignature(raw, request.headers.get("x-hub-signature-256")))
+    if (!validSignature(raw, request.headers.get("x-hub-signature-256"))) {
+      console.warn("[facebook webhook] rejected: invalid signature");
       return new Response("Forbidden", { status: 403 });
+    }
     const payload = z
       .object({
         object: z.string(),
@@ -40,9 +42,19 @@ export async function POST(request: Request) {
       .parse(JSON.parse(raw.toString("utf8")));
     const db = getDb();
     const stale = ingestWebhook(db, payload);
+    // IDs and counts only: message content must not reach the logs.
+    console.info(
+      "[facebook webhook] received",
+      payload.object,
+      payload.entry.map((e) => `${e.id}:${e.messaging?.length ?? 0}`).join(","),
+    );
     if (stale.length) after(() => refreshProfiles(db, stale));
     return NextResponse.json({ received: true });
-  } catch {
+  } catch (e) {
+    console.error(
+      "[facebook webhook] failed:",
+      e instanceof Error ? e.name : "unknown error",
+    );
     return new Response("Webhook processing failed", { status: 500 });
   }
 }
