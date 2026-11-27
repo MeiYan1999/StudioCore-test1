@@ -50,6 +50,7 @@ test.describe("landing và public website", () => {
       "/blog/checklist-van-hanh-studio-chup-anh",
       "/terms",
       "/privacy",
+      "/data-deletion",
       "/contact",
     ]) {
       const response = await page.goto(route);

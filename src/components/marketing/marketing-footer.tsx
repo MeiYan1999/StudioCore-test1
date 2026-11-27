@@ -41,6 +41,7 @@ export function MarketingFooter() {
           <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
             <li><Link href="/terms" className="hover:text-primary">Điều khoản sử dụng</Link></li>
             <li><Link href="/privacy" className="hover:text-primary">Chính sách bảo mật</Link></li>
+            <li><Link href="/data-deletion" className="hover:text-primary">Xóa dữ liệu người dùng</Link></li>
             <li><a href={`mailto:${MARKETING_CONTACT.email}`} className="hover:text-primary">{MARKETING_CONTACT.email}</a></li>
             <li><a href={`tel:${MARKETING_CONTACT.phone.replace(/\s/g, "")}`} className="hover:text-primary">{MARKETING_CONTACT.phone}</a></li>
             <li>{MARKETING_CONTACT.address}</li>
