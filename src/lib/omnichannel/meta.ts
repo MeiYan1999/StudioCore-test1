@@ -27,8 +27,11 @@ export function metaConfig() {
     META_REDIRECT_URI,
     META_TOKEN_KEY,
     META_VERIFY_TOKEN,
+    APP_URL,
+    // Destructured so the runtime value is read, not the one inlined at build time.
+    NEXT_PUBLIC_SITE_URL,
   } = process.env;
-  const site = process.env.APP_URL || process.env.NEXT_PUBLIC_SITE_URL;
+  const site = APP_URL || NEXT_PUBLIC_SITE_URL;
   const redirect =
     META_REDIRECT_URI ||
     (site ? `${site.replace(/\/+$/, "")}/api/facebook/callback` : "");
