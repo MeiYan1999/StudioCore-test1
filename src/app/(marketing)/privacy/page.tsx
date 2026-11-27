@@ -45,7 +45,15 @@ const SECTIONS = [
     ],
   },
   {
-    title: "6. Liên hệ phụ trách bảo mật",
+    title: "6. Dữ liệu từ Facebook Messenger",
+    paragraphs: [
+      "Khi studio kết nối Fanpage với Inbox, StudioCore nhận từ Meta và lưu thay cho studio: mã định danh Messenger của người nhắn trong phạm vi Fanpage, tên và ảnh đại diện công khai, nội dung tin nhắn và tệp đính kèm, trạng thái đã nhận / đã xem, cùng mã truy cập Fanpage (được mã hóa).",
+      "Dữ liệu này chỉ dùng để nhân viên của chính studio đó trả lời tin nhắn, đặt lịch và chăm sóc khách; không bán, không chia sẻ cho bên thứ ba và không dùng cho quảng cáo.",
+      "Người dùng Facebook có thể yêu cầu xóa dữ liệu của mình theo hướng dẫn tại trang /data-deletion.",
+    ],
+  },
+  {
+    title: "7. Liên hệ phụ trách bảo mật",
     paragraphs: [
       "Nếu bạn có bất kỳ câu hỏi, thắc mắc hoặc yêu cầu nào liên quan đến chính sách bảo mật và an toàn thông tin, vui lòng liên hệ trực tiếp với chúng tôi:",
       "Hotline / Zalo: 0976 181 859 · Email: samstudio.hn@gmail.com · Địa chỉ: Hà Nội, Việt Nam.",
