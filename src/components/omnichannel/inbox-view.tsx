@@ -130,6 +130,7 @@ function ConnectPanel({
   act: (input: object) => Promise<unknown>;
 }) {
   const pending = data.pages.filter((p) => p.status !== "connected");
+  const [branchId, setBranchId] = useState(data.branches[0]?.id ?? "");
   return (
     <div className="mb-4 rounded-xl border border-border bg-surface p-5">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -151,16 +152,33 @@ function ConnectPanel({
           </div>
         </div>
         {data.owner && (
-          <Button
-            disabled={!data.configured}
-            onClick={() => {
-              window.location.href = "/api/facebook/oauth";
-            }}
-            className="shrink-0"
-          >
-            <Plug className="h-4 w-4" />
-            {pending.length ? "Thêm Fanpage khác" : "Kết nối Fanpage"}
-          </Button>
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            {data.branches.length > 1 && (
+              <select
+                aria-label="Chi nhánh nhận tin của Fanpage"
+                value={branchId}
+                onChange={(e) => setBranchId(e.target.value)}
+                className={cn(field, "w-auto py-2")}
+              >
+                {data.branches.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+              </select>
+            )}
+            <Button
+              disabled={!data.configured}
+              onClick={() => {
+                window.location.href = `/api/facebook/oauth${
+                  branchId ? `?branchId=${encodeURIComponent(branchId)}` : ""
+                }`;
+              }}
+            >
+              <Plug className="h-4 w-4" />
+              {pending.length ? "Thêm Fanpage khác" : "Kết nối Fanpage"}
+            </Button>
+          </div>
         )}
       </div>
       {pending.length > 0 && (
@@ -274,13 +292,15 @@ export function InboxView({
   ).length;
 
   function open(t: Thread) {
-    setId(t.id);
     setPane("chat");
-    setDraft("");
-    setAttachment("");
-    setShowAttachment(false);
-    setShowReplies(false);
-    setCreating(false);
+    if (t.id !== id) {
+      setId(t.id);
+      setDraft("");
+      setAttachment("");
+      setShowAttachment(false);
+      setShowReplies(false);
+      setCreating(false);
+    }
     void command({ action: "read", id: t.id }).catch(() => {});
   }
   async function send() {
@@ -603,13 +623,17 @@ export function InboxView({
                             rel="noreferrer"
                             className="mb-1 block underline"
                           >
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={m.attachment}
-                              alt="Ảnh / tệp đính kèm"
-                              referrerPolicy="no-referrer"
-                              className="max-h-60 rounded-lg"
-                            />
+                            {m.direction === "inbound" ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={m.attachment}
+                                alt="Ảnh / tệp đính kèm"
+                                referrerPolicy="no-referrer"
+                                className="max-h-60 rounded-lg"
+                              />
+                            ) : (
+                              "Ảnh đã gửi (bấm để mở)"
+                            )}
                           </a>
                         )}
                         {!(m.attachment && m.content.startsWith("[")) && (
@@ -739,7 +763,10 @@ export function InboxView({
                     variant="secondary"
                     size="sm"
                     aria-expanded={showAttachment}
-                    onClick={() => setShowAttachment(!showAttachment)}
+                    onClick={() => {
+                      if (showAttachment) setAttachment("");
+                      setShowAttachment(!showAttachment);
+                    }}
                   >
                     <ImagePlus className="h-4 w-4" />
                     Ảnh
@@ -802,8 +829,9 @@ export function InboxView({
                 <p className="text-muted-foreground">
                   {selected.phone || "Chưa có số điện thoại"}
                 </p>
-                {!selected.customer_name && (
+                {
                   <select
+                    key={`${id}:${selected.customer_name ?? ""}`}
                     aria-label="Liên kết hồ sơ khách"
                     defaultValue=""
                     onChange={(e) => {
@@ -821,14 +849,18 @@ export function InboxView({
                     }}
                     className={cn(field, "mt-2 py-1.5 text-xs")}
                   >
-                    <option value="">Liên kết hồ sơ khách đã có</option>
+                    <option value="">
+                      {selected.customer_name
+                        ? "Đổi sang hồ sơ khách khác"
+                        : "Liên kết hồ sơ khách đã có"}
+                    </option>
                     {data.customers.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.name} · {c.phone}
                       </option>
                     ))}
                   </select>
-                )}
+                }
               </div>
 
               {selected.label && (
