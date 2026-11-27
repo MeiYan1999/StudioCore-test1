@@ -204,7 +204,7 @@ function ConnectPanel({
               {data.owner && p.status === "pending" && (
                 <Button
                   size="sm"
-                  disabled={busy}
+                  disabled={busy || !data.configured}
                   onClick={() =>
                     void act({ action: "page", id: p.id, connect: true })
                   }
@@ -378,7 +378,8 @@ export function InboxView({
           {error || oauthError}
         </p>
       )}
-      {(connected.length === 0 ||
+      {(!data.configured ||
+        connected.length === 0 ||
         data.pages.some((p) => p.status !== "connected")) && (
         <ConnectPanel data={data} busy={busy} act={act} />
       )}
