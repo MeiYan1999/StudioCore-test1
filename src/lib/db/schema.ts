@@ -1704,6 +1704,8 @@ export const facebookThreads = sqliteTable("facebook_threads", {
   lastInboundAt: integer("last_inbound_at").notNull().default(0),
   readAt: integer("read_at").notNull().default(0),
   label: text("label").notNull().default("Khách mới"),
+  avatar: text("avatar"),
+  profileAt: integer("profile_at").notNull().default(0),
 }, t => [uniqueIndex("facebook_page_psid").on(t.pageId, t.psid)]);
 export const facebookDeliveries = sqliteTable("facebook_deliveries", {
   id: text("id").primaryKey(),

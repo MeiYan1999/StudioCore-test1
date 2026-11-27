@@ -52,8 +52,9 @@ export async function GET(request: Request) {
       hasToken: Boolean(token),
     }));
     const threads =
-      db.all(sql`SELECT c.*, f.page_id, f.label, f.last_inbound_at, f.read_at, p.name AS page_name, u.name AS customer_name, u.phone,
-      (SELECT content FROM messages WHERE conversation_id=c.id ORDER BY sent_at DESC LIMIT 1) AS preview
+      db.all(sql`SELECT c.*, f.page_id, f.label, f.last_inbound_at, f.read_at, f.avatar, p.name AS page_name, p.avatar AS page_avatar, u.name AS customer_name, u.phone,
+      (SELECT content FROM messages WHERE conversation_id=c.id ORDER BY sent_at DESC LIMIT 1) AS preview,
+      (SELECT direction FROM messages WHERE conversation_id=c.id ORDER BY sent_at DESC LIMIT 1) AS preview_direction
       FROM conversations c LEFT JOIN facebook_threads f ON f.conversation_id=c.id LEFT JOIN facebook_pages p ON p.id=f.page_id LEFT JOIN customers u ON u.id=c.customer_id
       WHERE c.tenant_id=${actor.tenantId} AND (${Number(actor.role === "owner")} OR c.assigned_to=${actor.staffId})
       AND c.branch_id IN (${sql.join(
@@ -93,10 +94,12 @@ export async function GET(request: Request) {
       };
     }
     let readiness = "Sẵn sàng kết nối Meta";
+    let configured = true;
     try {
       metaConfig();
     } catch (e) {
       readiness = (e as Error).message;
+      configured = false;
     }
     return NextResponse.json(
       {
@@ -104,9 +107,11 @@ export async function GET(request: Request) {
         threads,
         detail,
         readiness,
+        configured,
         owner: actor.role === "owner",
         canDeposit: actor.permissions.includes("finance.manage"),
         branches: actor.branches,
+        activeBranchId: actor.activeBranchId ?? null,
         offers: db
           .select({ offer: bookingOffers, service: services })
           .from(bookingOffers)
