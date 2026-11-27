@@ -130,7 +130,11 @@ function ConnectPanel({
   act: (input: object) => Promise<unknown>;
 }) {
   const pending = data.pages.filter((p) => p.status !== "connected");
-  const [branchId, setBranchId] = useState(data.branches[0]?.id ?? "");
+  const [branchId, setBranchId] = useState(
+    data.branches.find((b) => b.id === data.activeBranchId)?.id ??
+      data.branches[0]?.id ??
+      "",
+  );
   return (
     <div className="mb-4 rounded-xl border border-border bg-surface p-5">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

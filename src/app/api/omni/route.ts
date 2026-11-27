@@ -111,6 +111,7 @@ export async function GET(request: Request) {
         owner: actor.role === "owner",
         canDeposit: actor.permissions.includes("finance.manage"),
         branches: actor.branches,
+        activeBranchId: actor.activeBranchId ?? null,
         offers: db
           .select({ offer: bookingOffers, service: services })
           .from(bookingOffers)

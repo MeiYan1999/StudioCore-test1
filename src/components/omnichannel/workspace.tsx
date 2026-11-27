@@ -51,6 +51,7 @@ export type Data = {
     lastEventAt: number | null;
   }[];
   branches: { id: string; name: string }[];
+  activeBranchId?: string | null;
   threads: Thread[];
   services: Package[];
   offers: { service: Package; offer: typeof bookingOffers.$inferSelect }[];
