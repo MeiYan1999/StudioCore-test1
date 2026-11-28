@@ -1,5 +1,6 @@
 import path from "node:path";
 import Database from "better-sqlite3";
+import sharp from "sharp";
 import { expect, test } from "@playwright/test";
 
 function withDb<T>(run: (db: Database.Database) => T): T {
@@ -160,4 +161,57 @@ test("khớp tay khoản SePay chưa khớp với đơn còn dư nợ",async({pa
   await expect(page.getByRole("row").filter({hasText:description}).getByText(code)).toBeVisible();
   await page.goto("/manage/orders/order-demo-06");
   expect(await paidOf()).toBe(before+amount);
+});
+test("tải hai ảnh, chỉ ảnh lỗi được thử lại riêng",async({page})=>{
+  const stamp=Date.now(), good="e2e-ok-"+stamp+".png", bad="e2e-bad-"+stamp+".jpg";
+  const png=await sharp({create:{width:32,height:32,channels:3,background:"#3366cc"}}).png().toBuffer();
+  const count=()=>withDb(db=>(db.prepare("SELECT COUNT(*) AS n FROM photos WHERE album_id='album-demo-01'").get() as {n:number}).n);
+  const before=count();
+  await page.goto("/manage/albums/album-demo-01");
+  await page.getByRole("button",{name:"Tải ảnh lên"}).click();
+  await page.locator("#album-upload-files").setInputFiles([
+    {name:good,mimeType:"image/png",buffer:png},
+    {name:bad,mimeType:"image/jpeg",buffer:Buffer.from("không phải ảnh "+stamp)},
+  ]);
+  await page.getByRole("button",{name:"Tải 2 ảnh lên"}).click();
+  const sheet=page.getByRole("dialog");
+  await expect(sheet.getByText("Đã thêm 1 ảnh.")).toBeVisible();
+  await expect(sheet.getByRole("button",{name:"Thử lại ảnh"})).toHaveCount(1);
+  const row=sheet.locator("div").filter({has:page.getByRole("button",{name:"Thử lại ảnh"})}).last();
+  await expect(row).toContainText(bad+" · ");
+  await expect(sheet.getByText(good+" · ")).toHaveCount(0);
+  await page.evaluate(()=>{
+    const original=window.fetch.bind(window);
+    (window as unknown as {sent:string[][]}).sent=[];
+    window.fetch=(input,init)=>{
+      if(String(input).includes("/api/uploads/photos")&&init?.body instanceof FormData)
+        (window as unknown as {sent:string[][]}).sent.push(init.body.getAll("files").map(file=>(file as File).name));
+      return original(input,init);
+    };
+  });
+  await sheet.getByRole("button",{name:"Thử lại ảnh"}).click();
+  await expect(sheet.getByText("Đã thêm 0 ảnh.")).toBeVisible();
+  expect(await page.evaluate(()=>(window as unknown as {sent:string[][]}).sent)).toEqual([[bad]]);
+  await expect(sheet.getByText("Đã thêm 0 ảnh.")).toBeVisible();
+  await expect(sheet.getByRole("button",{name:"Thử lại ảnh"})).toHaveCount(1);
+  await expect(row).toContainText(bad+" · ");
+  expect(count()).toBe(before+1);
+  await page.reload();
+  await expect(page.getByText(good,{exact:true}).first()).toBeVisible();
+});
+test("viết bài bằng AI Hub khi chưa có khóa báo lỗi, không tạo bài",async({page})=>{
+  ensureE2ePage();
+  expect(withDb(db=>(db.prepare("SELECT COUNT(*) AS n FROM settings WHERE tenant_id='tenant-demo' AND key LIKE 'ai.hub%'").get() as {n:number}).n)).toBe(0);
+  const brief="E2E yêu cầu AI "+Date.now(), error="Thêm khóa OpenRouter đang hoạt động trong AI Hub.";
+  await page.goto("/manage/campaigns/fanpage");
+  await page.getByLabel("Giờ đăng").fill("2099-12-20T09:00");
+  await page.getByLabel("Yêu cầu nội dung").fill(brief);
+  await page.getByRole("button",{name:"Viết nháp bằng AI Hub"}).click();
+  await expect(page.getByRole("status").filter({hasText:error})).toBeVisible();
+  await page.reload();
+  const newest=page.getByRole("table",{name:"Lịch sử viết bài AI Hub"}).getByRole("row").nth(1);
+  await expect(newest.getByText("Lỗi",{exact:true})).toBeVisible();
+  await expect(newest).toContainText(error);
+  await expect(page.getByText(brief)).toHaveCount(0);
+  expect(withDb(db=>(db.prepare("SELECT COUNT(*) AS n FROM page_posts WHERE content LIKE ?").get("%"+brief+"%") as {n:number}).n)).toBe(0);
 });
