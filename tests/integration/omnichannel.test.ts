@@ -8,6 +8,7 @@ import type { ActorContext } from "@/lib/auth/types";
 import {
   appointments,
   bookingOffers,
+  assistantReplies,
   conversations,
   facebookPages,
   facebookThreads,
@@ -32,6 +33,7 @@ import {
   unseal,
   validSignature,
 } from "@/lib/omnichannel/meta";
+import { addAiHubApiKey, getAiHubData, updateAiHubFeature } from "@/lib/services/ai-hub-service";
 let db: ReturnType<typeof createTestDb>;
 let owner: ActorContext;
 let serviceId: string;
@@ -391,5 +393,100 @@ describe("Fanpage et Ads sandbox", () => {
       expect(fetchMock.mock.calls[0][1]?.body).toContain("Số 12, đường Hoa.");
       expect(db.select().from(assistantReplies).all().map(r=>r.status).sort()).toEqual(["cancelled","handoff","sent"]);
     } finally {fetchMock.mockRestore();}
+  });
+  describe("AI Hub", () => {
+    const openRouter=(content:string,usage:object|null={cost:0.0002,total_tokens:120})=>Response.json({id:"gen-1",choices:[{message:{content}}],...(usage?{usage}:{})});
+    const feature=(id:"messenger_assistant"|"social_content")=>getAiHubData(db,owner.tenantId).features.find(f=>f.id===id)!;
+    const inbound=(psid:string,text:string,mid:string)=>ingestWebhook(db,{object:"page",entry:[{id:"page-test",messaging:[{sender:{id:psid},timestamp:Date.now(),message:{mid,text}}]}]});
+    const job=(psid:string)=>db.select().from(assistantReplies).where(eq(assistantReplies.conversationId,db.select().from(facebookThreads).where(eq(facebookThreads.psid,psid)).get()!.conversationId)).get()!;
+    beforeAll(async()=>{
+      const {savePageAssistant}=await import("@/lib/services/page-marketing-service");
+      savePageAssistant(db,owner,"page-test","Lễ tân",[{question:"Địa chỉ?",answer:"Số 12, đường Hoa."}],true);
+      addAiHubApiKey(db,owner.tenantId,{name:"Test",provider:"openrouter",apiKey:"sk-or-test-key"});
+    });
+    it("câu hỏi diễn đạt khác được mô hình chọn đúng câu trả lời đã duyệt",async()=>{
+      const {deliverAssistantReplies}=await import("@/lib/services/page-marketing-service");
+      const before=feature("messenger_assistant");
+      const fetchMock=vi.spyOn(globalThis,"fetch").mockResolvedValueOnce(openRouter('{"index":0}')).mockResolvedValueOnce(Response.json({message_id:"reply-model"}));
+      try {
+        inbound("ai-para","Studio nằm ở đâu vậy?","ai-1");
+        await deliverAssistantReplies(db);
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        expect(String(fetchMock.mock.calls[0][0])).toContain("openrouter.ai");
+        expect(fetchMock.mock.calls[0][1]?.body).not.toContain("Số 12, đường Hoa.");
+        expect(fetchMock.mock.calls[1][1]?.body).toContain("Số 12, đường Hoa.");
+        expect(job("ai-para").status).toBe("sent");
+        const after=feature("messenger_assistant");
+        expect(after.usedUsd-before.usedUsd).toBeCloseTo(0.0002,10);
+        expect(after.tokensUsed-before.tokensUsed).toBe(120);
+        expect(after.callsCount-before.callsCount).toBe(1);
+      } finally {fetchMock.mockRestore();}
+    });
+    it("mô hình không chắc thì bàn giao nhân viên và vẫn ghi chi phí",async()=>{
+      const {deliverAssistantReplies}=await import("@/lib/services/page-marketing-service");
+      const before=feature("messenger_assistant");
+      const fetchMock=vi.spyOn(globalThis,"fetch").mockResolvedValueOnce(openRouter('{"index":null}'));
+      try {
+        inbound("ai-none","Còn váy cưới màu tím không?","ai-2");
+        await deliverAssistantReplies(db);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(job("ai-none").status).toBe("handoff");
+        const thread=db.select().from(facebookThreads).where(eq(facebookThreads.psid,"ai-none")).get()!;
+        expect(db.select().from(conversations).where(eq(conversations.id,thread.conversationId)).get()!.aiAutoReply).toBe(false);
+        expect(feature("messenger_assistant").callsCount-before.callsCount).toBe(1);
+      } finally {fetchMock.mockRestore();}
+    });
+    it("nhân viên tiếp quản trong lúc gọi mô hình thì không gửi tin",async()=>{
+      const {deliverAssistantReplies}=await import("@/lib/services/page-marketing-service");
+      const fetchMock=vi.spyOn(globalThis,"fetch").mockImplementationOnce(async()=>{
+        const thread=db.select().from(facebookThreads).where(eq(facebookThreads.psid,"ai-take")).get()!;
+        db.update(conversations).set({assignedTo:owner.staffId,aiAutoReply:false}).where(eq(conversations.id,thread.conversationId)).run();
+        return openRouter('{"index":0}');
+      });
+      try {
+        inbound("ai-take","Studio ở chỗ nào?","ai-3");
+        await deliverAssistantReplies(db);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(job("ai-take").status).toBe("cancelled");
+      } finally {fetchMock.mockRestore();}
+    });
+    it("phản hồi mô hình thiếu chi phí thì bàn giao và không đổi bộ đếm",async()=>{
+      const {deliverAssistantReplies}=await import("@/lib/services/page-marketing-service");
+      const before=feature("messenger_assistant");
+      const fetchMock=vi.spyOn(globalThis,"fetch").mockResolvedValueOnce(openRouter('{"index":0}',null));
+      try {
+        inbound("ai-nocost","Cho hỏi studio ở đâu?","ai-4");
+        await deliverAssistantReplies(db);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(job("ai-nocost").status).toBe("handoff");
+        expect(feature("messenger_assistant")).toMatchObject({usedUsd:before.usedUsd,tokensUsed:before.tokensUsed,callsCount:before.callsCount});
+      } finally {fetchMock.mockRestore();}
+    });
+    it("viết bài bằng AI Hub tạo bản nháp, ghi chi phí và chặn người không đủ quyền",async()=>{
+      const {writePostDraft}=await import("@/lib/services/page-marketing-service");
+      const {aiJobs,pagePosts}=await import("@/lib/db/schema");
+      const posts=()=>db.select().from(pagePosts).all().length;
+      const before=feature("social_content");
+      const count=posts();
+      const fetchMock=vi.spyOn(globalThis,"fetch");
+      try {
+        fetchMock.mockResolvedValueOnce(openRouter("Ưu đãi chụp ảnh cưới tháng 12."));
+        await expect(writePostDraft(db,owner,"page-test","Giới thiệu gói chụp ảnh cưới",new Date(Date.now()+86400000))).resolves.toContain("0.0002 USD");
+        const post=db.select().from(pagePosts).all().find(p=>p.content==="Ưu đãi chụp ảnh cưới tháng 12.")!;
+        expect(posts()).toBe(count+1);
+        expect(post.status).toBe("draft");
+        const written=db.select().from(aiJobs).all().find(j=>j.type==="post_writing")!;
+        expect(written.status).toBe("completed");
+        expect(JSON.parse(written.inputRef!)).toMatchObject({postId:post.id,costUsd:0.0002,tokens:120});
+        expect(feature("social_content").callsCount-before.callsCount).toBe(1);
+        fetchMock.mockClear();
+        await expect(writePostDraft(db,{...owner,permissions:[]},"page-test","Giới thiệu gói chụp ảnh cưới",new Date())).rejects.toThrow();
+        await expect(writePostDraft(db,{...owner,tenantId:"test-other"},"page-test","Giới thiệu gói chụp ảnh cưới",new Date())).rejects.toThrow();
+        updateAiHubFeature(db,owner.tenantId,"social_content",{enabled:false});
+        await expect(writePostDraft(db,owner,"page-test","Giới thiệu gói chụp ảnh cưới",new Date())).rejects.toThrow();
+        expect(fetchMock).not.toHaveBeenCalled();
+        expect(posts()).toBe(count+1);
+      } finally {fetchMock.mockRestore();updateAiHubFeature(db,owner.tenantId,"social_content",{enabled:true});}
+    });
   });
 });

@@ -1,4 +1,4 @@
-import { and, eq, inArray, lte } from "drizzle-orm";
+import { and, eq, inArray, isNull, lte } from "drizzle-orm";
 import { z } from "zod";
 import { assertBranchAccess, assertPermission } from "../auth/permissions";
 import type { ActorContext } from "../auth/types";
@@ -111,6 +111,72 @@ export function knowledgeReply(content: string, facts: {question:string;answer:s
   return matched.length === 1 ? matched[0].answer : null;
 }
 
+const modelIds: Record<string,string>={"GPT-4o Mini (rẻ, nhanh)":"openai/gpt-4o-mini","GPT-4o (mạnh, đa năng)":"openai/gpt-4o","DeepSeek V3":"deepseek/deepseek-chat",
+    "Claude 3.5 Sonnet":"anthropic/claude-3.5-sonnet","Claude 3.5 Haiku":"anthropic/claude-3.5-haiku","Gemini 1.5 Pro (mạnh)":"google/gemini-pro-1.5","Gemini 1.5 Flash (nhanh)":"google/gemini-flash-1.5","GPT-4.5 Preview":"openai/gpt-4.5-preview"};
+
+type HubFeature="messenger_assistant"|"social_content";
+async function hubChat(db:AppDb,tenantId:string,feature:HubFeature,messages:{role:"system"|"user";content:string}[],maxTokens:number) {
+  const hub=getAiHubData(db,tenantId);
+  const config=hub.features.find(f=>f.id===feature)!;
+  if(!config.enabled) throw new Error("Tính năng này đang tắt trong AI Hub.");
+  if(config.usedUsd>=config.budgetUsd) throw new Error("Đã đạt ngân sách của tính năng này trong AI Hub.");
+  const key=hub.apiKeys.filter(k=>k.provider==="openrouter" && k.status==="active").sort((a,b)=>a.priority-b.priority)[0];
+  const secret=key?.keyEncrypted ? decryptSecret(key.keyEncrypted) : null;
+  if(!secret) throw new Error("Thêm khóa OpenRouter đang hoạt động trong AI Hub.");
+  const model=modelIds[config.model];
+  if(!model) throw new Error("Mô hình của tính năng này trong AI Hub chưa có bộ kết nối.");
+  const response=await fetch("https://openrouter.ai/api/v1/chat/completions",{method:"POST",headers:{Authorization:"Bearer "+secret,"Content-Type":"application/json"},
+    body:JSON.stringify({model,temperature:0,max_tokens:maxTokens,messages}),signal:AbortSignal.timeout(20000)});
+  if(!response.ok) throw new Error("Nhà cung cấp AI trả lỗi "+response.status+".");
+  const result=await response.json();
+  const cost=result.usage?.cost,tokens=result.usage?.total_tokens;
+  if(typeof cost!=="number"||!Number.isFinite(cost)||cost<0 || !Number.isSafeInteger(tokens)||tokens<0) throw new Error("Nhà cung cấp chưa xác nhận chi phí. Kiểm tra lịch sử OpenRouter.");
+  db.transaction(tx=>{
+    const latest=getAiHubData(tx,tenantId).features.find(f=>f.id===feature)!;
+    updateAiHubFeature(tx,tenantId,feature,{callsCount:latest.callsCount+1,tokensUsed:latest.tokensUsed+tokens,usedUsd:latest.usedUsd+cost});
+  },{behavior:"immediate"});
+  const content=result.choices?.[0]?.message?.content;
+  return {content:typeof content==="string"?content:"",costUsd:cost as number,tokens:tokens as number,model,requestId:String(result.id??"")};
+}
+
+export async function resolveAssistantReply(db:AppDb,tenantId:string,content:string,facts:{question:string;answer:string}[]):Promise<{reply:string|null;via:"exact"|"model"|"none";costUsd:number}> {
+  const exact=knowledgeReply(content,facts);
+  if(exact) return {reply:exact,via:"exact",costUsd:0};
+  try {
+    const result=await hubChat(db,tenantId,"messenger_assistant",[
+      {role:"system",content:"Bạn chọn câu hỏi đã lưu của studio ảnh có câu trả lời giải đáp đầy đủ tin nhắn của khách. Chọn đúng MỘT câu hỏi. Chỉ trả JSON {\"index\": số nguyên}, hoặc {\"index\": null} nếu không câu nào phù hợp hoặc bạn không chắc."},
+      {role:"user",content:JSON.stringify({message:content,questions:facts.map((fact,index)=>({index,question:fact.question}))})}],60);
+    const parsed=(()=>{try {return z.object({index:z.number().int().min(0).max(facts.length-1).nullable()}).strict().parse(JSON.parse(result.content));} catch {return null;}})();
+    const reply=parsed?.index==null?null:facts[parsed.index].answer;
+    return {reply,via:reply?"model":"none",costUsd:result.costUsd};
+  } catch { return {reply:null,via:"none",costUsd:0}; }
+}
+
+export async function writePostDraft(db:AppDb,actor:ActorContext,pageId:string,brief:string,publishAt:Date) {
+  assertPermission(actor,"customers.manage");
+  const page=studioPage(db,actor,pageId);
+  const input=z.object({brief:z.string().trim().min(5).max(1000),publishAt:z.date().refine(d=>!Number.isNaN(d.getTime()))}).parse({brief,publishAt});
+  const id=crypto.randomUUID();
+  const base={pageId,brief:input.brief};
+  db.insert(aiJobs).values({id,tenantId:actor.tenantId,type:"post_writing",provider:"openrouter",status:"processing",inputRef:JSON.stringify(base),createdBy:actor.staffId}).run();
+  try {
+    const result=await hubChat(db,actor.tenantId,"social_content",[
+      {role:"system",content:"Viết một bài đăng Facebook Fanpage cho studio ảnh tên \""+page.name+"\" từ yêu cầu của chủ studio. Chỉ trả văn bản thuần, không markdown, tối đa 1200 ký tự. Không bịa giá, địa chỉ, số điện thoại hoặc khuyến mãi không có trong yêu cầu."},
+      {role:"user",content:input.brief}],700);
+    const text=result.content.trim();
+    if(!text) throw new Error("Mô hình không trả nội dung bài đăng. Đã ghi nhận chi phí thực tế.");
+    const postId=crypto.randomUUID();
+    db.transaction(tx=>{
+      tx.insert(pagePosts).values({content:text.slice(0,10000),publishAt:input.publishAt,id:postId,pageId,tenantId:actor.tenantId,createdBy:actor.staffId}).run();
+      tx.update(aiJobs).set({status:"completed",outputRef:text,inputRef:JSON.stringify({...base,postId,model:result.model,providerRequestId:result.requestId,costUsd:result.costUsd,tokens:result.tokens}),updatedAt:new Date()}).where(eq(aiJobs.id,id)).run();
+    },{behavior:"immediate"});
+    return "Đã tạo bản nháp bằng AI Hub · chi phí "+result.costUsd+" USD.";
+  } catch(err) {
+    db.update(aiJobs).set({status:"failed",error:err instanceof Error?err.message:"Lỗi AI",updatedAt:new Date()}).where(eq(aiJobs.id,id)).run();
+    throw err;
+  }
+}
+
 export async function deliverAssistantReplies(db: AppDb) {
   const jobs = db.select().from(assistantReplies).where(eq(assistantReplies.status,"pending")).limit(30).all();
   for (const job of jobs) {
@@ -125,19 +191,25 @@ export async function deliverAssistantReplies(db: AppDb) {
         tx.update(assistantReplies).set({status:"cancelled"}).where(eq(assistantReplies.messageId,job.messageId)).run();
         return;
       }
-      const reply = knowledgeReply(row.message,row.config.knowledge);
-      if (!reply) {
-        tx.update(conversations).set({aiAutoReply:false,status:"unanswered"}).where(eq(conversations.id,job.conversationId)).run();
-        tx.update(assistantReplies).set({status:"handoff"}).where(eq(assistantReplies.messageId,job.messageId)).run();
-      }
-      return reply;
+      return {tenantId:row.thread.tenantId,message:row.message,knowledge:row.config.knowledge};
     }, {behavior:"immediate"});
     if (!prepared) continue;
+    const {reply} = await resolveAssistantReply(db,prepared.tenantId,prepared.message,prepared.knowledge);
+    if (!reply) {
+      db.transaction(tx => {
+        tx.update(conversations).set({aiAutoReply:false,status:"unanswered"}).where(eq(conversations.id,job.conversationId)).run();
+        tx.update(assistantReplies).set({status:"handoff"}).where(eq(assistantReplies.messageId,job.messageId)).run();
+      }, {behavior:"immediate"});
+      continue;
+    }
     let status = "failed";
     try {
-      const delivery = await sendFacebook(db,job.conversationId,prepared,"assistant:"+job.messageId,undefined,true);
+      const delivery = await sendFacebook(db,job.conversationId,reply,"assistant:"+job.messageId,undefined,true);
       status = delivery?.status ?? "unknown";
-    } catch { /* Leave this request visible for human follow-up. */ }
+    } catch {
+      const open = db.select({id:conversations.id}).from(conversations).where(and(eq(conversations.id,job.conversationId),eq(conversations.aiAutoReply,true),isNull(conversations.assignedTo))).get();
+      if (!open) status = "cancelled";
+    }
     db.update(assistantReplies).set({status}).where(eq(assistantReplies.messageId,job.messageId)).run();
   }
 }
@@ -178,8 +250,6 @@ export async function analyzeAdsWithHub(db:AppDb,actor:ActorContext,periodId:str
   const key=hub.apiKeys.filter(k=>k.provider==="openrouter" && k.status==="active").sort((a,b)=>a.priority-b.priority)[0];
   const secret=key?.keyEncrypted ? decryptSecret(key.keyEncrypted) : null;
   if(!secret) throw new Error("Thêm khóa OpenRouter đang hoạt động trong AI Hub để chạy phân tích bằng mô hình.");
-  const modelIds: Record<string,string>={"GPT-4o Mini (rẻ, nhanh)":"openai/gpt-4o-mini","GPT-4o (mạnh, đa năng)":"openai/gpt-4o","DeepSeek V3":"deepseek/deepseek-chat",
-    "Claude 3.5 Sonnet":"anthropic/claude-3.5-sonnet","Claude 3.5 Haiku":"anthropic/claude-3.5-haiku","Gemini 1.5 Pro (mạnh)":"google/gemini-pro-1.5","Gemini 1.5 Flash (nhanh)":"google/gemini-flash-1.5","GPT-4.5 Preview":"openai/gpt-4.5-preview"};
   const model=modelIds[config.model];
   if(!model) throw new Error("Mô hình Ads trong AI Hub chưa có bộ kết nối.");
   const facts=note.split(/(?<=\.) (?=[A-ZÀ-Ỹ])/u);

@@ -24,6 +24,7 @@ export default async function Page({searchParams}:{searchParams:Promise<{result?
   const accounts=owner?db.select({id:adsAccounts.id,name:adsAccounts.name,currency:adsAccounts.currency,timezone:adsAccounts.timezone}).from(adsAccounts).where(eq(adsAccounts.tenantId,actor.tenantId)).all():[];
   const periods=owner?db.select().from(adsPeriods).where(eq(adsPeriods.tenantId,actor.tenantId)).orderBy(desc(adsPeriods.syncedAt)).limit(100).all():[];
   const history=owner?db.select().from(aiJobs).where(and(eq(aiJobs.tenantId,actor.tenantId),eq(aiJobs.type,"ads_analysis"))).orderBy(desc(aiJobs.createdAt)).limit(20).all():[];
+  const writing=db.select().from(aiJobs).where(and(eq(aiJobs.tenantId,actor.tenantId),eq(aiJobs.type,"post_writing"))).orderBy(desc(aiJobs.createdAt)).limit(20).all();
   const result=(await searchParams).result;
   const panel="space-y-3 rounded-xl border bg-card p-4";
   return <main className="mx-auto max-w-4xl space-y-5"><Link href="/manage/campaigns">← Chiến dịch</Link><h1 className="text-2xl font-bold">Fanpage và quảng cáo</h1>
@@ -32,8 +33,12 @@ export default async function Page({searchParams}:{searchParams:Promise<{result?
     {owner && <Link href="/api/facebook/oauth?publish=1">Kết nối trang với quyền đăng bài</Link>}
     {pages.length>0 && <form action={marketingForm} className="space-y-2"><input type="hidden" name="action" value="draft"/><label>Fanpage<Select name="page">{pages.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</Select></label>
     <label>Bài đăng theo giờ Việt Nam, mỗi bài một dòng<textarea name="batch" className="block min-h-20 w-full rounded border p-2" required placeholder="2026-12-20T09:00 | Nội dung bài đăng"/></label><Button type="submit">Lưu bản nháp</Button></form>}
+    {pages.length>0 && <form action={marketingForm} className="space-y-2"><input type="hidden" name="action" value="write"/><label>Fanpage<Select name="page">{pages.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</Select></label>
+    <label>Giờ đăng<Input name="publishAt" type="datetime-local" required/></label>
+    <label>Yêu cầu nội dung<textarea name="brief" className="block min-h-20 w-full rounded border p-2" required minLength={5} maxLength={1000}/></label><Button type="submit">Viết nháp bằng AI Hub</Button></form>}
     <form action={marketingForm}><input type="hidden" name="action" value="approve"/>{posts.map(p=><label key={p.id} className="block border-t py-2">{owner && p.status==="draft" && <input type="checkbox" name="post" value={p.id}/>} {p.content} · {pages.find(page=>page.id===p.pageId)?.name} · {formatDateTime(p.publishAt)} · {labels[p.status]} {p.remoteId} {p.error}</label>)}
-    {owner && posts.some(p=>p.status==="draft") && <Button type="submit">Duyệt bài đã chọn</Button>}</form></section>
+    {owner && posts.some(p=>p.status==="draft") && <Button type="submit">Duyệt bài đã chọn</Button>}</form>
+    {writing.map(job=>{const info=JSON.parse(job.inputRef??"{}");return <p key={job.id} className="border-t py-2 text-sm">{formatDateTime(job.createdAt)} · Viết bài AI Hub · {job.status} · {info.model??"Chưa có mô hình"} · {info.costUsd??"Chưa xác nhận"}{info.costUsd!==undefined&&" USD"} {job.error}</p>})}</section>
     {owner && pages.map(p=>{const agent=agents.find(a=>a.pageId===p.id);return <section className={panel} key={p.id}><h2 className="font-semibold">Trợ lý Messenger · {p.name}</h2>
       <form action={marketingForm} className="space-y-2"><input type="hidden" name="page" value={p.id}/><input type="hidden" name="action" value="assistant"/>
       <label>Tên nhân viên<Input name="name" defaultValue={agent?.name} required/></label><label>Kiến thức đã duyệt, mỗi dòng một câu hỏi | trả lời<textarea name="knowledge" className="block w-full rounded border p-2" required defaultValue={agent?.knowledge.map(k=>k.question+" | "+k.answer).join("\n")}/></label>

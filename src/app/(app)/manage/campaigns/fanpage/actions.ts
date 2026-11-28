@@ -3,7 +3,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireActor } from "@/lib/auth/session";
 import { getDb } from "@/lib/db/client";
-import { analyzeAdsWithHub, analyzeAdsPeriod, approvePosts, connectAds, draftPosts, knowledgeReply, savePageAssistant, syncAds } from "@/lib/services/page-marketing-service";
+import { analyzeAdsWithHub, analyzeAdsPeriod, approvePosts, connectAds, draftPosts, resolveAssistantReply, savePageAssistant, syncAds, writePostDraft } from "@/lib/services/page-marketing-service";
 import { parseVietnamDateTimeLocal } from "@/lib/utils";
 import { and, eq } from "drizzle-orm";
 import { pageAssistants, facebookPages } from "@/lib/db/schema";
@@ -47,7 +47,13 @@ export async function marketingForm(form: FormData) {
         if(!page) throw new Error("Chưa kết nối trang.");
         assertBranchAccess(actor,page.branchId);
         const agent = db.select().from(pageAssistants).where(and(eq(pageAssistants.tenantId,actor.tenantId),eq(pageAssistants.pageId,page.id))).get();
-        message=knowledgeReply(value("question"),agent?.knowledge??[])??"Chuyển nhân viên phụ trách."; break;
+        const answer=await resolveAssistantReply(db,actor.tenantId,value("question"),agent?.knowledge??[]);
+        message=answer.reply?"Trả lời: "+answer.reply+(answer.via==="model"?" · Khớp bằng AI Hub · chi phí "+answer.costUsd+" USD.":" · Khớp chính xác câu hỏi đã lưu."):"Câu hỏi này sẽ được chuyển nhân viên phụ trách."+(answer.costUsd?" Chi phí AI Hub "+answer.costUsd+" USD.":""); break;
+      }
+      case "write": {
+        const publishAt = parseVietnamDateTimeLocal(value("publishAt"));
+        if (!publishAt) throw new Error("Giờ đăng không hợp lệ.");
+        message=await writePostDraft(db,actor,value("page"),value("brief"),publishAt); break;
       }
       default: throw new Error("Thao tác không hợp lệ.");
     }
