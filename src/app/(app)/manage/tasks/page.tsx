@@ -1,3 +1,5 @@
+import { notFound } from "next/navigation";
+import { AuthorizationError, NotFoundError } from "@/lib/errors";
 import { ClipboardList } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,6 +12,7 @@ import { hasPermission } from "@/lib/auth/permissions";
 import { requireActor } from "@/lib/auth/session";
 import { getDb } from "@/lib/db/client";
 import {
+  getTaskDetail,
   listTaskAssignees,
   listTaskLinkOptions,
   listTasks,
@@ -29,6 +32,8 @@ export default async function TasksPage({
   searchParams,
 }: {
   searchParams: Promise<{
+    taskId?: string;
+    overdue?: string;
     q?: string;
     status?: string;
     priority?: string;
@@ -42,6 +47,14 @@ export default async function TasksPage({
   }
   const params = await searchParams;
   const db = getDb();
+  let initialDetail = null;
+  if (params.taskId) {
+    try { initialDetail = getTaskDetail(db, actor, params.taskId); }
+    catch (error) {
+      if (error instanceof AuthorizationError || error instanceof NotFoundError) notFound();
+      throw error;
+    }
+  }
   const tasks = listTasks(db, actor, params);
   const assignees = listTaskAssignees(db, actor);
   const linkOptions = listTaskLinkOptions(db, actor);
@@ -95,11 +108,15 @@ export default async function TasksPage({
               ))}
             </Select>
           </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" name="overdue" value="1" defaultChecked={params.overdue === "1"} />
+            Chỉ việc quá hạn
+          </label>
           <Button type="submit" size="sm">Lọc</Button>
         </div>
       </form>
 
-      <TaskBoard
+      <TaskBoard selfId={actor.readOnly||actor.planLapsed ? "" : actor.staffId} key={params.taskId ?? ""} initialDetail={initialDetail}
         tasks={tasks}
         branches={actor.branches}
         assignees={assignees}

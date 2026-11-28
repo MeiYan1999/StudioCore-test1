@@ -1,10 +1,14 @@
+import { DEMO_ALBUM, demoPhotoStorageKey, demoPhotoPreviewKey, demoPhotoThumbnailKey } from "../demo-album";
 import { hasPermission } from "../auth/permissions";
 import type { ActorContext } from "../auth/types";
 
 export type FileAccess = "public" | "private" | "denied";
 
 const DERIVATIVE_PATTERN = /-(thumb|preview)\.(jpe?g|webp|png)$/i;
-const DEMO_PREFIX = "tenant-demo/";
+const publicDemoKeys = new Set(DEMO_ALBUM.photos.flatMap(photo => [
+  demoPhotoStorageKey(photo.folder, photo.filename), demoPhotoPreviewKey(photo.folder, photo.filename),
+  demoPhotoThumbnailKey(photo.folder, photo.filename),
+]));
 
 export function isSafeStorageKey(key: string): boolean {
   return Boolean(
@@ -39,12 +43,12 @@ export function resolveFileAccess(
   isDerivative = false,
 ): FileAccess {
   if (!isSafeStorageKey(key)) return "denied";
-  if (key.startsWith(DEMO_PREFIX) || isDerivative) return "public";
+  if (publicDemoKeys.has(key) || isDerivative) return "public";
   if (!actor) return "denied";
   const ownerTenantId = key.split("/")[0];
   if (
-    ownerTenantId === actor.tenantId ||
-    hasPermission(actor.permissions, "tenants.manage")
+    ownerTenantId === actor.tenantId &&
+    hasPermission(actor.permissions, "albums.view")
   ) {
     return "private";
   }

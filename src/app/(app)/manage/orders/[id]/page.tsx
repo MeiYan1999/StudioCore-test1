@@ -1,3 +1,4 @@
+import { confirmReviewForm } from "@/lib/actions/operations-actions";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { and, desc, eq } from "drizzle-orm";
@@ -19,10 +20,11 @@ import { Money } from "@/components/shared/money";
 import { CancelOrderDialog, OrderStatusForm } from "@/components/orders/order-status";
 import { PaymentSheet } from "@/components/orders/payment-sheet";
 import { hasPermission } from "@/lib/auth/permissions";
+import { setOrderCampaignAction } from "@/lib/actions/operations-actions";
 import { requireActor } from "@/lib/auth/session";
 import { getDb } from "@/lib/db/client";
 import {
-  albums,
+  albums, reviewRequests, campaigns,
   invoices,
   tasks,
   transactions,
@@ -68,6 +70,7 @@ export default async function OrderDetailPage({
     notFound();
   }
 
+  const review = db.select().from(reviewRequests).where(and(eq(reviewRequests.tenantId, actor.tenantId), eq(reviewRequests.orderId, order.id))).get();
   const linkedAlbums = db
     .select({ id: albums.id, title: albums.title, status: albums.status })
     .from(albums)
@@ -106,6 +109,8 @@ export default async function OrderDetailPage({
 
   const canManage = hasPermission(actor.permissions, "orders.manage");
   const canPay = canRecordPayment(actor);
+  const campaignOptions = canManage ? db.select({ id: campaigns.id, name: campaigns.name }).from(campaigns)
+    .where(and(eq(campaigns.tenantId, actor.tenantId), eq(campaigns.branchId, order.branchId))).orderBy(campaigns.name).all() : [];
   const transitions = nextOrderStatuses(order.status);
   const normalTransitions = transitions.filter((status) => status !== "cancelled");
   const canCancel = transitions.includes("cancelled");
@@ -115,6 +120,17 @@ export default async function OrderDetailPage({
 
   return (
     <div>
+      {canManage && campaignOptions.length > 0 && <form action={setOrderCampaignAction} className="mb-3 flex items-center gap-2">
+        <input type="hidden" name="orderId" value={order.id} />
+        <label>Chiến dịch <select name="campaignId" defaultValue={order.campaignId ?? ""} className="rounded border bg-background p-2">
+          <option value="">Chưa gắn</option>{campaignOptions.map(row => <option key={row.id} value={row.id}>{row.name}</option>)}
+        </select></label>
+        <Button type="submit" size="sm" variant="outline">Lưu nguồn đơn</Button>
+      </form>}
+      {review && <Card className="mb-3"><CardHeader><CardTitle>Yêu cầu đánh giá</CardTitle></CardHeader><CardContent>
+        <p>{review.channel === "manual" ? "Nhân viên liên hệ" : "Messenger"} · {({ pending: "Chờ gửi", sending: "Đang xử lý", sent: "Đã gửi", failed: "Lỗi", unknown: "Cần đối chiếu Messenger" } as Record<string, string>)[review.status]} · {formatDateTime(review.sentAt ?? review.dueAt)}</p>
+        <p>{review.content}</p>{review.channel==="manual" && review.status==="pending" && hasPermission(actor.permissions,"orders.manage") && <form action={confirmReviewForm}><input type="hidden" name="orderId" value={order.id}/><Button type="submit" variant="outline">Xác nhận đã liên hệ khách</Button></form>}{review.error && <p>{review.error}</p>}
+      </CardContent></Card>}
       <PageHeader
         title={order.code}
         description={`${order.customer.name} · ${order.branchName} · Tạo ${formatDateTime(order.createdAt)}`}
@@ -322,12 +338,15 @@ export default async function OrderDetailPage({
                       </tr>
                     ) : (
                       order.payments.map((payment) => (
-                        <tr key={payment.id}>
+                        <tr id={`payment-${payment.id}`} key={payment.id}>
                           <td className="px-3 py-2"><DateTimeText value={payment.paidAt} /></td>
                           <td className="px-3 py-2">{PAYMENT_METHOD_LABELS[payment.method] ?? payment.method}</td>
-                          <td className="px-3 py-2 text-muted-foreground">{payment.reference ?? "—"}</td>
+                          <td className="px-3 py-2 text-muted-foreground">{payment.reference || payment.id}
+                            {payment.status === "refunded" && <div>Hoàn tiền · {payment.sourcePaymentId
+                              ? <a className="underline" href={`#payment-${payment.sourcePaymentId}`}>Khoản thu gốc</a>
+                              : "Chưa ghi khoản thu gốc"}</div>}</td>
                           <td className="px-3 py-2 text-muted-foreground">{payment.createdByName ?? "—"}</td>
-                          <td className="px-3 py-2 text-right"><Money value={payment.amount} /></td>
+                          <td className="px-3 py-2 text-right"><Money value={payment.status === "refunded" ? -payment.amount : payment.amount} /></td>
                         </tr>
                       ))
                     )}

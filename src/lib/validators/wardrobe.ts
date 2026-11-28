@@ -13,7 +13,7 @@ export const wardrobeItemSchema = z.object({
   name: z.string().trim().min(2, "Tên trang phục phải có ít nhất 2 ký tự.").max(150),
   size: z.string().trim().min(1, "Nhập size.").max(20),
   color: z.string().trim().min(1, "Nhập màu.").max(50),
-  status: z.enum(["available", "rented", "cleaning", "maintenance", "retired"]),
+  status: z.enum(["available", "reserved", "rented", "cleaning", "maintenance", "retired"]),
   rentalPrice: z.coerce.number().int().min(0),
   depositPrice: z.coerce.number().int().min(0),
   image: z.string().max(500).optional().or(z.literal("")),

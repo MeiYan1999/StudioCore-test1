@@ -10,7 +10,7 @@ describe("quyền đọc file qua /api/files", () => {
   it("thumbnail, preview và album demo là công khai", () => {
     expect(resolveFileAccess("tenant-a/album-1/upload-1a2b3c4d-anh-thumb.webp", null, true)).toBe("public");
     expect(resolveFileAccess("tenant-a/album-1/upload-1a2b3c4d-anh-preview.jpg", null, true)).toBe("public");
-    expect(resolveFileAccess("tenant-demo/album-demo-01/cuoi/anh-01.jpg", null)).toBe("public");
+    expect(resolveFileAccess("tenant-demo/album-demo-01/duoi-ca/anh-001.jpg", null)).toBe("public");
   });
 
   it("ảnh gốc đặt tên giống thumbnail vẫn là riêng tư", () => {
@@ -23,9 +23,10 @@ describe("quyền đọc file qua /api/files", () => {
     expect(resolveFileAccess(original, staffB)).toBe("denied");
   });
 
-  it("ảnh gốc chỉ dành cho nhân sự cùng tenant hoặc quản trị nền tảng", () => {
+  it("ảnh gốc chỉ dành cho nhân sự có quyền album trong cùng tenant", () => {
     expect(resolveFileAccess(original, staffA)).toBe("private");
-    expect(resolveFileAccess(original, platformAdmin)).toBe("private");
+    expect(resolveFileAccess(original, platformAdmin)).toBe("denied");
+    expect(resolveFileAccess("tenant-demo/album-demo-01/upload-private.jpg", null)).toBe("denied");
   });
 
   it("chặn backup, tài liệu và path traversal kể cả khi đã đăng nhập", () => {

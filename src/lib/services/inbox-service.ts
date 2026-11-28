@@ -267,7 +267,7 @@ export function assignConversation(
     if (!assignee) throw new ValidationError("Nhân sự không hợp lệ.");
   }
   db.update(conversations)
-    .set({ assignedTo: assignedTo || null, status: "processing", updatedAt: new Date() })
+    .set({ assignedTo: assignedTo || null, aiAutoReply: false, status: "processing", updatedAt: new Date() })
     .where(eq(conversations.id, conversationId))
     .run();
   writeAudit(db, {

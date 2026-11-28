@@ -11,6 +11,7 @@ import {
   addTaskComment,
   createTask,
   getTasksForCustomer,
+  listTasks,
   setTaskStatus,
 } from "@/lib/services/task-service";
 import {
@@ -37,6 +38,7 @@ import {
   getDocumentFile,
   listDocuments,
 } from "@/lib/services/document-service";
+import { getNotificationsForActor, markNotificationRead } from "@/lib/services/notification-service";
 import { getDashboardOverview } from "@/lib/services/report-service";
 import * as storage from "@/lib/adapters/storage";
 import { createTestDb } from "../helpers/test-db";
@@ -335,5 +337,48 @@ describe("vận hành: tasks, HR, inbox, settings", () => {
     expect(overview.debtTotal).toBe(0);
     expect(overview.roomUtilization).toEqual([]);
     expect(overview.ordersByStatus).toBeTruthy();
+  });
+
+  it("lọc việc quá hạn chỉ trả việc chưa xong đã qua hạn của người được giao", () => {
+    const make = (title: string, status: "todo" | "done", dueAt: string, assigneeId = "staff-sc-photo") => createTask(db, owner, {
+      title, description: "", branchId: "branch-demo-q1", assigneeId, orderId: "", customerId: "", albumId: "",
+      priority: "medium", status, dueAt,
+    });
+    const late = make("Trễ hạn lọc", "todo", "2020-01-02T09:00");
+    make("Đã xong dù quá hạn", "done", "2020-01-02T09:00");
+    make("Chưa tới hạn", "todo", "2999-01-02T09:00");
+    make("Không có hạn", "todo", "");
+    const lateOther = make("Trễ hạn của người khác", "todo", "2020-01-02T09:00", "staff-sc-retouch");
+    const mine = listTasks(db, owner, { overdue: "1", assigneeId: "staff-sc-photo" });
+    expect(mine.map(task => task.id)).toEqual([late]);
+    expect(mine.every(task => task.overdue && task.status !== "done")).toBe(true);
+    const all = listTasks(db, owner, { overdue: "1" }).map(task => task.id);
+    expect(all).toEqual(expect.arrayContaining([late, lateOther]));
+    expect(all.every(id => listTasks(db, owner, {}).find(task => task.id === id)?.overdue)).toBe(true);
+    expect(listTasks(db, photographer, { overdue: "1", assigneeId: "staff-sc-photo" }).map(task => task.id)).toEqual([late]);
+  });
+
+  it("giao việc chỉ báo cho người được giao, đọc xong giảm số chưa đọc và người khác không đánh dấu được", () => {
+    const before = getNotificationsForActor(db, photographer).unreadCount;
+    const ownerBefore = getNotificationsForActor(db, owner).unreadCount;
+    createTask(db, owner, {
+      title: "Việc để thử thông báo", description: "", branchId: "branch-demo-q1", assigneeId: "staff-sc-photo",
+      orderId: "", customerId: "", albumId: "", priority: "medium", status: "todo", dueAt: "",
+    });
+    const summary = getNotificationsForActor(db, photographer);
+    expect(summary.unreadCount).toBe(before + 1);
+    expect(getNotificationsForActor(db, owner).unreadCount).toBe(ownerBefore);
+    const item = summary.items.find(row => row.content === "Việc để thử thông báo")!;
+    expect(item.readAt).toBeNull();
+
+    markNotificationRead(db, receptionist, item.id);
+    expect(getNotificationsForActor(db, photographer).unreadCount).toBe(before + 1);
+    markNotificationRead(db, owner, item.id);
+    expect(getNotificationsForActor(db, photographer).unreadCount).toBe(before + 1);
+
+    markNotificationRead(db, photographer, item.id);
+    const after = getNotificationsForActor(db, photographer);
+    expect(after.unreadCount).toBe(before);
+    expect(after.items.find(row => row.id === item.id)?.readAt).toBeInstanceOf(Date);
   });
 });

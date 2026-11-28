@@ -24,6 +24,7 @@ import {
   createExpenseAction,
   createTransactionAction,
   recordRefundAction,
+  reconcileSepayAction,
   saveBudgetAction,
 } from "@/lib/actions/finance-actions";
 import {
@@ -34,7 +35,7 @@ import {
   TRANSACTION_CATEGORIES,
   TRANSACTION_CATEGORY_LABELS,
 } from "@/lib/finance/constants";
-import { formatVnd, newRequestId } from "@/lib/utils";
+import { formatDateTime, formatVnd, newRequestId } from "@/lib/utils";
 
 type BranchOption = { id: string; name: string };
 type OrderOption = {
@@ -43,6 +44,7 @@ type OrderOption = {
   customerName: string;
   paid: number;
   remaining: number;
+  receipts: { id: string; reference: string | null; paidAt: Date; available: number }[];
 };
 
 export function TransactionSheet({
@@ -366,9 +368,8 @@ export function RefundSheet({
   const [open, setOpen] = useState(false);
   const [requestId, setRequestId] = useState("");
   const [orderId, setOrderId] = useState(orders[0]?.id ?? "");
-  const [amount, setAmount] = useState(
-    String(orders[0]?.paid && orders[0].paid > 0 ? orders[0].paid : 0),
-  );
+  const [sourceId, setSourceId] = useState("");
+  const [amount, setAmount] = useState("");
   const router = useRouter();
   const [state, formAction] = useActionState(
     async (previousState: typeof initialActionState, formData: FormData) => {
@@ -383,6 +384,8 @@ export function RefundSheet({
     initialActionState,
   );
   const selected = orders.find((order) => order.id === orderId);
+  const receipt = selected?.receipts.find(item => item.id === sourceId);
+  const available = Math.min(selected?.paid ?? 0, receipt?.available ?? 0);
   return (
     <Sheet
       open={open}
@@ -401,7 +404,7 @@ export function RefundSheet({
         <SheetHeader>
           <SheetTitle>Hoàn tiền đơn hàng</SheetTitle>
           <SheetDescription>
-            Ghi transaction refund, payment trạng thái refunded và giảm số đã thu.
+            Chọn khoản thu gốc và nhập số tiền thực hoàn cho khách.
           </SheetDescription>
         </SheetHeader>
         <form action={formAction} className="space-y-4">
@@ -415,8 +418,8 @@ export function RefundSheet({
               value={orderId}
               onChange={(event) => {
                 setOrderId(event.target.value);
-                const next = orders.find((order) => order.id === event.target.value);
-                setAmount(String(next?.paid ?? 0));
+                setSourceId("");
+                setAmount("");
               }}
               className="mt-1.5"
             >
@@ -428,19 +431,32 @@ export function RefundSheet({
             </Select>
           </div>
           <div>
+            <Label htmlFor="refund-source">Khoản thu gốc</Label>
+            <Select id="refund-source" name="sourcePaymentId" value={sourceId} required
+              onChange={event => { setSourceId(event.target.value); setAmount(""); }}>
+              <option value="">Chọn khoản thu</option>
+              {selected?.receipts.map(item => (
+                <option key={item.id} value={item.id}>
+                  {formatDateTime(item.paidAt)} · {item.reference || item.id} · {formatVnd(item.available)}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div>
             <Label htmlFor="refund-amount">Số tiền hoàn</Label>
             <Input
               id="refund-amount"
               name="amount"
               type="number"
               min={1}
-              max={selected?.paid}
+              required
+              max={available}
               value={amount}
               onChange={(event) => setAmount(event.target.value)}
               className="mt-1.5"
             />
             <p className="mt-1 text-xs text-muted-foreground">
-              Tối đa {formatVnd(selected?.paid ?? 0)}.
+              Tối đa {formatVnd(available)}.
             </p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -466,4 +482,14 @@ export function RefundSheet({
       </SheetContent>
     </Sheet>
   );
+}
+
+export function MatchSepayForm({ transactionId }: { transactionId: string }) {
+  const [state, action] = useActionState(reconcileSepayAction, initialActionState);
+  return <form action={action} className="mt-2 space-y-1">
+    <input type="hidden" name="transactionId" value={transactionId} />
+    <Input name="code" aria-label="Mã đơn cần khớp" placeholder="Mã đơn" required />
+    <SubmitButton pendingLabel="Đang khớp…">Khớp khoản thu</SubmitButton>
+    {state.status === "error" && <Alert tone="danger">{state.message}</Alert>}
+  </form>;
 }

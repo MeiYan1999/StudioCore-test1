@@ -1722,6 +1722,7 @@ export async function rescanAlbum(
 }
 
 export type UploadedPhotoFile = {
+  error?: string;
   filename: string;
   relativePath: string;
   buffer: Buffer;
@@ -1732,7 +1733,7 @@ export async function addUploadedPhotos(
   actor: ActorContext,
   albumId: string,
   files: UploadedPhotoFile[],
-): Promise<{ added: number; skipped: { filename: string; reason: string }[] }> {
+): Promise<{ added: number; skipped: { filename: string; index: number; reason: string }[] }> {
   assertPermission(actor, "albums.manage");
   const album = db
     .select()
@@ -1776,11 +1777,12 @@ export async function addUploadedPhotos(
     isRaw: boolean;
     sortOrder: number;
   }[] = [];
-  const skipped: { filename: string; reason: string }[] = [];
+  const skipped: { filename: string; index: number; reason: string }[] = [];
 
   for (const [index, file] of files.entries()) {
     const filename = file.filename.replace(/\\/g, "/").split("/").pop() ?? file.filename;
     try {
+      if (file.error) throw new ValidationError(file.error);
       const rawStem = filename.replace(/\.[^.]+$/, "").slice(0, 80) || "photo";
       const stem = sanitizeSegment(rawStem);
       const keyBase = `${actor.tenantId}/${albumId}/upload-${crypto.randomUUID().slice(0, 8)}-${stem}`;
@@ -1801,7 +1803,7 @@ export async function addUploadedPhotos(
       });
     } catch (error) {
       skipped.push({
-        filename,
+        index, filename,
         reason: error instanceof Error ? error.message : "Không xử lý được ảnh.",
       });
     }

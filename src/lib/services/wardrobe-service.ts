@@ -1,6 +1,7 @@
 import { and, asc, count, desc, eq, inArray, isNull, like, ne, or, sql } from "drizzle-orm";
 import type { AppDb } from "../db/client";
 import {
+  appointments,
   branches,
   customers,
   notifications,
@@ -42,7 +43,7 @@ export type RentalView = {
   customerName: string | null;
   branchId: string;
   branchName: string;
-  checkedOutAt: Date;
+  checkedOutAt: Date | null;
   dueAt: Date;
   returnedAt: Date | null;
   conditionOut: string;
@@ -75,6 +76,7 @@ export type WardrobeItemInput = {
 };
 
 export type RentalInput = {
+  reserveForAppointment?: string;
   wardrobeItemId: string;
   orderId: string;
   dueAt: string;
@@ -259,6 +261,9 @@ export function createWardrobeItem(
 ): string {
   assertPermission(actor, "schedule.manage");
   assertBranchAccess(actor, input.branchId);
+  if (["reserved", "rented"].includes(input.status)) {
+    throw new ValidationError("Tạo phiếu giữ hoặc thuê để ghi nhận người giữ trang phục.");
+  }
   const sku = input.sku.trim().toUpperCase();
   const qrCode = input.qrCode.trim().toUpperCase() || `QR-${sku}`;
 
@@ -319,7 +324,7 @@ export function updateWardrobeItem(
   assertPermission(actor, "schedule.manage");
   assertBranchAccess(actor, input.branchId);
   const item = db
-    .select({ id: wardrobeItems.id })
+    .select()
     .from(wardrobeItems)
     .where(
       and(
@@ -330,6 +335,13 @@ export function updateWardrobeItem(
     .get();
   if (!item) throw new NotFoundError("Không tìm thấy trang phục.");
 
+  assertBranchAccess(actor, item.branchId);
+  if (input.status !== item.status && ["reserved", "rented"].includes(input.status)) {
+    throw new ValidationError("Tạo phiếu giữ hoặc thuê để đổi trạng thái.");
+  }
+  if (["reserved", "rented"].includes(item.status) && (input.status !== item.status || input.branchId !== item.branchId)) {
+    throw new ValidationError("Hãy xử lý phiếu giữ hoặc thuê trước khi đổi trạng thái hay chi nhánh.");
+  }
   const sku = input.sku.trim().toUpperCase();
   const qrCode = input.qrCode.trim().toUpperCase() || `QR-${sku}`;
   const duplicateSku = db
@@ -467,6 +479,20 @@ export async function createRental(
               throw new ValidationError("Trang phục vừa được cho thuê bởi giao dịch khác.");
             }
 
+            let appointmentId: string | null = null;
+            if (input.reserveForAppointment) {
+              const booking = tx.select({ orderId: orders.id, customerId: orders.customerId, endAt: appointments.endAt })
+                .from(appointments).innerJoin(orders, eq(orders.id, appointments.orderId)).where(and(
+                  eq(appointments.id, input.reserveForAppointment), eq(appointments.tenantId, actor.tenantId),
+                  eq(appointments.branchId, item.branchId), eq(orders.tenantId, actor.tenantId), ne(orders.status, "cancelled"),
+                  eq(appointments.status, "scheduled"))).get();
+              if (!booking || dueAt < booking.endAt) throw new ValidationError("Lịch không còn hiệu lực hoặc hạn trả trước khi kết thúc buổi chụp.");
+              appointmentId = input.reserveForAppointment;
+              orderId = booking.orderId;
+              customerId = booking.customerId;
+            } else if (orderId && tx.select().from(orders).where(eq(orders.id, orderId)).get()?.status === "cancelled") {
+              throw new ValidationError("Không thể giao đồ cho đơn đã hủy.");
+            }
             tx.insert(wardrobeRentals)
               .values({
                 id: rentalId,
@@ -475,20 +501,21 @@ export async function createRental(
                 wardrobeItemId: item.id,
                 orderId,
                 customerId,
-                checkedOutAt: new Date(),
+                appointmentId,
+                checkedOutAt: appointmentId ? null : new Date(),
                 dueAt,
                 conditionOut: input.conditionOut,
                 cleaningFee: 0,
                 damageFee: 0,
                 deposit: input.deposit,
-                status: "active",
+                status: appointmentId ? "reserved" : "active",
                 notes: input.notes.trim() || null,
                 createdBy: actor.staffId,
               })
               .run();
 
             tx.update(wardrobeItems)
-              .set({ status: "rented", updatedAt: new Date() })
+              .set({ status: appointmentId ? "reserved" : "rented", updatedAt: new Date() })
               .where(
                 and(
                   eq(wardrobeItems.id, item.id),
@@ -585,7 +612,7 @@ export function returnRental(
 
   db.transaction(
     (tx) => {
-      tx.update(wardrobeRentals)
+      const changed = tx.update(wardrobeRentals)
         .set({
           returnedAt: now,
           conditionIn: input.conditionIn,
@@ -598,10 +625,12 @@ export function returnRental(
         .where(
           and(
             eq(wardrobeRentals.id, rentalId),
+            eq(wardrobeRentals.status, "active"),
             eq(wardrobeRentals.tenantId, actor.tenantId),
           ),
         )
         .run();
+      if (!changed.changes) throw new ValidationError("Phiếu thuê không còn đang giao.");
 
       tx.update(wardrobeItems)
         .set({ status: itemStatus, updatedAt: now })
@@ -779,6 +808,7 @@ export function listUnreturnedRentalItems(
   const conditions = [
     eq(wardrobeRentals.tenantId, actor.tenantId),
     eq(wardrobeRentals.orderId, orderId),
+    eq(wardrobeRentals.status, "active"),
     isNull(wardrobeRentals.returnedAt),
   ];
   // An owner viewing all branches also sees inactive ones, which `actor.branches` omits.
@@ -816,4 +846,21 @@ export function notifyUnreturnedRentals(
       createdAt: new Date(),
     })
     .run();
+}
+
+export function resolveReservation(db: AppDb, actor: ActorContext, id: string, release: boolean) {
+  assertPermission(actor, "schedule.manage");
+  db.transaction(tx => {
+    const row = tx.select().from(wardrobeRentals).where(and(eq(wardrobeRentals.id, id),
+      eq(wardrobeRentals.tenantId, actor.tenantId))).get();
+    if (!row) throw new NotFoundError("Không tìm thấy phiếu giữ đồ.");
+    assertBranchAccess(actor, row.branchId);
+    if (row.status !== "reserved") throw new ValidationError("Phiếu đã được xử lý.");
+    tx.update(wardrobeRentals).set({ status: release ? "cancelled" : "active",
+      checkedOutAt: release ? null : new Date(), updatedAt: new Date() }).where(eq(wardrobeRentals.id, id)).run();
+    tx.update(wardrobeItems).set({ status: release ? "available" : "rented", updatedAt: new Date() })
+      .where(eq(wardrobeItems.id, row.wardrobeItemId)).run();
+    writeAudit(tx, { tenantId: actor.tenantId, actorId: actor.staffId, action: release ? "wardrobe.release" : "wardrobe.checkout",
+      entity: "wardrobe_rental", entityId: id });
+  }, { behavior: "immediate" });
 }

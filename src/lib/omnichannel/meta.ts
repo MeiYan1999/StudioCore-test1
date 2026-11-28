@@ -10,6 +10,8 @@ import {
 import { and, eq, sql } from "drizzle-orm";
 import type { AppDb } from "../db/client";
 import {
+  assistantReplies,
+  pageAssistants,
   conversations,
   facebookDeliveries,
   facebookPages,
@@ -203,6 +205,8 @@ export function ingestWebhook(
                 tenantId: page.tenantId,
                 branchId: page.branchId,
                 channel: "facebook",
+                aiAutoReply: Boolean(tx.select({ enabled: pageAssistants.enabled }).from(pageAssistants)
+                  .where(and(eq(pageAssistants.pageId,page.id),eq(pageAssistants.tenantId,page.tenantId))).get()?.enabled),
                 subject: `Khách Facebook ${psid.slice(-6)}`,
               })
               .run();
@@ -304,6 +308,11 @@ export function ingestWebhook(
             })
             .where(eq(conversations.id, thread.conversationId))
             .run();
+          if (echo) {
+            tx.update(conversations).set({ aiAutoReply: false }).where(eq(conversations.id,thread.conversationId)).run();
+          } else if (tx.select({id:conversations.id}).from(conversations).where(and(eq(conversations.id,thread.conversationId),eq(conversations.aiAutoReply,true),sql`assigned_to IS NULL`)).get()) {
+            tx.insert(assistantReplies).values({ messageId:id, conversationId:thread.conversationId }).onConflictDoNothing().run();
+          }
           if (!echo)
             tx.update(facebookThreads)
               .set({ lastInboundAt: sql`max(last_inbound_at,${at})` })
@@ -387,6 +396,7 @@ export async function sendFacebook(
   content: string,
   requestId: string,
   attachment?: string,
+  automatic = false,
 ) {
   const thread = db
     .select()
@@ -415,6 +425,9 @@ export async function sendFacebook(
   if (existing) return existing;
   db.transaction(
     (tx) => {
+      if (automatic && !tx.select({id:conversations.id}).from(conversations).where(and(eq(conversations.id,conversationId),eq(conversations.aiAutoReply,true),sql`assigned_to IS NULL`)).get()) {
+        throw new Error("Nhân viên đã tiếp quản hội thoại.");
+      }
       tx.insert(messages)
         .values({
           id,

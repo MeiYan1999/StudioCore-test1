@@ -97,13 +97,16 @@ export default async function ReceiptPage({
                 </tr>
               ) : (
                 order.payments.map((payment) => (
-                  <tr key={payment.id} className="border-b border-slate-200">
+                  <tr id={`payment-${payment.id}`} key={payment.id} className="border-b border-slate-200">
                     <td className="py-2 pr-2">{formatDateTime(payment.paidAt)}</td>
                     <td className="px-2 py-2">
                       {PAYMENT_METHOD_LABELS[payment.method] ?? payment.method}
                     </td>
-                    <td className="px-2 py-2">{payment.reference ?? "—"}</td>
-                    <td className="pl-2 py-2 text-right">{formatVnd(payment.amount)}</td>
+                    <td className="px-2 py-2">{payment.reference || payment.id}
+                            {payment.status === "refunded" && <div>Hoàn tiền · {payment.sourcePaymentId
+                              ? <a className="underline" href={`#payment-${payment.sourcePaymentId}`}>Khoản thu gốc</a>
+                              : "Chưa ghi khoản thu gốc"}</div>}</td>
+                    <td className="pl-2 py-2 text-right">{formatVnd(payment.status === "refunded" ? -payment.amount : payment.amount)}</td>
                   </tr>
                 ))
               )}

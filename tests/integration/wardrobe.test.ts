@@ -57,7 +57,7 @@ describe("kho trang phục", () => {
       createRental(db, photographer, {
         wardrobeItemId: item.id,
         orderId: "order-demo-03",
-        dueAt: new Date("2026-11-30T18:00:00+07:00").toISOString(),
+        dueAt: new Date(Date.now()+7*86400000).toISOString(),
         deposit: 1_000_000,
         conditionOut: "good",
         notes: "Thuê demo.",
@@ -67,7 +67,7 @@ describe("kho trang phục", () => {
     const rentalId = await createRental(db, owner, {
       wardrobeItemId: item.id,
       orderId: "order-demo-03",
-      dueAt: new Date("2026-11-30T18:00:00+07:00").toISOString(),
+      dueAt: new Date(Date.now()+7*86400000).toISOString(),
       deposit: 1_000_000,
       conditionOut: "good",
       notes: "Thuê demo.",
@@ -169,4 +169,27 @@ describe("thiết bị", () => {
       }),
     ).toThrow(/serial/i);
   });
+});
+
+it("hai booking giữ món cuối, hủy lịch sau khi giao và trả từng món", async()=>{
+  const {appointments,wardrobeRentals}=await import("@/lib/db/schema");
+  const {resolveReservation,listUnreturnedRentalItems}=await import("@/lib/services/wardrobe-service");
+  const first=db.select().from(appointments).where(eq(appointments.id,"appointment-demo-04")).get()!;
+  db.insert(appointments).values({...first,id:"qa-competing-appointment",idempotencyKey:"qa-competing-appointment",orderId:"order-demo-06"}).run();
+  const reserve=(item:string,id:string)=>createRental(db,owner,{wardrobeItemId:item,orderId:"",dueAt:"2030-01-01T00:00:00+07:00",deposit:0,conditionOut:"good",notes:"",reserveForAppointment:id});
+  const attempts=await Promise.allSettled([reserve("wardrobe-demo-09",first.id),reserve("wardrobe-demo-09","qa-competing-appointment")]);
+  const winners=attempts.flatMap(r=>r.status==="fulfilled"?[r.value]:[]);
+  expect(winners).toHaveLength(1);
+  const held=db.select().from(wardrobeRentals).where(eq(wardrobeRentals.id,winners[0])).get()!;
+  resolveReservation(db,owner,held.id,false);
+  const next=await reserve("wardrobe-demo-11",held.appointmentId!);
+  resolveReservation(db,owner,next,false);
+  const pending=await reserve("wardrobe-demo-15",held.appointmentId!);
+  db.update(appointments).set({status:"cancelled"}).where(eq(appointments.id,held.appointmentId!)).run();
+  expect(db.select().from(wardrobeRentals).where(eq(wardrobeRentals.id,pending)).get()?.status).toBe("cancelled");
+  const before=listUnreturnedRentalItems(db,owner,held.orderId!).length;
+  expect(before).toBeGreaterThanOrEqual(2);
+  returnRental(db,owner,held.id,{conditionIn:"good",cleaningFee:0,damageFee:0,notes:""});
+  expect(listUnreturnedRentalItems(db,owner,held.orderId!)).toHaveLength(before-1);
+  expect(db.select().from(wardrobeRentals).where(eq(wardrobeRentals.id,next)).get()?.status).toBe("active");
 });

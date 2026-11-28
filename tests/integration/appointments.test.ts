@@ -13,6 +13,7 @@ import {
   createAppointment,
   getAppointmentDetail,
   getCalendarData,
+  updateAppointment,
 } from "@/lib/services/appointment-service";
 import { listUnreturnedRentalItems } from "@/lib/services/wardrobe-service";
 import { createTestDb } from "../helpers/test-db";
@@ -179,6 +180,44 @@ describe("booking và chống trùng lịch", () => {
     });
     expect(calendar.appointments).toHaveLength(0);
     expect(getAppointmentDetail(db, secondaryOwner, "appointment-demo-01")).toBeNull();
+  });
+});
+
+describe("dời lịch trùng", () => {
+  const slot = (day: string, from: string, to: string) => ({
+    startAt: iso(`${day}T${from}:00+07:00`),
+    endAt: iso(`${day}T${to}:00+07:00`),
+  });
+  const q1 = { branchId: "branch-demo-q1", makeupId: null, editorId: null, notes: "Dời lịch" };
+  const stored = (id: string) => db.select().from(appointments).where(eq(appointments.id, id)).get()!;
+
+  it("từ chối dời vào giờ trùng nhiếp ảnh gia hoặc phòng, cho phép dời sang giờ trống", async () => {
+    const a = await createAppointment(db, owner, {
+      ...q1, orderId: "order-demo-04", roomId: "room-demo-q1-1", photographerId: "staff-sc-photo",
+      ...slot("2027-03-02", "10:00", "12:00"), idempotencyKey: crypto.randomUUID(),
+    });
+    const original = slot("2027-03-02", "14:00", "16:00");
+    const b = await createAppointment(db, owner, {
+      ...q1, orderId: "order-demo-06", roomId: "room-demo-q1-2", photographerId: "staff-sc-photo",
+      ...original, idempotencyKey: crypto.randomUUID(),
+    });
+    const input = (changes: object) => ({ ...q1, orderId: "order-demo-06", roomId: "room-demo-q1-2", photographerId: "staff-sc-photo", ...original, ...changes });
+    const onA = slot("2027-03-02", "10:00", "12:00");
+
+    await expect(updateAppointment(db, owner, b.appointmentId, input(onA))).rejects.toBeInstanceOf(BookingConflictError);
+    expect(stored(b.appointmentId).startAt.toISOString()).toBe(original.startAt);
+
+    await updateAppointment(db, owner, b.appointmentId, input({ roomId: "room-demo-q1-1", photographerId: null }));
+    await expect(updateAppointment(db, owner, b.appointmentId, input({ roomId: "room-demo-q1-1", photographerId: null, ...onA }))).rejects.toBeInstanceOf(BookingConflictError);
+    expect(stored(b.appointmentId)).toMatchObject({ roomId: "room-demo-q1-1" });
+    expect(stored(b.appointmentId).startAt.toISOString()).toBe(original.startAt);
+
+    const free = slot("2027-03-03", "10:00", "12:00");
+    await updateAppointment(db, owner, b.appointmentId, input({ roomId: "room-demo-q1-1", photographerId: null, ...free }));
+    const moved = stored(b.appointmentId);
+    expect(moved.startAt.toISOString()).toBe(free.startAt);
+    expect(moved.endAt.toISOString()).toBe(free.endAt);
+    expect(stored(a.appointmentId).startAt.toISOString()).toBe(onA.startAt);
   });
 });
 

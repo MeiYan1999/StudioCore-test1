@@ -19,7 +19,7 @@ import {
 
 type UploadResult = {
   added: number;
-  skipped: { filename: string; reason: string }[];
+  skipped: { filename: string; index?: number; reason: string }[];
 };
 
 export function AlbumUploadSheet({
@@ -37,8 +37,9 @@ export function AlbumUploadSheet({
   const [result, setResult] = useState<UploadResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const handlePhotosUpload = async () => {
-    if (files.length === 0) {
+  const [failed, setFailed] = useState<{ file: File; reason: string }[]>([]);
+  const handlePhotosUpload = async (batch = files) => {
+    if (batch.length === 0) {
       setError("Chưa chọn ảnh để tải lên.");
       return;
     }
@@ -48,7 +49,7 @@ export function AlbumUploadSheet({
     try {
       const formData = new FormData();
       formData.set("albumId", albumId);
-      for (const file of files) {
+      for (const file of batch) {
         formData.append("files", file);
         const withPath = file as File & { webkitRelativePath?: string };
         formData.append(
@@ -66,8 +67,13 @@ export function AlbumUploadSheet({
         return;
       }
       setResult(payload);
-      setFiles([]);
-      toast.success(`Đã thêm ${payload.added} ảnh vào album.`);
+      const rejected = payload.skipped.flatMap(item => {
+        const file = item.index === undefined ? undefined : batch[item.index];
+        return file ? [{ file, reason: item.reason }] : [];
+      });
+      setFailed(previous => [...previous.filter(item => !batch.includes(item.file)), ...rejected]);
+      setFiles(current => current.filter(file => !batch.includes(file)));
+      if (payload.added) toast.success(`Đã thêm ${payload.added} ảnh vào album.`);
       router.refresh();
     } catch {
       setError("Không thể tải ảnh lên. Kiểm tra kết nối và thử lại.");
@@ -143,6 +149,14 @@ export function AlbumUploadSheet({
             </Alert>
           ) : null}
 
+          {failed.map(({ file, reason }, index) => (
+            <div key={index} className="flex items-center justify-between gap-2 text-sm">
+              <span>{file.webkitRelativePath || file.name} · {reason}</span>
+              <Button disabled={uploading} variant="outline" size="sm" onClick={() => void handlePhotosUpload([file])}>
+                Thử lại ảnh
+              </Button>
+            </div>
+          ))}
           <div className="rounded-lg border border-border p-3">
             <Label htmlFor="album-upload-files">Chọn nhiều ảnh</Label>
             <Input

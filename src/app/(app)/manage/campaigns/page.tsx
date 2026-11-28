@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { Input } from "@/components/ui/input";
 import { Megaphone } from "lucide-react";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -29,7 +31,7 @@ export const metadata = { title: "Chiến dịch" };
 export default async function CampaignsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; branchId?: string }>;
+  searchParams: Promise<{ status?: string; branchId?: string; from?: string; to?: string }>;
 }) {
   const actor = await requireActor();
   if (!hasPermission(actor.permissions, "customers.view")) {
@@ -76,9 +78,16 @@ export default async function CampaignsPage({
     },
     {
       key: "revenue",
-      header: "Doanh thu",
+      header: "Doanh thu nhập tay",
       className: "text-right",
       cell: (row) => formatVnd(row.revenue),
+    },
+    {
+      key: "attributed", header: "Đơn lập trong kỳ",
+      cell: row => <details><summary>{row.attributedOrders.length} đơn · {formatVnd(row.attributedOrders.reduce((total, item) => total + item.total, 0))}</summary>
+        {row.attributedOrders.map(order => <Link key={order.id} href={`/manage/orders/${order.id}`} className="block underline">
+          {order.code} · {formatVnd(order.total)}
+        </Link>)}</details>,
     },
     {
       key: "roas",
@@ -129,7 +138,7 @@ export default async function CampaignsPage({
         description={`${campaigns.length} chiến dịch · ngân sách chi ${formatVnd(totalSpend)} · doanh thu ${formatVnd(totalRevenue)} · ${totalLeads} lead.`}
         actions={
           canManage ? (
-            <CampaignSheet branches={actor.branches} defaultBranchId={defaultBranchId} />
+            <><Button asChild variant="outline"><Link href="/manage/campaigns/fanpage">Fanpage và quảng cáo</Link></Button><CampaignSheet branches={actor.branches} defaultBranchId={defaultBranchId} /></>
           ) : null
         }
       />
@@ -148,6 +157,8 @@ export default async function CampaignsPage({
             ))}
           </Select>
         </div>
+        <label className="text-sm">Đơn từ ngày<Input type="date" name="from" defaultValue={params.from} /></label>
+        <label className="text-sm">Đến ngày<Input type="date" name="to" defaultValue={params.to} /></label>
         <Button type="submit" size="sm">Lọc</Button>
       </form>
       <DataTable

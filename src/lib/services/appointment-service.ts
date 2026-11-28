@@ -10,6 +10,7 @@ import {
   lt,
   ne,
   or,
+  sql,
   type SQL,
 } from "drizzle-orm";
 import type { AppDb } from "../db/client";
@@ -244,7 +245,7 @@ function assertActiveOrderForBranch(
   return order;
 }
 
-function assertRoom(
+export function assertRoom(
   db: AppDb,
   actor: ActorContext,
   roomId: string,
@@ -261,7 +262,7 @@ function assertRoom(
   }
 }
 
-function getStaffForBranch(
+export function getStaffForBranch(
   db: AppDb,
   actor: ActorContext,
   staffId: string,
@@ -833,6 +834,14 @@ export async function updateAppointment(
               throw new BookingConflictError(conflict);
             }
 
+            if (input.orderId !== current.orderId && (tx.get(sql`SELECT id FROM inbox_bookings WHERE appointment_id=${appointmentId}`)
+              || tx.get(sql`SELECT id FROM wardrobe_rentals WHERE appointment_id=${appointmentId} AND status IN ('reserved','active')`))) {
+              throw new ValidationError("Không thể chuyển lịch đang gắn booking hoặc trang phục sang đơn khác.");
+            }
+            tx.update(orders).set({ scheduledAt: startAt, updatedAt: new Date() }).where(and(
+              eq(orders.id, input.orderId), eq(orders.tenantId, actor.tenantId),
+              or(isNull(orders.scheduledAt), eq(orders.scheduledAt, current.startAt)),
+            )).run();
             tx.update(appointments)
               .set({
                 orderId: input.orderId,
@@ -919,7 +928,8 @@ export function cancelAppointment(
     throw new ValidationError("Vui lòng nhập lý do hủy lịch.");
   }
 
-  db.update(appointments)
+  db.transaction(tx => {
+    tx.update(appointments)
     .set({
       status: "cancelled",
       cancelReason: reason.trim(),
@@ -927,6 +937,10 @@ export function cancelAppointment(
     })
     .where(and(eq(appointments.id, appointmentId), eq(appointments.tenantId, actor.tenantId)))
     .run();
+
+    tx.run(sql`UPDATE inbox_bookings SET status='cancelled' WHERE tenant_id=${actor.tenantId}
+      AND appointment_id=${appointmentId} AND status IN ('held','confirmed')`);
+  }, { behavior: "immediate" });
 
   writeAudit(db, {
     tenantId: actor.tenantId,

@@ -87,6 +87,7 @@ export function OrderCreateSheet({
   catalog,
   assignees,
   defaultBranchId,
+  initialCustomerId = "",
 }: {
   branches: BranchOption[];
   customers: CustomerOption[];
@@ -97,6 +98,7 @@ export function OrderCreateSheet({
     makeup: AssigneeOption[];
   };
   defaultBranchId: string;
+  initialCustomerId?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [branchId, setBranchId] = useState(defaultBranchId);
@@ -137,7 +139,7 @@ export function OrderCreateSheet({
   });
 
   const customerOptions = customers;
-  const defaultCustomerId = customers[0]?.id ?? "";
+  const defaultCustomerId = initialCustomerId;
   const photographerOptions = assignees.photographers.filter((member) =>
     member.branchIds.includes(branchId),
   );

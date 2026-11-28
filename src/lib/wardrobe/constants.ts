@@ -1,5 +1,6 @@
 export const WARDROBE_STATUSES = [
   { value: "available", label: "Sẵn sàng" },
+  { value: "reserved", label: "Đang giữ đồ" },
   { value: "rented", label: "Đang cho thuê" },
   { value: "cleaning", label: "Đang giặt" },
   { value: "maintenance", label: "Bảo trì" },
@@ -11,6 +12,7 @@ export const WARDROBE_STATUS_LABELS: Record<string, string> = Object.fromEntries
 );
 
 export const RENTAL_STATUSES = [
+  { value: "reserved", label: "Đang giữ đồ" },
   { value: "active", label: "Đang thuê" },
   { value: "returned", label: "Đã trả" },
   { value: "cancelled", label: "Đã hủy" },

@@ -26,6 +26,7 @@ import { initialActionState } from "@/lib/actions/action-state";
 import {
   addTaskCommentAction,
   createTaskAction,
+  changeTaskStatus,
   loadTaskDetailAction,
   updateTaskAction,
 } from "@/lib/actions/operations-actions";
@@ -390,6 +391,8 @@ function TaskDetailSheet({
 }
 
 export function TaskBoard({
+  selfId,
+  initialDetail,
   tasks,
   branches,
   assignees,
@@ -400,6 +403,8 @@ export function TaskBoard({
   defaultCustomerId,
   canManage,
 }: {
+  selfId: string;
+  initialDetail: TaskDetail | null;
   tasks: TaskView[];
   branches: { id: string; name: string }[];
   assignees: { id: string; name: string; code: string }[];
@@ -410,10 +415,11 @@ export function TaskBoard({
   defaultCustomerId?: string;
   canManage: boolean;
 }) {
+  const router = useRouter();
   const [view, setView] = useState<"board" | "list">("board");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [open, setOpen] = useState(false);
-  const [detail, setDetail] = useState<TaskDetail | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(initialDetail?.id ?? null);
+  const [open, setOpen] = useState(Boolean(initialDetail));
+  const [detail, setDetail] = useState<TaskDetail | null>(initialDetail);
   const [detailLoading, setDetailLoading] = useState(false);
 
   const reloadTask = async (taskId: string) => {
@@ -456,7 +462,12 @@ export function TaskBoard({
     {
       key: "status",
       header: "Trạng thái",
-      cell: (row) => (
+      cell: (row) => canManage || row.assigneeId===selfId ? (
+        <Select aria-label={"Trạng thái "+row.title} value={row.status} onChange={async event=>{
+          const error=await changeTaskStatus(row.id,event.target.value as TaskStatus);
+          if(error) toast.error(error); else router.refresh();
+        }}>{TASK_STATUSES.map(value=><option key={value} value={value}>{TASK_STATUS_META[value].label}</option>)}</Select>
+      ) : (
         <Badge tone={TASK_STATUS_META[row.status as TaskStatus]?.tone ?? "neutral"}>
           {TASK_STATUS_META[row.status as TaskStatus]?.label ?? row.status}
         </Badge>

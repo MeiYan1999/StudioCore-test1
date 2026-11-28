@@ -4,7 +4,10 @@ import { authenticate } from "@/lib/auth/login-service";
 import { getActorFromToken } from "@/lib/auth/session-core";
 import type { ActorContext } from "@/lib/auth/types";
 import type { AppDb } from "@/lib/db/client";
-import { customers, vouchers } from "@/lib/db/schema";
+import { customers, payments, transactions, vouchers } from "@/lib/db/schema";
+import { listFinanceOrderOptions, processPaymentWebhook } from "@/lib/services/finance-service";
+import { createService, updateService } from "@/lib/services/catalog-service";
+import { getRevenueReport } from "@/lib/services/report-service";
 import {
   changeOrderStatus,
   confirmOrderContract,
@@ -100,6 +103,60 @@ const baseOrder = {
 };
 
 describe("tạo đơn hàng", () => {
+  it("đối chiếu cọc và giao dịch ngân hàng gửi lặp theo ngày chứng từ", () => {
+    const orderId = createOrder(db, owner, {
+      ...baseOrder, items: [{ itemType: "custom", refId: null, quantity: 1, unitPrice: 5_000_000, name: "Gói chụp" }],
+      voucherCode: "", discount: 0, deposit: 1_000_000,
+    });
+    const period = { from: "2027-01-01", to: "2027-01-31" };
+    const before = getRevenueReport(db, owner, period);
+    const payload = { provider: "sepay", eventType: "payment.received", orderId, eventId: "accept-2500",
+      amount: 2_500_000, occurredAt: "2027-01-01 00:05:00" };
+    for (const status of ["processed", "duplicate"]) {
+      expect(processPaymentWebhook(db, payload, JSON.stringify(payload)).status).toBe(status);
+    }
+    expect(getOrderDetail(db, owner, orderId)).toMatchObject({ total: 5_000_000, paid: 3_500_000, remaining: 1_500_000 });
+    const ledger = db.select().from(transactions).where(eq(transactions.orderId, orderId)).all();
+    expect.soft(ledger.map(row => row.amount).sort()).toEqual([1_000_000, 2_500_000]);
+    expect.soft(ledger.find(row => row.amount === 2_500_000)?.occurredAt.toISOString()).toBe("2026-12-31T17:05:00.000Z");
+    expect.soft(getRevenueReport(db, owner, period).collected - before.collected).toBe(2_500_000);
+    changeOrderStatus(db, owner, orderId, "cancelled", "Khách hủy");
+    expect(listFinanceOrderOptions(db, owner).some(row => row.id === orderId)).toBe(true);
+  });
+  it("SePay chưa khớp được xử lý một lần và hoàn đúng khoản gốc",async()=>{
+    const {getSepaySettings,handleSepayWebhookCall}=await import("@/lib/services/sepay-service");
+    const {reconcileSepayIncome,recordRefund}=await import("@/lib/services/finance-service");
+    const id=createOrder(db,owner,{...baseOrder,voucherCode:"",discount:0,deposit:0});
+    const order=getOrderDetail(db,owner,id)!;
+    const key=getSepaySettings(db,owner.tenantId).apiKey;
+    const data={id:909009,transferType:"in" as const,transferAmount:300000,content:"không có mã đơn",transactionDate:"2026-11-20 15:00:00"};
+    for(let n=0;n<2;n++)await handleSepayWebhookCall(db,key,data,JSON.stringify(data));
+    const entries=db.select().from(transactions).where(eq(transactions.idempotencyKey,"sepay:909009")).all();
+    expect(entries).toHaveLength(1);
+    expect(entries[0].orderId).toBeNull();
+    expect(()=>reconcileSepayIncome(db,secondaryOwner,entries[0].id,order.code)).toThrow();
+    for(let n=0;n<2;n++)reconcileSepayIncome(db,owner,entries[0].id,order.code);
+    expect(getOrderDetail(db,owner,id)?.paid).toBe(300000);
+    const source=db.select().from(payments).where(eq(payments.orderId,id)).get()!;
+    const refund={orderId:id,amount:120000,reason:"Trả một phần",method:"cash" as const,sourcePaymentId:source.id,idempotencyKey:"qa-return-1234567"};
+    expect(recordRefund(db,owner,refund)).toBe(recordRefund(db,owner,refund));
+    expect(db.select().from(payments).where(eq(payments.sourcePaymentId,source.id)).get()).toMatchObject({amount:120000,status:"refunded"});
+    expect(getOrderDetail(db,owner,id)?.paid).toBe(180000);
+    expect(()=>recordRefund(db,owner,{...refund,amount:190000,idempotencyKey:"qa-return-2234567"})).toThrow();
+  });
+  it("truy đơn theo nguồn chiến dịch, hồ sơ và tài liệu chỉ trong studio",async()=>{
+    const {attributeOrder,listCampaigns}=await import("@/lib/services/campaign-service");
+    const {createLinkDocument,listDocuments}=await import("@/lib/services/document-service");
+    const {getCustomerDetail}=await import("@/lib/services/customer-service");
+    const order=getOrderDetail(db,owner,"order-demo-04")!;
+    attributeOrder(db,owner,order.id,"campaign-demo-facebook");
+    expect(listCampaigns(db,owner,{}).find(c=>c.id==="campaign-demo-facebook")?.attributedOrders.map(o=>o.id)).toContain(order.id);
+    expect(()=>attributeOrder(db,secondaryOwner,order.id,"")).toThrow();
+    const doc=createLinkDocument(db,owner,{name:"Hợp đồng QA",category:"other",url:"https://example.test/contract",visibility:"branch",branchId:order.branchId,notes:"",orderCode:order.code});
+    expect(listDocuments(db,owner,{q:order.code}).map(d=>d.id)).toContain(doc);
+    expect(listDocuments(db,secondaryOwner,{q:order.code})).toHaveLength(0);
+    expect(getCustomerDetail(db,owner,order.customer.id)?.appointments.some(a=>a.code===order.code)).toBe(true);
+  });
   it("server lấy giá catalog và tính voucher đúng", () => {
     const voucherBefore = db
       .select({ usedCount: vouchers.usedCount })
@@ -228,5 +285,20 @@ describe("tạo đơn hàng", () => {
         deposit: 200_000,
       }),
     ).toThrow(/cọc/i);
+  });
+  it("đổi giá catalog không làm đổi giá đã chốt trên đơn cũ", () => {
+    const service = { name: "Gói chụp thử giá", category: "wedding", branchId: "branch-demo-q1", price: 3_000_000, durationMinutes: 60, description: "", active: true };
+    const serviceId = createService(db, owner, service);
+    const order = { ...baseOrder, voucherCode: "", discount: 0, deposit: 1_000_000,
+      items: [{ itemType: "service" as const, refId: serviceId, name: "Gói chụp thử giá", quantity: 2, unitPrice: 1 }] };
+    const oldId = createOrder(db, owner, order);
+    expect(getOrderDetail(db, owner, oldId)).toMatchObject({ total: 6_000_000, paid: 1_000_000, remaining: 5_000_000 });
+    updateService(db, owner, serviceId, { ...service, price: 4_500_000 });
+    const oldDetail = getOrderDetail(db, owner, oldId)!;
+    expect(oldDetail.items.map(item => item.unitPrice)).toEqual([3_000_000]);
+    expect(oldDetail).toMatchObject({ total: 6_000_000, paid: 1_000_000, remaining: 5_000_000 });
+    const newDetail = getOrderDetail(db, owner, createOrder(db, owner, order))!;
+    expect(newDetail.items.map(item => item.unitPrice)).toEqual([4_500_000]);
+    expect(newDetail).toMatchObject({ total: 9_000_000, remaining: 8_000_000 });
   });
 });

@@ -10,7 +10,7 @@ import { DateTimeText } from "@/components/shared/date-time";
 import { ForbiddenState } from "@/components/shared/forbidden-state";
 import { Money } from "@/components/shared/money";
 import { QrCode } from "@/components/wardrobe/qr-code";
-import { RentalSheet, ReturnRentalSheet } from "@/components/wardrobe/rental-sheets";
+import { RentalSheet, ReturnRentalSheet, ReservationControls } from "@/components/wardrobe/rental-sheets";
 import { WardrobeItemSheet } from "@/components/wardrobe/wardrobe-item-sheet";
 import { hasPermission } from "@/lib/auth/permissions";
 import { requireActor } from "@/lib/auth/session";
@@ -108,14 +108,14 @@ export default async function WardrobeDetailPage({
         </div>
       ),
     },
-    ...(canManage && activeRental
+    ...(canManage && item.rentals.some((rental) => rental.status === "active" || rental.status === "reserved")
       ? [
           {
             key: "actions",
             header: "",
             className: "text-right",
             cell: (row: RentalView) =>
-              row.status === "active" ? <ReturnRentalSheet rental={row} /> : null,
+              row.status === "reserved" ? <ReservationControls id={row.id} /> : row.status === "active" ? <ReturnRentalSheet rental={row} /> : null,
           },
         ]
       : []),

@@ -12,11 +12,13 @@ import {
   ne,
   or,
   sum,
+  sql,
   type SQL,
 } from "drizzle-orm";
 import type { AppDb } from "../db/client";
 import {
   branches,
+  appointments,
   customerInteractions,
   customers,
   orders,
@@ -69,6 +71,7 @@ export type CustomerInteractionItem = {
 };
 
 export type CustomerOrderSummary = {
+  branchId: string;
   id: string;
   code: string;
   status: string;
@@ -85,6 +88,7 @@ export type CustomerDetail = CustomerListItem & {
   measurements: Record<string, string>;
   notes: string | null;
   interactions: CustomerInteractionItem[];
+  appointments: {id:string;startAt:Date;status:string;code:string}[];
   orders: CustomerOrderSummary[];
   metrics: {
     ltv: number;
@@ -133,6 +137,7 @@ function customerScopeConditions(actor: ActorContext): SQL[] {
     isNull(customers.archivedAt),
   ];
 
+  if (scope.mode === "none") conditions.push(sql`1=0`);
   if (scope.mode === "branch") {
     conditions.push(eq(customers.branchId, scope.branchId));
   }
@@ -385,10 +390,13 @@ export function getCustomerDetail(
     .orderBy(desc(customerInteractions.occurredAt))
     .all();
 
+  const scope = getBranchScope(actor);
+  const orderBranch = scope.mode === "branch" ? eq(orders.branchId,scope.branchId) : undefined;
   const recentOrders = db
     .select({
       id: orders.id,
       code: orders.code,
+      branchId:orders.branchId,
       status: orders.status,
       total: orders.total,
       paid: orders.paid,
@@ -401,6 +409,7 @@ export function getCustomerDetail(
       and(
         eq(orders.tenantId, actor.tenantId),
         eq(orders.customerId, customerId),
+        orderBranch,
         isNull(orders.archivedAt),
       ),
     )
@@ -420,26 +429,14 @@ export function getCustomerDetail(
       and(
         eq(orders.tenantId, actor.tenantId),
         eq(orders.customerId, customerId),
+        orderBranch,
         isNull(orders.archivedAt),
         ne(orders.status, "cancelled"),
       ),
     )
     .get();
 
-  const lastOrder = db
-    .select({ createdAt: orders.createdAt })
-    .from(orders)
-    .where(
-      and(
-        eq(orders.tenantId, actor.tenantId),
-        eq(orders.customerId, customerId),
-        isNull(orders.archivedAt),
-      ),
-    )
-    .orderBy(desc(orders.createdAt))
-    .limit(1)
-    .get();
-
+  const lastOrder = recentOrders[0];
   const orderCount = stats?.orderCount ?? 0;
   const ltv = Number(stats?.total ?? 0);
   const totalPaid = Number(stats?.paid ?? 0);
@@ -452,6 +449,9 @@ export function getCustomerDetail(
     measurements: safeJson<Record<string, string>>(row.customer.measurements, {}),
     notes: row.customer.notes,
     interactions: interactionRows,
+    appointments: actor.permissions.includes("schedule.view") ? db.select({id:appointments.id,startAt:appointments.startAt,status:appointments.status,code:orders.code}).from(appointments)
+      .innerJoin(orders,eq(orders.id,appointments.orderId)).where(and(eq(orders.customerId,customerId),eq(orders.tenantId,actor.tenantId),eq(appointments.tenantId,actor.tenantId),scope.mode==="branch"?eq(appointments.branchId,scope.branchId):undefined))
+      .orderBy(desc(appointments.startAt)).all() : [],
     orders: recentOrders,
     metrics: {
       ltv,

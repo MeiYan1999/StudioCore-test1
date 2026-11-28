@@ -148,7 +148,7 @@ export function WardrobeItemSheet({
                 defaultValue={values?.status ?? item?.status ?? "available"}
                 className="mt-1.5"
               >
-                {WARDROBE_STATUSES.map((status) => (
+                {WARDROBE_STATUSES.filter(status => status.value !== "reserved" || item?.status === "reserved").map((status) => (
                   <option key={status.value} value={status.value}>
                     {status.label}
                   </option>

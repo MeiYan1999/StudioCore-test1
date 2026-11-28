@@ -43,6 +43,7 @@ export const invoiceStatusSchema = z.object({
 });
 
 export const refundSchema = z.object({
+  sourcePaymentId: z.string().min(1),
   orderId: z.string().min(1),
   amount: z.coerce.number().int().min(1),
   reason: z.string().min(1).max(500),

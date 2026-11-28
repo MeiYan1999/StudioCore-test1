@@ -1,17 +1,18 @@
 import crypto from "node:crypto";
-import { and, count, desc, eq, isNull, ne, or, sql, type SQL } from "drizzle-orm";
+import { and, count, desc, eq, lt, isNull, ne, or, sql, type SQL } from "drizzle-orm";
 import type { AppDb } from "../db/client";
 import {
   albums,
   customers,
   orders,
+  staffBranches,
   staff,
   taskComments,
   tasks,
 } from "../db/schema";
 import type { ActorContext } from "../auth/types";
 import { assertBranchAccess, assertPermission, getBranchScope } from "../auth/permissions";
-import { NotFoundError, ValidationError } from "../errors";
+import { AuthorizationError, NotFoundError, ValidationError } from "../errors";
 import { writeAudit } from "../audit";
 import { parseVietnamDateTimeLocal } from "../utils";
 import { createNotification } from "./notification-service";
@@ -54,6 +55,7 @@ export type TaskCommentView = {
 export type TaskDetail = TaskView & { comments: TaskCommentView[] };
 
 function taskConditions(actor: ActorContext, filters: {
+  overdue?: string;
   q?: string;
   status?: string;
   priority?: string;
@@ -75,6 +77,7 @@ function taskConditions(actor: ActorContext, filters: {
   ) {
     conditions.push(eq(tasks.priority, filters.priority));
   }
+  if (filters.overdue === "1") conditions.push(ne(tasks.status, "done"), lt(tasks.dueAt, new Date()));
   if (filters.assigneeId) conditions.push(eq(tasks.assigneeId, filters.assigneeId));
   if (filters.customerId) conditions.push(eq(tasks.customerId, filters.customerId));
   if (filters.q?.trim()) {
@@ -131,6 +134,7 @@ export function listTasks(
   db: AppDb,
   actor: ActorContext,
   filters: {
+    overdue?: string;
     q?: string;
     status?: string;
     priority?: string;
@@ -222,6 +226,7 @@ function validateTaskRelations(
     const assignee = db
       .select({ id: staff.id })
       .from(staff)
+      .innerJoin(staffBranches,and(eq(staffBranches.staffId,staff.id),eq(staffBranches.branchId,input.branchId),eq(staffBranches.tenantId,actor.tenantId)))
       .where(
         and(
           eq(staff.id, input.assigneeId),
@@ -237,7 +242,7 @@ function validateTaskRelations(
     const order = db
       .select({ id: orders.id, branchId: orders.branchId })
       .from(orders)
-      .where(and(eq(orders.id, input.orderId), eq(orders.tenantId, actor.tenantId)))
+      .where(and(eq(orders.branchId,input.branchId),eq(orders.id, input.orderId), eq(orders.tenantId, actor.tenantId)))
       .get();
     if (!order) throw new ValidationError("Đơn hàng không hợp lệ.");
   }
@@ -246,7 +251,7 @@ function validateTaskRelations(
       .select({ id: customers.id })
       .from(customers)
       .where(
-        and(eq(customers.id, input.customerId), eq(customers.tenantId, actor.tenantId)),
+        and(eq(customers.branchId,input.branchId),eq(customers.id, input.customerId), eq(customers.tenantId, actor.tenantId)),
       )
       .get();
     if (!customer) throw new ValidationError("Khách hàng không hợp lệ.");
@@ -255,7 +260,7 @@ function validateTaskRelations(
     const album = db
       .select({ id: albums.id })
       .from(albums)
-      .where(and(eq(albums.id, input.albumId), eq(albums.tenantId, actor.tenantId)))
+      .where(and(eq(albums.branchId,input.branchId),eq(albums.id, input.albumId), eq(albums.tenantId, actor.tenantId)))
       .get();
     if (!album) throw new ValidationError("Album không hợp lệ.");
   }
@@ -380,7 +385,7 @@ export function setTaskStatus(
   taskId: string,
   status: TaskStatus,
 ): void {
-  assertPermission(actor, "tasks.manage");
+  assertPermission(actor, "tasks.view");
   const task = db
     .select()
     .from(tasks)
@@ -388,6 +393,9 @@ export function setTaskStatus(
     .get();
   if (!task) throw new NotFoundError("Không tìm thấy task.");
   assertBranchAccess(actor, task.branchId);
+  if (actor.readOnly || actor.planLapsed || (task.assigneeId !== actor.staffId && !actor.permissions.includes("tasks.manage"))) {
+    throw new AuthorizationError();
+  }
   if (!TASK_STATUSES.includes(status)) {
     throw new ValidationError("Trạng thái task không hợp lệ.");
   }

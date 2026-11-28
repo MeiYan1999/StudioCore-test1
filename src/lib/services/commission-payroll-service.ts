@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { and, count, desc, eq, gte, isNull, lte, ne, or, sql } from "drizzle-orm";
 import type { AppDb } from "../db/client";
 import {
+  activityLogs,
   attendance,
   branches,
   commissionRules,
@@ -475,125 +476,135 @@ export function generatePayrolls(
 ): { created: number; skipped: number } {
   assertPermission(actor, "payroll.manage");
   const range = payrollPeriodRange(period);
-  const locked = db
-    .select({ value: count() })
-    .from(payrolls)
-    .where(
-      and(
-        eq(payrolls.tenantId, actor.tenantId),
-        eq(payrolls.period, period),
-        or(eq(payrolls.status, "approved"), eq(payrolls.status, "paid")) ?? sql`1=0`,
-      ),
-    )
-    .get()?.value ?? 0;
-  if (locked > 0) {
-    throw new ValidationError("Kỳ lương đã duyệt/khóa, không thể tạo lại.");
-  }
-  const staffRows = db
-    .select()
-    .from(staff)
-    .where(
-      and(
-        eq(staff.tenantId, actor.tenantId),
-        eq(staff.active, true),
-        isNull(staff.archivedAt),
-        ne(staff.role, "platform_admin"),
-      ),
-    )
-    .all();
-  const existing = new Set(
-    db
-      .select({ staffId: payrolls.staffId })
+  return db.transaction((tx) => {
+    const locked = tx
+      .select({ value: count() })
       .from(payrolls)
       .where(
-        and(eq(payrolls.tenantId, actor.tenantId), eq(payrolls.period, period)),
+        and(
+          eq(payrolls.tenantId, actor.tenantId),
+          eq(payrolls.period, period),
+          or(eq(payrolls.status, "approved"), eq(payrolls.status, "paid")) ?? sql`1=0`,
+        ),
       )
-      .all()
-      .map((row) => row.staffId),
-  );
-  let created = 0;
-  let skipped = 0;
-  for (const staffRow of staffRows) {
-    if (existing.has(staffRow.id)) {
-      skipped += 1;
-      continue;
+      .get()?.value ?? 0;
+    if (locked > 0) {
+      throw new ValidationError("Kỳ lương đã duyệt/khóa, không thể tạo lại.");
     }
-    const attendanceRows = db
+    const staffRows = tx
       .select()
-      .from(attendance)
+      .from(staff)
       .where(
         and(
-          eq(attendance.tenantId, actor.tenantId),
-          eq(attendance.staffId, staffRow.id),
-          gte(attendance.checkInAt, range.start),
-          lte(attendance.checkInAt, range.end),
+          eq(staff.tenantId, actor.tenantId),
+          eq(staff.active, true),
+          isNull(staff.archivedAt),
+          ne(staff.role, "platform_admin"),
         ),
       )
       .all();
-    const workDays = new Set(
-      attendanceRows.map((row) =>
-        new Intl.DateTimeFormat("en-CA", {
-          timeZone: "Asia/Ho_Chi_Minh",
-          year: "numeric",
-          month: "2-digit",
-          day: "2-digit",
-        }).format(row.checkInAt),
-      ),
-    ).size;
-    const commissionRows = db
-      .select()
-      .from(commissions)
-      .where(
-        and(
-          eq(commissions.tenantId, actor.tenantId),
-          eq(commissions.staffId, staffRow.id),
-          eq(commissions.status, "approved"),
-          isNull(commissions.payrollId),
-          gte(commissions.createdAt, range.start),
-          lte(commissions.createdAt, range.end),
-        ),
-      )
-      .all();
-    const commissionAmount = commissionRows.reduce(
-      (sum, row) => sum + row.amount,
-      0,
+    const existing = new Map(
+      tx
+        .select()
+        .from(payrolls)
+        .where(
+          and(eq(payrolls.tenantId, actor.tenantId), eq(payrolls.period, period)),
+        )
+        .all()
+        .map((row) => [row.staffId, row] as const),
     );
-    const payrollId = crypto.randomUUID();
-    db.transaction((tx) => {
-      tx.insert(payrolls)
-        .values({
-          id: payrollId,
-          tenantId: actor.tenantId,
-          period,
-          staffId: staffRow.id,
-          baseSalary: staffRow.baseSalary,
-          workDays,
-          commissionAmount,
-          bonus: 0,
-          deduction: 0,
-          net: staffRow.baseSalary + commissionAmount,
-          status: "draft",
-          createdBy: actor.staffId,
-        })
-        .run();
-      for (const commission of commissionRows) {
-        tx.update(commissions)
-          .set({ payrollId, updatedAt: new Date() })
-          .where(eq(commissions.id, commission.id))
-          .run();
+    let created = 0;
+    let skipped = 0;
+    for (const staffRow of staffRows) {
+      const previous = existing.get(staffRow.id);
+      if (previous && previous.status !== "draft") {
+        skipped += 1;
+        continue;
       }
+      const attendanceRows = tx
+        .select()
+        .from(attendance)
+        .where(
+          and(
+            eq(attendance.tenantId, actor.tenantId),
+            eq(attendance.staffId, staffRow.id),
+            gte(attendance.checkInAt, range.start),
+            lte(attendance.checkInAt, range.end),
+          ),
+        )
+        .all();
+      const workDays = new Set(
+        attendanceRows.map((row) =>
+          new Intl.DateTimeFormat("en-CA", {
+            timeZone: "Asia/Ho_Chi_Minh",
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+          }).format(row.checkInAt),
+        ),
+      ).size;
+      const commissionRows = tx
+        .select()
+        .from(commissions)
+        .where(
+          and(
+            eq(commissions.tenantId, actor.tenantId),
+            eq(commissions.staffId, staffRow.id),
+            eq(commissions.status, "approved"),
+            or(isNull(commissions.payrollId), previous ? eq(commissions.payrollId, previous.id) : undefined),
+            gte(commissions.createdAt, range.start),
+            lte(commissions.createdAt, range.end),
+          ),
+        )
+        .all();
+      const commissionAmount = commissionRows.reduce(
+        (sum, row) => sum + row.amount,
+        0,
+      );
+      const payrollId = previous?.id ?? crypto.randomUUID();
+      if (previous) {
+        const baseSalary = previous.baseSalary;
+        tx.update(payrolls).set({ workDays, commissionAmount,
+          net: baseSalary + commissionAmount + previous.bonus - previous.deduction, updatedAt: new Date() })
+          .where(eq(payrolls.id, payrollId)).run();
+        skipped += 1;
+      } else {
+        tx.insert(payrolls)
+          .values({
+            id: payrollId,
+            tenantId: actor.tenantId,
+            period,
+            staffId: staffRow.id,
+            baseSalary: staffRow.baseSalary,
+            workDays,
+            commissionAmount,
+            bonus: 0,
+            deduction: 0,
+            net: staffRow.baseSalary + commissionAmount,
+            status: "draft",
+            createdBy: actor.staffId,
+          })
+          .run();
+        created += 1;
+      }
+      for (const commission of commissionRows) {
+          tx.update(commissions)
+            .set({ payrollId, updatedAt: new Date() })
+            .where(eq(commissions.id, commission.id))
+            .run();
+        }
+  
+    }
+    writeAudit(tx, {
+      tenantId: actor.tenantId,
+      actorId: actor.staffId,
+      action: "finance.payroll.generate",
+      entity: "payroll",
+      entityId: period,
+      metadata: { created, skipped },
     });
-    created += 1;
-  }
-  writeAudit(db, {
-    tenantId: actor.tenantId,
-    actorId: actor.staffId,
-    action: "finance.payroll.generate",
-    entity: "payroll",
-    entityId: period,
-    metadata: { created, skipped },
-  });
-  return { created, skipped };
+    return { created, skipped };
+  }, { behavior: "immediate" });
 }
 
 export function updatePayroll(
@@ -778,4 +789,18 @@ export function listHrStaff(db: AppDb, actor: ActorContext): HrStaffView[] {
     ...row,
     branches: branchMap.get(row.id) ?? [],
   }));
+}
+
+export function payrollSources(db:AppDb,actor:ActorContext,period:string) {
+  assertPermission(actor,"payroll.view");
+  const range=payrollPeriodRange(period);
+  const earned=db.select({payrollId:payrolls.id,orderId:orders.id,code:orders.code,role:commissions.role,amount:commissions.amount})
+    .from(commissions).innerJoin(payrolls,eq(payrolls.id,commissions.payrollId)).innerJoin(orders,eq(orders.id,commissions.orderId))
+    .where(and(eq(payrolls.tenantId,actor.tenantId),eq(orders.tenantId,actor.tenantId),eq(commissions.tenantId,actor.tenantId),eq(payrolls.period,period))).all();
+  const days=db.select({staffId:attendance.staffId,id:attendance.id,at:attendance.checkInAt}).from(attendance)
+    .where(and(eq(attendance.tenantId,actor.tenantId),gte(attendance.checkInAt,range.start),lte(attendance.checkInAt,range.end))).orderBy(attendance.checkInAt).all();
+  const bonuses=db.select({payrollId:payrolls.id,at:activityLogs.createdAt,by:staff.name,detail:activityLogs.metadata})
+    .from(activityLogs).innerJoin(payrolls,eq(payrolls.id,activityLogs.entityId)).leftJoin(staff,eq(staff.id,activityLogs.actorId))
+    .where(and(eq(payrolls.tenantId,actor.tenantId),eq(activityLogs.tenantId,actor.tenantId),eq(activityLogs.action,"finance.payroll.update"),eq(payrolls.period,period))).orderBy(desc(activityLogs.createdAt)).all();
+  return {earned,days,bonuses};
 }

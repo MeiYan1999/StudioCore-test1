@@ -9,6 +9,8 @@ import {
   transactions,
 } from "../db/schema";
 import { setTenantSetting } from "./settings-write-service";
+import { parseVietnamDateTimeLocal } from "../utils";
+import { ValidationError } from "../errors";
 import { processPaymentWebhook } from "./finance-service";
 
 export type SepayStats = {
@@ -257,13 +259,18 @@ export async function handleSepayWebhookCall(
     payload.id || payload.referenceCode || `sepay-hash-${payloadHash.slice(0, 32)}`,
   );
   const rawAmount = Number(payload.transferAmount || 0);
-  const transferAmount = Number.isFinite(rawAmount) && rawAmount > 0 ? Math.round(rawAmount) : 0;
+  const occurredAt = payload.transactionDate ? parseVietnamDateTimeLocal(payload.transactionDate) : new Date();
+  if (!occurredAt || !Number.isSafeInteger(rawAmount) || rawAmount <= 0 || !["in", "out"].includes(payload.transferType ?? "")) {
+    return { success: false, status: 400, message: "Ngày, chiều hoặc số tiền giao dịch không hợp lệ." };
+  }
+  const transferAmount = rawAmount;
   const transferType = payload.transferType === "out" ? "out" : "in";
   const eventType =
     transferType === "in" ? "payment.received" : "payment.sent";
   const content = payload.content || payload.description || "";
+  return db.transaction(tx => {
   // Check if already processed
-  const existingEvent = db
+  const existingEvent = tx
     .select()
     .from(paymentWebhookEvents)
     .where(
@@ -287,7 +294,7 @@ export async function handleSepayWebhookCall(
   let matchedOrder: typeof orders.$inferSelect | null = null;
   if (transferType === "in" && content) {
     matchedOrder = matchOrderByTransferContent(
-      db
+      tx
         .select()
         .from(orders)
         .where(and(eq(orders.tenantId, tenantId), sql`${orders.status} != 'cancelled'`))
@@ -300,7 +307,7 @@ export async function handleSepayWebhookCall(
   if (matchedOrder && transferAmount > 0) {
     try {
       const res = processPaymentWebhook(
-        db,
+        tx,
         {
           provider: "sepay",
           eventId,
@@ -319,13 +326,13 @@ export async function handleSepayWebhookCall(
         paymentId: res.paymentId,
       };
     } catch (orderErr) {
-      console.warn("Failed to attach SePay webhook directly to order:", orderErr);
+      if (!(orderErr instanceof ValidationError)) throw orderErr;
       // Fall through to record general transaction
     }
   }
 
   // Otherwise, record as general studio transaction and log event
-  const branch = db
+  const branch = tx
     .select({ id: branches.id })
     .from(branches)
     .where(eq(branches.tenantId, tenantId))
@@ -336,7 +343,7 @@ export async function handleSepayWebhookCall(
   const eventRowId = crypto.randomUUID();
   const txId = crypto.randomUUID();
 
-  db.transaction((tx) => {
+  {
     tx.insert(paymentWebhookEvents)
       .values({
         id: eventRowId,
@@ -363,17 +370,16 @@ export async function handleSepayWebhookCall(
           description: content || `Biến động số dư SePay (${payload.gateway || "Ngân hàng"})`,
           reference: payload.referenceCode || payload.accountNumber || "sepay",
           idempotencyKey: `sepay:${eventId}`,
-          occurredAt: payload.transactionDate
-            ? new Date(payload.transactionDate)
-            : new Date(),
+          occurredAt,
         })
         .run();
     }
-  });
+  }
 
   return {
     success: true,
     status: 200,
     message: "Đã ghi nhận biến động số dư SePay thành công.",
   };
+  }, { behavior: "immediate" });
 }

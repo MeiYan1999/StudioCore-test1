@@ -22,6 +22,9 @@ export async function POST(request: Request): Promise<Response> {
     }
     const buffer = Buffer.from(await file.arrayBuffer());
     const documentId = await createUploadedDocument(getDb(), actor, {
+      orderCode: String(formData.get("orderCode") ?? ""),
+      customerPhone: String(formData.get("customerPhone") ?? ""),
+
       name: String(formData.get("name") ?? file.name),
       category: String(formData.get("category") ?? "other"),
       visibility: String(formData.get("visibility") ?? "internal"),

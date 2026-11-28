@@ -92,6 +92,8 @@ describe("commission và payroll", () => {
     expect(linked?.payrollId).toBe(makeup.id);
 
     updatePayroll(db, owner, makeup.id, { bonus: 100_000, deduction: 50_000 });
+    generatePayrolls(db,owner,"2026-11");
+    generatePayrolls(db,owner,"2026-11");
     const updated = listPayrolls(db, owner, "2026-11").find((row) => row.id === makeup.id);
     expect(updated?.net).toBe(9_250_000);
 

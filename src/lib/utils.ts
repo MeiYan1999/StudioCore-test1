@@ -120,8 +120,8 @@ export function parseVietnamDateTimeLocal(value: string | null | undefined): Dat
   }
 
   const trimmed = value.trim();
-  const normalized = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(trimmed)
-    ? `${trimmed}:00+07:00`
+  const normalized = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?$/.test(trimmed)
+    ? `${trimmed.replace(" ", "T")}+07:00`
     : trimmed;
 
   const date = new Date(normalized);
