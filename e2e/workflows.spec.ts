@@ -1,4 +1,14 @@
+import path from "node:path";
+import Database from "better-sqlite3";
 import { expect, test } from "@playwright/test";
+
+function withDb<T>(run: (db: Database.Database) => T): T {
+  const url = process.env.DATABASE_URL ?? "./data/studiocore.db";
+  const db = new Database(path.join(process.cwd(), "data", url.replace(/^\.\//, "").replace(/^data\//, "")));
+  try { return run(db); } finally { db.close(); }
+}
+const ensureE2ePage = () => withDb(db => db.prepare(
+  "INSERT INTO facebook_pages (id,tenant_id,branch_id,name,token,status) VALUES ('page-e2e','tenant-demo','branch-demo-q1','Fanpage thử E2E','placeholder-e2e-token','connected') ON CONFLICT(id) DO UPDATE SET status='connected'").run());
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/login");
@@ -100,4 +110,54 @@ test("form Fanpage và quảng cáo gửi được",async({page})=>{
   await page.getByLabel("Token có quyền ads_read").fill("token-thu");
   await page.getByRole("button",{name:"Kết nối tài khoản"}).click();
   await expect(page.getByRole("status").filter({hasText:"Nhập mã act_ và token có quyền ads_read."})).toBeVisible();
+});
+test("soạn, duyệt bài và thử trợ lý trên Fanpage",async({page})=>{
+  ensureE2ePage();
+  const content="E2E bài năm 2099 "+Date.now();
+  await page.goto("/manage/campaigns/fanpage");
+  await page.getByLabel("Bài đăng theo giờ Việt Nam, mỗi bài một dòng").fill("2099-12-20T09:00 | "+content);
+  await page.getByRole("button",{name:"Lưu bản nháp"}).click();
+  await page.reload();
+  const row=page.getByRole("row").filter({hasText:content});
+  await expect(row.getByText("Nháp",{exact:true})).toBeVisible();
+  await row.getByRole("checkbox").check();
+  await page.getByRole("button",{name:"Duyệt bài đã chọn"}).click();
+  await page.reload();
+  await expect(row.getByText("Đã duyệt",{exact:true})).toBeVisible();
+  await page.locator("#assistant-name-page-e2e").fill("Lễ tân");
+  await page.locator("#assistant-knowledge-page-e2e").fill("Địa chỉ? | Số 12, đường Hoa.");
+  await page.getByRole("button",{name:"Lưu trợ lý"}).first().click();
+  await expect(page.getByRole("status").filter({hasText:"Đã lưu."})).toBeVisible();
+  await page.locator("#assistant-question-page-e2e").fill("Địa chỉ?");
+  await page.getByRole("button",{name:"Thử câu trả lời"}).first().click();
+  const result=page.getByRole("status").filter({hasText:"Số 12, đường Hoa."});
+  await expect(result).toBeVisible();
+  await expect(result).toContainText("Khớp chính xác");
+});
+test("xác nhận đã liên hệ khách cho yêu cầu đánh giá",async({page})=>{
+  withDb(db=>db.prepare("INSERT INTO review_requests (order_id,tenant_id,channel,content,due_at,status) VALUES ('order-demo-01','tenant-demo','manual','Cảm ơn khách đã chọn studio.',?, 'pending') ON CONFLICT(order_id) DO UPDATE SET channel='manual',status='pending',sent_at=NULL,error=NULL").run(Date.now()));
+  await page.goto("/manage/orders/order-demo-01");
+  await expect(page.getByRole("heading",{name:"Yêu cầu đánh giá"})).toBeVisible();
+  await expect(page.getByText(/Nhân viên liên hệ · Chờ gửi/)).toBeVisible();
+  await page.getByRole("button",{name:"Xác nhận đã liên hệ khách"}).click();
+  await page.reload();
+  await expect(page.getByText(/Nhân viên liên hệ · Đã gửi/)).toBeVisible();
+  await expect(page.getByRole("button",{name:"Xác nhận đã liên hệ khách"})).toHaveCount(0);
+});
+test("khớp tay khoản SePay chưa khớp với đơn còn dư nợ",async({page})=>{
+  const amount=10000+Math.floor(Math.random()*900), eventId=Date.now(), description="E2E SePay "+eventId;
+  const paidOf=async()=>Number((await page.getByText("Đã thu",{exact:true}).locator("xpath=following-sibling::p").innerText()).replace(/\D/g,""));
+  await page.goto("/manage/orders/order-demo-06");
+  const code=(await page.locator("h1").innerText()).match(/DH[\w-]+/)![0];
+  const before=await paidOf();
+  withDb(db=>db.prepare("INSERT INTO transactions (id,tenant_id,branch_id,type,category,amount,method,description,reference,idempotency_key,occurred_at) VALUES (?, 'tenant-demo','branch-demo-q1','income','other_income',?,'bank_transfer',?,'sepay',?,?)").run(crypto.randomUUID(),amount,description,"sepay:"+eventId,Date.now()));
+  await page.goto("/manage/finance?unmatched=1&q="+encodeURIComponent(description));
+  const row=page.getByRole("row").filter({hasText:description});
+  await row.getByLabel("Mã đơn cần khớp").fill(code);
+  await row.getByRole("button",{name:"Khớp khoản thu"}).click();
+  await page.goto("/manage/finance?q="+encodeURIComponent(description));
+  await page.reload();
+  await expect(page.getByRole("row").filter({hasText:description}).getByText(code)).toBeVisible();
+  await page.goto("/manage/orders/order-demo-06");
+  expect(await paidOf()).toBe(before+amount);
 });

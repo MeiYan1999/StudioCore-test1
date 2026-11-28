@@ -2,6 +2,7 @@
 import {useEffect,useState,useSyncExternalStore} from "react";
 import {useRouter} from "next/navigation";
 import {QRCodeSVG} from "qrcode.react";
+import {Alert} from "@/components/ui/alert";
 import {Button} from "@/components/ui/button";
 import {clockAtBranch} from "@/app/(app)/manage/check-in/actions";
 
@@ -11,7 +12,7 @@ export function StudioClockQr({branch,code}:{branch:string;code:string}) {
   const origin=useSyncExternalStore(subscribeOrigin,()=>window.location.origin,()=>"");
   useEffect(()=>{const id=window.setInterval(()=>router.refresh(),30000);return()=>window.clearInterval(id);},[router]);
   const url=origin+"/manage/check-in?"+new URLSearchParams({branch,code});
-  return origin && <div><a href={url} aria-label="Mở liên kết chấm công của mã QR"><QRCodeSVG value={url} size={186} marginSize={3}/></a><p>Nhân viên quét mã bằng camera điện thoại tại chi nhánh.</p></div>;
+  return origin && <div className="flex flex-col items-center gap-3 text-center"><a href={url} aria-label="Mở liên kết chấm công của mã QR" className="rounded-lg bg-white p-1"><QRCodeSVG value={url} size={186} marginSize={3}/></a><p className="text-sm text-muted-foreground">Nhân viên quét mã bằng camera điện thoại tại chi nhánh.</p></div>;
 }
 export function MobileClock({branch,code,checkout}:{branch:string;code:string;checkout:boolean}) {
   const [message,setMessage]=useState("");
@@ -25,5 +26,5 @@ export function MobileClock({branch,code,checkout}:{branch:string;code:string;ch
       catch {setMessage("Mất kết nối. Hãy kiểm tra lại ca công.");} finally {setBusy(false);}
     },()=>{setMessage("Chưa lấy được vị trí. Cho phép truy cập GPS rồi thử lại.");setBusy(false);},{enableHighAccuracy:true,maximumAge:0,timeout:15000});
   }
-  return <div><Button disabled={busy} onClick={capture}>{busy?"Đang lấy vị trí…":checkout?"Kết thúc ca bằng GPS":"Vào ca bằng GPS"}</Button><p role="status">{message}</p></div>;
+  return <div className="space-y-3"><Button size="lg" className="w-full" disabled={busy} onClick={capture}>{busy?"Đang lấy vị trí…":checkout?"Kết thúc ca bằng GPS":"Vào ca bằng GPS"}</Button><Alert role="status" tone="info" className={message?undefined:"sr-only"}>{message}</Alert></div>;
 }

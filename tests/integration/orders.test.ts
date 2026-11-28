@@ -6,6 +6,7 @@ import type { ActorContext } from "@/lib/auth/types";
 import type { AppDb } from "@/lib/db/client";
 import { customers, payments, transactions, vouchers } from "@/lib/db/schema";
 import { listFinanceOrderOptions, processPaymentWebhook } from "@/lib/services/finance-service";
+import { createService, updateService } from "@/lib/services/catalog-service";
 import { getRevenueReport } from "@/lib/services/report-service";
 import {
   changeOrderStatus,
@@ -284,5 +285,20 @@ describe("tạo đơn hàng", () => {
         deposit: 200_000,
       }),
     ).toThrow(/cọc/i);
+  });
+  it("đổi giá catalog không làm đổi giá đã chốt trên đơn cũ", () => {
+    const service = { name: "Gói chụp thử giá", category: "wedding", branchId: "branch-demo-q1", price: 3_000_000, durationMinutes: 60, description: "", active: true };
+    const serviceId = createService(db, owner, service);
+    const order = { ...baseOrder, voucherCode: "", discount: 0, deposit: 1_000_000,
+      items: [{ itemType: "service" as const, refId: serviceId, name: "Gói chụp thử giá", quantity: 2, unitPrice: 1 }] };
+    const oldId = createOrder(db, owner, order);
+    expect(getOrderDetail(db, owner, oldId)).toMatchObject({ total: 6_000_000, paid: 1_000_000, remaining: 5_000_000 });
+    updateService(db, owner, serviceId, { ...service, price: 4_500_000 });
+    const oldDetail = getOrderDetail(db, owner, oldId)!;
+    expect(oldDetail.items.map(item => item.unitPrice)).toEqual([3_000_000]);
+    expect(oldDetail).toMatchObject({ total: 6_000_000, paid: 1_000_000, remaining: 5_000_000 });
+    const newDetail = getOrderDetail(db, owner, createOrder(db, owner, order))!;
+    expect(newDetail.items.map(item => item.unitPrice)).toEqual([4_500_000]);
+    expect(newDetail).toMatchObject({ total: 9_000_000, remaining: 8_000_000 });
   });
 });
