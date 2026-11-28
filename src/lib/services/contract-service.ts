@@ -3,7 +3,7 @@ import type { AppDb } from "../db/client";
 import {
   appointments,
   customers,
-  orders,
+  orders, services,
   orderItems,
   orderStatusHistory,
   payments,
@@ -12,6 +12,7 @@ import {
 import type { ActorContext } from "../auth/types";
 import { assertBranchAccess, assertPermission } from "../auth/permissions";
 import { ValidationError } from "../errors";
+import { assertRoom, findConflict, getStaffForBranch } from "./appointment-service";
 import { writeAudit } from "../audit";
 import { parseVietnamDateTimeLocal } from "../utils";
 import { normalizeVietnamesePhone } from "../utils/phone";
@@ -115,7 +116,7 @@ export function createContractWithAppointments(
   const result = db.transaction((tx) => {
     // 1. Customer: find existing by phone or create new
     const customer = tx
-      .select({ id: customers.id })
+      .select({ id: customers.id, branchId: customers.branchId })
       .from(customers)
       .where(
         and(
@@ -127,6 +128,7 @@ export function createContractWithAppointments(
 
     let customerId: string;
     if (customer) {
+      assertBranchAccess(actor, customer.branchId);
       customerId = customer.id;
       // Update customer name if provided
       tx.update(customers)
@@ -153,9 +155,12 @@ export function createContractWithAppointments(
     }
 
     // 2. Prepare shoot sessions & scheduling
-    const validSessions = (input.sessions || []).filter(
-      (s) => s.date && s.startTime && s.endTime,
-    );
+    const validSessions = input.sessions || [];
+    if (validSessions.length) assertPermission(actor, "schedule.manage");
+    if (input.serviceId && !tx.select({ id: services.id }).from(services).where(and(eq(services.id, input.serviceId),
+      eq(services.tenantId, actor.tenantId), eq(services.branchId, input.branchId), eq(services.active, true))).get()) {
+      throw new ValidationError("Dịch vụ không thuộc chi nhánh hoặc đã ngừng kinh doanh.");
+    }
 
     let firstScheduledAt: Date | null = null;
     let firstLocation = "";
@@ -292,7 +297,16 @@ export function createContractWithAppointments(
       const startAt = parseVietnamDateTimeLocal(`${s.date}T${s.startTime}`);
       const endAt = parseVietnamDateTimeLocal(`${s.date}T${s.endTime}`);
 
-      if (startAt && endAt) {
+      if (!startAt || !endAt || startAt >= endAt) throw new ValidationError("Giờ kết thúc buổi chụp phải sau giờ bắt đầu.");
+      if (s.roomId) assertRoom(tx, actor, s.roomId, input.branchId);
+      if (s.photographerId) getStaffForBranch(tx, actor, s.photographerId, input.branchId, "photographer");
+      if (s.editorId) getStaffForBranch(tx, actor, s.editorId, input.branchId, "retoucher");
+      if (s.makeupId) getStaffForBranch(tx, actor, s.makeupId, input.branchId, "makeup");
+      const conflict = findConflict(tx, { actor, branchId: input.branchId, roomId: s.roomId || null,
+        photographerId: s.photographerId || null, editorId: s.editorId || null, makeupId: s.makeupId || null,
+        startAt, endAt, bufferMinutes: 30 });
+      if (conflict) throw new ValidationError(conflict);
+      {
         const appointmentId = crypto.randomUUID();
         createdAppointmentIds.push(appointmentId);
 
@@ -340,7 +354,7 @@ export function createContractWithAppointments(
       .run();
 
     return { orderId, code, customerId, appointmentIds: createdAppointmentIds };
-  });
+  }, { behavior: "immediate" });
 
   writeAudit(db, {
     tenantId: actor.tenantId,

@@ -44,6 +44,8 @@ export async function saveStudioSettingsAction(
       weekdayHours: getFormString(formData, "weekdayHours"),
       saturdayHours: getFormString(formData, "saturdayHours"),
       sundayHours: getFormString(formData, "sundayHours"),
+      reviewChannel: getFormString(formData, "reviewChannel"),
+      reviewDelayHours: Number(getFormString(formData, "reviewDelayHours")),
       reviewTemplate: getFormString(formData, "reviewTemplate"),
       reminderTemplate: getFormString(formData, "reminderTemplate"),
     });

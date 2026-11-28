@@ -21,6 +21,11 @@ import { ForbiddenState } from "@/components/shared/forbidden-state";
 import { Money } from "@/components/shared/money";
 import { CustomerFormSheet } from "@/components/crm/customer-form-sheet";
 import { CustomerInteractionForm } from "@/components/crm/customer-interaction-form";
+import { BookingSheet } from "@/components/scheduling/booking-sheet";
+import { listRooms } from "@/lib/services/room-service";
+import { OrderCreateSheet } from "@/components/orders/order-create-sheet";
+import { listCatalogOptions } from "@/lib/services/catalog-service";
+import { orderAssigneeOptions } from "@/lib/services/order-service";
 import { CustomerTabs } from "@/components/crm/customer-tabs";
 import { hasPermission } from "@/lib/auth/permissions";
 import { requireActor } from "@/lib/auth/session";
@@ -203,6 +208,17 @@ export default async function CustomerDetailPage({
                 Xem đơn hàng
               </Link>
             </Button>
+            {hasPermission(actor.permissions, "orders.manage") && (
+              <OrderCreateSheet branches={actor.branches} defaultBranchId={customer.branchId}
+                customers={[{ id: customer.id, name: customer.name, phone: customer.phone, branchId: customer.branchId }]}
+                initialCustomerId={customer.id} catalog={listCatalogOptions(getDb(), actor)}
+                assignees={orderAssigneeOptions(getDb(), actor)} />
+            )}
+            {["schedule.manage","schedule.view","orders.view"].every(p=>actor.permissions.some(v=>v===p)) && customer.orders.some(o=>o.status!=="cancelled" && o.status!=="completed") && <BookingSheet
+              branches={actor.branches.filter(b=>customer.orders.some(o=>o.branchId===b.id))} defaultBranchId={customer.orders.find(o=>o.status!=="cancelled" && o.status!=="completed")?.branchId??customer.branchId}
+              defaultDate={new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Ho_Chi_Minh"}).format(new Date())}
+              rooms={listRooms(getDb(),actor)} assignees={orderAssigneeOptions(getDb(),actor)}
+              orders={customer.orders.filter(o=>isOrderStatus(o.status) && o.status!=="cancelled" && o.status!=="completed").map(o=>({id:o.id,code:o.code,customerName:customer.name,branchId:o.branchId,status:isOrderStatus(o.status)?o.status:"new"}))}/>}
             {hasPermission(actor.permissions, "tasks.manage") ? (
               <Button asChild variant="outline">
                 <Link href={`/manage/tasks?customerId=${customer.id}`}>
@@ -426,7 +442,8 @@ export default async function CustomerDetailPage({
               </Card>
             </div>
           }
-          orders={
+          orders={<>
+            {hasPermission(actor.permissions,"schedule.view") && <section className="mb-4"><h3 className="font-semibold">Lịch hẹn của khách</h3>{customer.appointments.length?customer.appointments.map(a=><Link className="block underline" key={a.id} href={`/manage/calendar/${a.id}`}><DateTimeText value={a.startAt}/> · {a.code}</Link>):<p>Chưa có lịch hẹn.</p>}</section>}
             <DataTable
               columns={orderColumns}
               rows={customer.orders}
@@ -440,7 +457,7 @@ export default async function CustomerDetailPage({
                 />
               }
             />
-          }
+          </>}
           interactions={
             <div className="space-y-6">
               {canManage ? <CustomerInteractionForm customerId={customer.id} /> : null}

@@ -37,15 +37,9 @@ export async function POST(request: Request): Promise<Response> {
       .map((value) => (typeof value === "string" ? value : ""));
 
     let total = 0;
-    const files: { filename: string; relativePath: string; buffer: Buffer }[] = [];
+    const files: { filename: string; relativePath: string; buffer: Buffer; error?:string }[] = [];
     for (const [index, entry] of entries.entries()) {
-      if (entry.size === 0) continue;
-      if (entry.size > MAX_UPLOAD_BYTES) {
-        return NextResponse.json(
-          { error: `${entry.name} vượt quá 20MB.` },
-          { status: 400 },
-        );
-      }
+
       total += entry.size;
       if (total > MAX_TOTAL_BYTES) {
         return NextResponse.json(
@@ -56,7 +50,8 @@ export async function POST(request: Request): Promise<Response> {
       files.push({
         filename: entry.name,
         relativePath: relativePaths[index] || entry.name,
-        buffer: Buffer.from(await entry.arrayBuffer()),
+        buffer: entry.size > MAX_UPLOAD_BYTES ? Buffer.alloc(0) : Buffer.from(await entry.arrayBuffer()),
+        error: entry.size > MAX_UPLOAD_BYTES ? "Ảnh vượt quá 20MB." : undefined,
       });
     }
 

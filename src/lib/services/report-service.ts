@@ -11,6 +11,7 @@ import {
   orders,
   rooms,
   staff,
+  staffBranches,
   transactions,
 } from "../db/schema";
 import type { ActorContext } from "../auth/types";
@@ -293,8 +294,9 @@ export function getTaxReport(
   const range = reportRange(filters);
   const conditions: SQL[] = [
     eq(invoices.tenantId, actor.tenantId),
-    gte(invoices.createdAt, range.start),
-    lte(invoices.createdAt, range.end),
+    gte(invoices.issuedAt, range.start),
+    lte(invoices.issuedAt, range.end),
+    sql`${invoices.status} IN ('issued', 'paid')`,
     ...branchConditions(actor, invoices.branchId, filters.branchId),
   ];
   const rows = db
@@ -313,7 +315,7 @@ export function getTaxReport(
     .innerJoin(orders, eq(invoices.orderId, orders.id))
     .leftJoin(customers, eq(invoices.customerId, customers.id))
     .where(and(...conditions))
-    .orderBy(desc(invoices.createdAt))
+    .orderBy(desc(invoices.issuedAt))
     .all();
   const rates = new Map<
     number,
@@ -420,133 +422,58 @@ export function getRoomUtilization(
   });
 }
 
-export function getPhotographerPerformance(
-  db: AppDb,
-  actor: ActorContext,
-  filters: ReportFilters,
-): {
-  staffId: string;
-  staffName: string;
-  shoots: number;
-  completedOrders: number;
-  revenue: number;
-  commissionApproved: number;
-}[] {
-  assertPermission(actor, "reports.view");
-  const range = reportRange(filters);
-  const photographers = db
-    .select({ id: staff.id, name: staff.name })
-    .from(staff)
-    .where(
-      and(
-        eq(staff.tenantId, actor.tenantId),
-        eq(staff.role, "photographer"),
-        eq(staff.active, true),
-      ),
-    )
-    .all();
-  return photographers.map((photographer) => {
-    const conditions: SQL[] = [
-      eq(orders.tenantId, actor.tenantId),
-      eq(orders.photographerId, photographer.id),
-      gte(orders.createdAt, range.start),
-      lte(orders.createdAt, range.end),
-    ];
-    const rows = db
-      .select({ status: orders.status, total: orders.total })
-      .from(orders)
-      .where(and(...conditions))
-      .all();
-    const commissionAmount =
-      db
-        .select({ value: sql<number>`coalesce(sum(${commissions.amount}), 0)` })
-        .from(commissions)
-        .where(
-          and(
-            eq(commissions.tenantId, actor.tenantId),
-            eq(commissions.staffId, photographer.id),
-            eq(commissions.status, "approved"),
-            gte(commissions.createdAt, range.start),
-            lte(commissions.createdAt, range.end),
-          ),
-        )
-        .get()?.value ?? 0;
-    return {
-      staffId: photographer.id,
-      staffName: photographer.name,
-      shoots: rows.length,
-      completedOrders: rows.filter((row) => row.status === "completed").length,
-      revenue: rows
-        .filter((row) => row.status === "completed")
-        .reduce((sum, row) => sum + row.total, 0),
-      commissionApproved: Number(commissionAmount),
-    };
-  });
+function performanceStaff(db: AppDb, actor: ActorContext, branchId: string | undefined, roles: SQL) {
+  const conditions = branchConditions(actor, staffBranches.branchId, branchId);
+  return db.select({ id: staff.id, name: staff.name }).from(staff)
+    .where(and(eq(staff.tenantId, actor.tenantId), eq(staff.active, true), roles,
+      conditions.length ? sql`exists (select 1 from ${staffBranches} where ${staffBranches.staffId} = ${staff.id}
+        and ${staffBranches.tenantId} = ${actor.tenantId} and ${and(...conditions)})` : undefined))
+    .orderBy(staff.name).all();
 }
 
-export function getSalesPerformance(
-  db: AppDb,
-  actor: ActorContext,
-  filters: ReportFilters,
-): {
-  staffId: string;
-  staffName: string;
-  leads: number;
-  orders: number;
-  completedOrders: number;
-  revenue: number;
-  closeRate: number;
-}[] {
+function performanceOrders(db: AppDb, actor: ActorContext, filters: ReportFilters, column: typeof orders.photographerId | typeof orders.createdBy) {
+  const range = reportRange(filters);
+  const rows = db.select({ staffId: column, count: sql<number>`count(*)`,
+    completed: sql<number>`sum(case when ${orders.status}='completed' then 1 else 0 end)`,
+    revenue: sql<number>`sum(case when ${orders.status}='completed' then ${orders.total} else 0 end)` })
+    .from(orders).where(and(eq(orders.tenantId, actor.tenantId), gte(orders.createdAt, range.start),
+      lte(orders.createdAt, range.end), ...branchConditions(actor, orders.branchId, filters.branchId)))
+    .groupBy(column).all();
+  return new Map(rows.map(row => [row.staffId, row]));
+}
+
+export function getPhotographerPerformance(db: AppDb, actor: ActorContext, filters: ReportFilters) {
   assertPermission(actor, "reports.view");
   const range = reportRange(filters);
-  const salesStaff = db
-    .select({ id: staff.id, name: staff.name })
-    .from(staff)
-    .where(
-      and(
-        eq(staff.tenantId, actor.tenantId),
-        eq(staff.active, true),
-        sql`${staff.role} in ('receptionist', 'manager', 'owner')`,
-      ),
-    )
-    .all();
-  return salesStaff.map((item) => {
-    const leadCount =
-      db
-        .select({ value: sql<number>`count(*)` })
-        .from(customers)
-        .where(
-          and(
-            eq(customers.tenantId, actor.tenantId),
-            eq(customers.ownerId, item.id),
-          ),
-        )
-        .get()?.value ?? 0;
-    const rows = db
-      .select({ status: orders.status, total: orders.total })
-      .from(orders)
-      .where(
-        and(
-          eq(orders.tenantId, actor.tenantId),
-          eq(orders.createdBy, item.id),
-          gte(orders.createdAt, range.start),
-          lte(orders.createdAt, range.end),
-        ),
-      )
-      .all();
-    const completed = rows.filter((row) => row.status === "completed");
-    return {
-      staffId: item.id,
-      staffName: item.name,
-      leads: Number(leadCount),
-      orders: rows.length,
-      completedOrders: completed.length,
-      revenue: completed.reduce((sum, row) => sum + row.total, 0),
-      closeRate:
-        Number(leadCount) > 0
-          ? Math.round((rows.length / Number(leadCount)) * 1000) / 10
-          : 0,
-    };
+  const people = performanceStaff(db, actor, filters.branchId, eq(staff.role, "photographer"));
+  const sales = performanceOrders(db, actor, filters, orders.photographerId);
+  const rows = db.select({ staffId: commissions.staffId, amount: sql<number>`sum(${commissions.amount})` })
+    .from(commissions).innerJoin(orders, eq(orders.id, commissions.orderId)).where(and(
+      eq(commissions.tenantId, actor.tenantId), eq(orders.tenantId, actor.tenantId), eq(commissions.status, "approved"),
+      gte(commissions.createdAt, range.start), lte(commissions.createdAt, range.end),
+      ...branchConditions(actor, orders.branchId, filters.branchId))).groupBy(commissions.staffId).all();
+  const approved = new Map(rows.map(row => [row.staffId, row.amount]));
+  return people.map(person => ({ staffId: person.id, staffName: person.name, shoots: sales.get(person.id)?.count ?? 0,
+    completedOrders: sales.get(person.id)?.completed ?? 0, revenue: sales.get(person.id)?.revenue ?? 0,
+    commissionApproved: approved.get(person.id) ?? 0 }));
+}
+
+export function getSalesPerformance(db: AppDb, actor: ActorContext, filters: ReportFilters) {
+  assertPermission(actor, "reports.view");
+  const range = reportRange(filters);
+  const people = performanceStaff(db, actor, filters.branchId, sql`${staff.role} in ('receptionist','manager','owner')`);
+  const sales = performanceOrders(db, actor, filters, orders.createdBy);
+  const leadRows = db.select({ staffId: customers.ownerId, count: sql<number>`count(*)` }).from(customers)
+    .where(and(eq(customers.tenantId, actor.tenantId), gte(customers.createdAt, range.start),
+      lte(customers.createdAt, range.end), ...branchConditions(actor, customers.branchId, filters.branchId)))
+    .groupBy(customers.ownerId).all();
+  const leads = new Map(leadRows.map(row => [row.staffId, row.count]));
+  return people.map(person => {
+    const count = sales.get(person.id)?.count ?? 0;
+    const leadCount = leads.get(person.id) ?? 0;
+    return { staffId: person.id, staffName: person.name, leads: leadCount, orders: count,
+      completedOrders: sales.get(person.id)?.completed ?? 0, revenue: sales.get(person.id)?.revenue ?? 0,
+      closeRate: leadCount ? Math.round(count / leadCount * 1000) / 10 : 0 };
   });
 }
 
@@ -612,10 +539,8 @@ export function getDashboardOverview(
   const todayKey = formatDateKey(now);
   const todayStart = new Date(`${todayKey}T00:00:00+07:00`);
   const todayEnd = new Date(`${todayKey}T23:59:59.999+07:00`);
-  const scope = getBranchScope(actor);
-  const branchTx =
-    scope.mode === "branch" ? [eq(transactions.branchId, scope.branchId)] : [];
-  const todayRows = db
+  const branchTx = branchConditions(actor, transactions.branchId);
+  const todayRows = !canFinance ? [] : db
     .select({ type: transactions.type, amount: transactions.amount })
     .from(transactions)
     .where(
@@ -635,7 +560,7 @@ export function getDashboardOverview(
   const previousMonthRange = getVietnamMonthRange(previousMonthKey);
   const previousMonthStart = previousMonthRange.start;
   const previousMonthEnd = previousMonthRange.end;
-  const previousRows = db
+  const previousRows = !canFinance ? [] : db
     .select({ type: transactions.type, amount: transactions.amount })
     .from(transactions)
     .where(
@@ -652,7 +577,7 @@ export function getDashboardOverview(
     .reduce((sum, row) => sum + row.amount, 0);
 
   const orderConditions: SQL[] = [eq(orders.tenantId, actor.tenantId)];
-  if (scope.mode === "branch") orderConditions.push(eq(orders.branchId, scope.branchId));
+  orderConditions.push(...branchConditions(actor, orders.branchId));
   const orderRows = db
     .select({ status: orders.status, total: orders.total, createdAt: orders.createdAt })
     .from(orders)
@@ -664,7 +589,7 @@ export function getDashboardOverview(
   }
 
   const customerConditions: SQL[] = [eq(customers.tenantId, actor.tenantId)];
-  if (scope.mode === "branch") customerConditions.push(eq(customers.branchId, scope.branchId));
+  customerConditions.push(...branchConditions(actor, customers.branchId));
   const customerRows = db
     .select({
       source: customers.source,
@@ -682,7 +607,7 @@ export function getDashboardOverview(
   }
 
   const apptConditions: SQL[] = [eq(appointments.tenantId, actor.tenantId)];
-  if (scope.mode === "branch") apptConditions.push(eq(appointments.branchId, scope.branchId));
+  apptConditions.push(...branchConditions(actor, appointments.branchId));
   const appointmentRows = db
     .select({ startAt: appointments.startAt })
     .from(appointments)

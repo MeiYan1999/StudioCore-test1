@@ -11,7 +11,7 @@ import { DateTimeText } from "@/components/shared/date-time";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ForbiddenState } from "@/components/shared/forbidden-state";
 import { Money } from "@/components/shared/money";
-import { ReturnRentalSheet } from "@/components/wardrobe/rental-sheets";
+import { ReturnRentalSheet, ReservationControls } from "@/components/wardrobe/rental-sheets";
 import { hasPermission } from "@/lib/auth/permissions";
 import { requireActor } from "@/lib/auth/session";
 import { getDb } from "@/lib/db/client";
@@ -105,7 +105,7 @@ export default async function RentalsPage({
             header: "",
             className: "text-right",
             cell: (row: RentalView) =>
-              row.status === "active" ? <ReturnRentalSheet rental={row} /> : null,
+              row.status === "reserved" ? <ReservationControls id={row.id} /> : row.status === "active" ? <ReturnRentalSheet rental={row} /> : null,
           },
         ]
       : []),

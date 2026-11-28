@@ -52,6 +52,7 @@ export default async function DocumentsPage({
       cell: (row) => (
         <div>
           <p className="font-medium">{row.name}</p>
+          <p className="text-xs">{[row.orderCode, row.customerName].filter(Boolean).join(" · ")}</p>
           <p className="text-xs text-muted-foreground">
             v{row.version} · {DOCUMENT_CATEGORY_LABELS[row.category] ?? row.category}
           </p>
@@ -127,7 +128,7 @@ export default async function DocumentsPage({
         <div className="grid gap-3 sm:grid-cols-3 sm:items-end">
           <div>
             <Label htmlFor="doc-filter-q">Tìm kiếm</Label>
-            <Input id="doc-filter-q" name="q" defaultValue={params.q ?? ""} className="mt-1.5" />
+            <Input id="doc-filter-q" name="q" placeholder="Tên tài liệu, khách, SĐT, mã đơn" defaultValue={params.q ?? ""} className="mt-1.5" />
           </div>
           <div>
             <Label htmlFor="doc-filter-category">Danh mục</Label>

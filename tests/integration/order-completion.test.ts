@@ -4,7 +4,8 @@ import { authenticate } from "@/lib/auth/login-service";
 import { getActorFromToken } from "@/lib/auth/session-core";
 import type { ActorContext } from "@/lib/auth/types";
 import type { AppDb } from "@/lib/db/client";
-import { commissions, customerInteractions } from "@/lib/db/schema";
+import { commissions, reviewRequests, customerInteractions } from "@/lib/db/schema";
+import { queueReviewRequest, confirmManualReview } from "@/lib/services/notification-service";
 import { changeOrderStatus } from "@/lib/services/order-service";
 import { createTestDb } from "../helpers/test-db";
 
@@ -63,6 +64,11 @@ describe("hoàn tất đơn", () => {
         ),
       )
       .get()?.value;
-    expect(review).toBeGreaterThan(0);
+    expect(review).toBe(1);
+    queueReviewRequest(db,"order-demo-03",owner.staffId);
+    expect(db.select().from(reviewRequests).where(eq(reviewRequests.orderId,"order-demo-03")).all()).toHaveLength(1);
+    expect(db.select().from(reviewRequests).where(eq(reviewRequests.orderId,"order-demo-03")).get()?.status).toBe("pending");
+    confirmManualReview(db,owner,"order-demo-03"); confirmManualReview(db,owner,"order-demo-03");
+    expect(db.select().from(reviewRequests).where(eq(reviewRequests.orderId,"order-demo-03")).get()?.sentAt).toBeInstanceOf(Date);
   });
 });

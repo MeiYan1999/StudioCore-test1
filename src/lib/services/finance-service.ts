@@ -36,6 +36,7 @@ import {
 import { buildVietQrPayload, sanitizeTransferContent } from "../finance/vietqr";
 
 export type FinanceFilters = {
+  unmatched?: string;
   q?: string;
   type?: string;
   branchId?: string;
@@ -46,6 +47,7 @@ export type FinanceFilters = {
 };
 
 export type TransactionView = {
+  unmatchedSepay: boolean;
   id: string;
   type: string;
   category: string;
@@ -165,6 +167,9 @@ export function listTransactions(
       lte(transactions.occurredAt, range.end),
     );
   }
+  const unmatchedSepay = sql`${transactions.type} = 'income' and ${transactions.orderId} is null
+    and ${transactions.idempotencyKey} like 'sepay:%'`;
+  if (filters.unmatched === "1") conditions.push(unmatchedSepay);
   if (filters.q?.trim()) {
     const term = `%${filters.q.trim().toLowerCase()}%`;
     const search = or(
@@ -188,6 +193,7 @@ export function listTransactions(
   const items = db
     .select({
       id: transactions.id,
+      unmatchedSepay: sql<boolean>`case when ${unmatchedSepay} then 1 else 0 end`.mapWith(Boolean),
       type: transactions.type,
       category: transactions.category,
       amount: transactions.amount,
@@ -999,6 +1005,7 @@ export function recordRefund(
     amount: number;
     reason: string;
     method: PaymentMethod;
+    sourcePaymentId?: string;
     /** Client-generated key per submit attempt; a replay returns the first refund. */
     idempotencyKey?: string;
   },
@@ -1010,90 +1017,103 @@ export function recordRefund(
   if (!PAYMENT_METHODS.includes(input.method)) {
     throw new ValidationError("Phương thức hoàn tiền không hợp lệ.");
   }
-  const order = db
-    .select()
-    .from(orders)
-    .where(and(eq(orders.id, input.orderId), eq(orders.tenantId, actor.tenantId)))
-    .get();
-  if (!order) throw new NotFoundError("Không tìm thấy đơn hàng.");
-  assertBranchAccess(actor, order.branchId);
-  const transactionId = crypto.randomUUID();
-  const paymentId = crypto.randomUUID();
-  const idempotencyKey = input.idempotencyKey
-    ? `refund-form:${normalizeIdempotencyKey(input.idempotencyKey)}`
-    : `refund:${transactionId}`;
-  if (input.idempotencyKey) {
-    const replayed = db
-      .select({ id: transactions.id, orderId: transactions.orderId })
-      .from(transactions)
-      .where(
-        and(
-          eq(transactions.tenantId, actor.tenantId),
-          eq(transactions.idempotencyKey, idempotencyKey),
-        ),
-      )
+  return db.transaction((tx) => {
+    const order = tx
+      .select()
+      .from(orders)
+      .where(and(eq(orders.id, input.orderId), eq(orders.tenantId, actor.tenantId)))
       .get();
-    if (replayed) {
-      if (replayed.orderId !== order.id) {
-        throw new ValidationError("Yêu cầu hoàn tiền không hợp lệ, vui lòng tải lại trang.");
+    if (!order) throw new NotFoundError("Không tìm thấy đơn hàng.");
+    assertBranchAccess(actor, order.branchId);
+    const transactionId = crypto.randomUUID();
+    const paymentId = crypto.randomUUID();
+    const idempotencyKey = input.idempotencyKey
+      ? `refund-form:${normalizeIdempotencyKey(input.idempotencyKey)}`
+      : `refund:${transactionId}`;
+    if (input.idempotencyKey) {
+      const replayed = tx
+        .select({ id: transactions.id, orderId: transactions.orderId })
+        .from(transactions)
+        .where(
+          and(
+            eq(transactions.tenantId, actor.tenantId),
+            eq(transactions.idempotencyKey, idempotencyKey),
+          ),
+        )
+        .get();
+      if (replayed) {
+        if (replayed.orderId !== order.id) {
+          throw new ValidationError("Yêu cầu hoàn tiền không hợp lệ, vui lòng tải lại trang.");
+        }
+        return replayed.id;
       }
-      return replayed.id;
     }
-  }
-  if (input.amount > order.paid) {
-    throw new ValidationError("Số tiền hoàn vượt quá số đã thu.");
-  }
-  db.transaction((tx) => {
-    tx.insert(transactions)
-      .values({
-        id: transactionId,
-        tenantId: actor.tenantId,
-        branchId: order.branchId,
-        type: "refund",
-        category: "refund",
-        amount: input.amount,
-        orderId: order.id,
-        customerId: order.customerId,
-        method: input.method,
-        description: input.reason.trim() || "Hoàn tiền đơn hàng",
-        idempotencyKey,
-        occurredAt: new Date(),
-        createdBy: actor.staffId,
-      })
-      .run();
-    tx.insert(payments)
-      .values({
-        id: paymentId,
-        tenantId: actor.tenantId,
-        orderId: order.id,
-        amount: input.amount,
-        method: input.method,
-        status: "refunded",
-        reference: input.reason.trim() || "REFUND",
-        idempotencyKey,
-        paidAt: new Date(),
-        createdBy: actor.staffId,
-      })
-      .run();
-    tx.update(orders)
-      .set({
-        paid: order.paid - input.amount,
-        remaining: order.remaining + input.amount,
-        updatedAt: new Date(),
-      })
-      .where(eq(orders.id, order.id))
-      .run();
-    syncInvoiceStatusForOrder(tx, actor.tenantId, order.id);
-  });
-  writeAudit(db, {
-    tenantId: actor.tenantId,
-    actorId: actor.staffId,
-    action: "finance.refund.create",
-    entity: "transaction",
-    entityId: transactionId,
-    metadata: { orderId: order.id, amount: input.amount },
-  });
-  return transactionId;
+    if (input.amount > order.paid) {
+      throw new ValidationError("Số tiền hoàn vượt quá số đã thu.");
+    }
+    if (input.sourcePaymentId) {
+      const receipt = tx.select().from(payments).where(and(
+        eq(payments.tenantId, actor.tenantId), eq(payments.orderId, order.id),
+        eq(payments.id, input.sourcePaymentId), eq(payments.status, "completed"),
+      )).get();
+      if (!receipt) throw new ValidationError("Khoản thu gốc không thuộc đơn hàng.");
+      const used = tx.select({ amount: sql<number>`coalesce(sum(${payments.amount}), 0)` })
+        .from(payments).where(eq(payments.sourcePaymentId, receipt.id)).get();
+      if (input.amount > receipt.amount - Number(used?.amount ?? 0)) {
+        throw new ValidationError("Số tiền hoàn vượt số còn lại của khoản thu gốc.");
+      }
+    }
+      tx.insert(transactions)
+        .values({
+          id: transactionId,
+          tenantId: actor.tenantId,
+          branchId: order.branchId,
+          type: "refund",
+          category: "refund",
+          amount: input.amount,
+          orderId: order.id,
+          customerId: order.customerId,
+          method: input.method,
+          description: input.reason.trim() || "Hoàn tiền đơn hàng",
+          idempotencyKey,
+          occurredAt: new Date(),
+          createdBy: actor.staffId,
+        })
+        .run();
+      tx.insert(payments)
+        .values({
+          id: paymentId,
+          tenantId: actor.tenantId,
+          orderId: order.id,
+          amount: input.amount,
+          method: input.method,
+          status: "refunded",
+          sourcePaymentId: input.sourcePaymentId,
+          reference: input.reason.trim() || "REFUND",
+          idempotencyKey,
+          paidAt: new Date(),
+          createdBy: actor.staffId,
+        })
+        .run();
+      tx.update(orders)
+        .set({
+          paid: order.paid - input.amount,
+          remaining: order.remaining + input.amount,
+          updatedAt: new Date(),
+        })
+        .where(eq(orders.id, order.id))
+        .run();
+      syncInvoiceStatusForOrder(tx, actor.tenantId, order.id);
+    writeAudit(tx, {
+      tenantId: actor.tenantId,
+      actorId: actor.staffId,
+      action: "finance.refund.create",
+      entity: "transaction",
+      entityId: transactionId,
+      metadata: { orderId: order.id, amount: input.amount },
+    });
+    return transactionId;
+  }, { behavior: "immediate" });
 }
 
 export type PaymentSettings = {
@@ -1167,6 +1187,65 @@ export type PaymentWebhookInput = {
   occurredAt?: string;
 };
 
+function applyBankPayment(db: AppDb, order: typeof orders.$inferSelect, paymentId: string,
+  amount: number, reference: string, key: string, occurredAt: Date, staffId: string) {
+  if (order.status === "cancelled") throw new ValidationError("Đơn hàng đã hủy.");
+  if (amount > order.remaining) throw new ValidationError("Số tiền webhook vượt quá công nợ còn lại.");
+  db.insert(payments)
+      .values({
+        id: paymentId,
+        tenantId: order.tenantId,
+        orderId: order.id,
+        amount: amount,
+        method: "bank_transfer",
+        status: "completed",
+        reference: reference,
+        idempotencyKey: key,
+        paidAt: occurredAt,
+        createdBy: staffId,
+      })
+      .run();
+    const newPaid = order.paid + amount;
+    const newRemaining = Math.max(0, order.total - newPaid);
+  db.update(orders)
+      .set({
+        paid: newPaid,
+        remaining: newRemaining,
+        status: order.status === "new" ? "deposit_received" : order.status,
+        updatedAt: new Date(),
+      })
+      .where(eq(orders.id, order.id))
+      .run();
+    syncInvoiceStatusForOrder(db, order.tenantId, order.id);
+  db.run(sql`UPDATE inbox_bookings SET status='confirmed' WHERE order_id=${order.id}
+    AND tenant_id=${order.tenantId} AND status='held' AND expires_at>${Date.now()} AND ${order.deposit}<=${newPaid}`);
+}
+
+export function reconcileSepayIncome(db: AppDb, actor: ActorContext, transactionId: string, code: string) {
+  assertPermission(actor, "finance.manage");
+  return db.transaction(tx => {
+    const entry = tx.select().from(transactions).where(and(eq(transactions.id, transactionId),
+      eq(transactions.tenantId, actor.tenantId), eq(transactions.type, "income"))).get();
+    if (!entry || !entry.idempotencyKey?.startsWith("sepay:"))
+      throw new NotFoundError("Không tìm thấy khoản thu SePay.");
+    assertBranchAccess(actor, entry.branchId);
+    const order = tx.select().from(orders).where(and(eq(orders.tenantId, actor.tenantId),
+      eq(orders.code, code.trim().toUpperCase()))).get();
+    if (!order) throw new NotFoundError("Không tìm thấy mã đơn.");
+    assertBranchAccess(actor, order.branchId);
+    if (entry.orderId === order.id) return order.id;
+    if (entry.orderId) throw new ValidationError("Khoản thu đã khớp đơn khác.");
+    const paymentId = crypto.randomUUID();
+    applyBankPayment(tx, order, paymentId, entry.amount, entry.reference || "SePay",
+      entry.idempotencyKey, entry.occurredAt, actor.staffId);
+    tx.update(transactions).set({ orderId: order.id, customerId: order.customerId, branchId: order.branchId,
+      category: "order_payment", updatedAt: new Date() }).where(eq(transactions.id, entry.id)).run();
+    writeAudit(tx, { tenantId: actor.tenantId, actorId: actor.staffId, action: "finance.sepay.match",
+      entity: "transaction", entityId: entry.id, metadata: { orderId: order.id, paymentId } });
+    return order.id;
+  }, { behavior: "immediate" });
+}
+
 export function processPaymentWebhook(
   db: AppDb,
   input: PaymentWebhookInput,
@@ -1178,118 +1257,18 @@ export function processPaymentWebhook(
   if (!Number.isInteger(input.amount) || input.amount <= 0) {
     throw new ValidationError("Số tiền webhook không hợp lệ.");
   }
-  const order = db
-    .select()
-    .from(orders)
-    .where(eq(orders.id, input.orderId))
-    .get();
-  if (!order) throw new NotFoundError("Không tìm thấy đơn hàng.");
-  const payloadHash = crypto.createHash("sha256").update(rawPayload).digest("hex");
+  const occurredAt = input.occurredAt ? parseVietnamDateTimeLocal(input.occurredAt) : new Date();
+  if (!occurredAt) throw new ValidationError("Thời điểm giao dịch ngân hàng không hợp lệ.");
+  return db.transaction((tx) => {
+    const order = tx
+      .select()
+      .from(orders)
+      .where(eq(orders.id, input.orderId))
+      .get();
+    if (!order) throw new NotFoundError("Không tìm thấy đơn hàng.");
+    const payloadHash = crypto.createHash("sha256").update(rawPayload).digest("hex");
 
-  const existing = db
-    .select()
-    .from(paymentWebhookEvents)
-    .where(
-      and(
-        eq(paymentWebhookEvents.tenantId, order.tenantId),
-        eq(paymentWebhookEvents.provider, input.provider),
-        eq(paymentWebhookEvents.externalEventId, input.eventId),
-      ),
-    )
-    .get();
-  if (existing) {
-    return { status: "duplicate" };
-  }
-  if (order.status === "cancelled") {
-    throw new ValidationError("Đơn hàng đã hủy.");
-  }
-  if (input.amount > order.remaining) {
-    throw new ValidationError("Số tiền webhook vượt quá công nợ còn lại.");
-  }
-
-  const paymentId = crypto.randomUUID();
-  const eventRowId = crypto.randomUUID();
-  try {
-    db.transaction(
-      (tx) => {
-        tx.insert(paymentWebhookEvents)
-          .values({
-            id: eventRowId,
-            tenantId: order.tenantId,
-            provider: input.provider,
-            externalEventId: input.eventId,
-            eventType: input.eventType,
-            payloadHash,
-            status: "processing",
-          })
-          .run();
-        tx.insert(payments)
-          .values({
-            id: paymentId,
-            tenantId: order.tenantId,
-            orderId: order.id,
-            amount: input.amount,
-            method: "bank_transfer",
-            status: "completed",
-            reference: input.reference?.trim() || input.provider,
-            idempotencyKey: `webhook:${input.provider}:${input.eventId}`,
-            paidAt: input.occurredAt
-              ? parseVietnamDateTimeLocal(input.occurredAt) ?? new Date()
-              : new Date(),
-            createdBy: order.createdBy,
-          })
-          .run();
-        const newPaid = order.paid + input.amount;
-        const newRemaining = Math.max(0, order.total - newPaid);
-        tx.update(orders)
-          .set({
-            paid: newPaid,
-            remaining: newRemaining,
-            status: order.status === "new" ? "deposit_received" : order.status,
-            updatedAt: new Date(),
-          })
-          .where(eq(orders.id, order.id))
-          .run();
-        syncInvoiceStatusForOrder(tx, order.tenantId, order.id);
-        tx.insert(transactions)
-          .values({
-            id: crypto.randomUUID(),
-            tenantId: order.tenantId,
-            branchId: order.branchId,
-            type: "income",
-            category: "order_payment",
-            amount: input.amount,
-            orderId: order.id,
-            customerId: order.customerId,
-            method: "bank_transfer",
-            description: `Webhook ${input.provider} thanh toán đơn ${order.code}`,
-            reference: input.reference?.trim() || input.provider,
-            idempotencyKey: `webhook:${input.provider}:${input.eventId}`,
-            occurredAt: new Date(),
-            createdBy: order.createdBy,
-          })
-          .run();
-        tx.insert(orderStatusHistory)
-          .values({
-            id: crypto.randomUUID(),
-            tenantId: order.tenantId,
-            orderId: order.id,
-            fromStatus: order.status,
-            toStatus: order.status === "new" ? "deposit_received" : order.status,
-            note: `Thanh toán webhook ${input.provider}.`,
-            changedBy: null,
-            createdAt: new Date(),
-          })
-          .run();
-        tx.update(paymentWebhookEvents)
-          .set({ status: "processed", processedAt: new Date() })
-          .where(eq(paymentWebhookEvents.id, eventRowId))
-          .run();
-      },
-      { behavior: "immediate" },
-    );
-  } catch (error) {
-    const duplicate = db
+    const existing = tx
       .select()
       .from(paymentWebhookEvents)
       .where(
@@ -1300,19 +1279,65 @@ export function processPaymentWebhook(
         ),
       )
       .get();
-    if (duplicate) return { status: "duplicate" };
-    throw error;
-  }
-
-  writeAudit(db, {
-    tenantId: order.tenantId,
-    actorId: null,
-    action: "finance.webhook.payment",
-    entity: "payment",
-    entityId: paymentId,
-    metadata: { orderId: order.id, amount: input.amount, provider: input.provider },
-  });
-  return { status: "processed", paymentId };
+    if (existing) {
+      return { status: "duplicate" as const };
+    }
+    const paymentId = crypto.randomUUID();
+    const eventRowId = crypto.randomUUID();
+    tx.insert(paymentWebhookEvents)
+      .values({
+        id: eventRowId,
+        tenantId: order.tenantId,
+        provider: input.provider,
+        externalEventId: input.eventId,
+        eventType: input.eventType,
+        payloadHash,
+        status: "processing",
+      })
+      .run();
+    applyBankPayment(tx, order, paymentId, input.amount, input.reference?.trim() || input.provider,
+      `webhook:${input.provider}:${input.eventId}`, occurredAt, order.createdBy);
+    tx.insert(transactions)
+      .values({
+        id: crypto.randomUUID(),
+        tenantId: order.tenantId,
+        branchId: order.branchId,
+        type: "income",
+        category: "order_payment",
+        amount: input.amount,
+        orderId: order.id,
+        customerId: order.customerId,
+        method: "bank_transfer",
+        description: `Webhook ${input.provider} thanh toán đơn ${order.code}`,
+        reference: input.reference?.trim() || input.provider,
+        idempotencyKey: `webhook:${input.provider}:${input.eventId}`,
+        occurredAt,
+        createdBy: order.createdBy,
+      })
+      .run();
+    tx.insert(orderStatusHistory)
+      .values({
+        id: crypto.randomUUID(),
+        tenantId: order.tenantId,
+        orderId: order.id,
+        fromStatus: order.status,
+        toStatus: order.status === "new" ? "deposit_received" : order.status,
+        note: `Thanh toán webhook ${input.provider}.`,
+        changedBy: null,
+        createdAt: new Date(),
+      })
+      .run();
+    tx.update(paymentWebhookEvents)
+      .set({ status: "processed", processedAt: new Date() })
+      .where(eq(paymentWebhookEvents.id, eventRowId))
+      .run();
+    writeAudit(tx, {
+      tenantId: order.tenantId, actorId: null, action: "finance.webhook.payment",
+      entity: "payment", entityId: paymentId,
+      metadata: { orderId: order.id, amount: input.amount, provider: input.provider },
+    });
+    return { status: "processed" as const, paymentId };
+  }, { behavior: "immediate" });
 }
 
 export function validatePaymentWebhookOrder(
@@ -1339,9 +1364,23 @@ export function listFinanceOrderOptions(db: AppDb, actor: ActorContext) {
   if (scope.mode === "none") return [];
   const conditions: SQL[] = [
     eq(orders.tenantId, actor.tenantId),
-    sql`${orders.status} != 'cancelled'`,
+    sql`${orders.paid} > 0`,
   ];
   if (scope.mode === "branch") conditions.push(eq(orders.branchId, scope.branchId));
+  const receipts = db.select({
+    id: payments.id, orderId: payments.orderId, reference: payments.reference, paidAt: payments.paidAt,
+    available: sql<number>`${payments.amount} - coalesce((select sum(r.amount) from payments r
+      where r.source_payment_id = ${payments.id}), 0)`,
+  }).from(payments).innerJoin(orders, eq(orders.id, payments.orderId))
+    .where(and(...conditions, eq(payments.tenantId, actor.tenantId), eq(payments.status, "completed")))
+    .orderBy(desc(payments.paidAt)).all();
+  const byOrder = new Map<string, typeof receipts>();
+  for (const receipt of receipts) {
+    if (receipt.available <= 0) continue;
+    const group = byOrder.get(receipt.orderId) ?? [];
+    group.push(receipt);
+    byOrder.set(receipt.orderId, group);
+  }
   return db
     .select({
       id: orders.id,
@@ -1356,8 +1395,7 @@ export function listFinanceOrderOptions(db: AppDb, actor: ActorContext) {
     .innerJoin(customers, eq(orders.customerId, customers.id))
     .where(and(...conditions))
     .orderBy(desc(orders.createdAt))
-    .limit(100)
-    .all();
+    .all().map(order => ({ ...order, receipts: byOrder.get(order.id) ?? [] }));
 }
 
 export function listInvoiceOrderOptions(db: AppDb, actor: ActorContext) {

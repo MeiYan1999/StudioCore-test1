@@ -24,6 +24,7 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Chấm công" };
 
 const METHOD_LABELS: Record<string, string> = {
+  gps_qr: "GPS + QR",
   manual: "Thủ công",
   gps: "GPS",
   qr: "QR",
@@ -100,6 +101,7 @@ export default async function AttendancePage({
 
   return (
     <div>
+      <Button asChild variant="outline"><Link href="/manage/check-in">Chấm công GPS + QR</Link></Button>
       <PageHeader
         title="Chấm công"
         description="Check-in/out thủ công, GPS hoặc QR; lưu vị trí/thiết bị và audit."

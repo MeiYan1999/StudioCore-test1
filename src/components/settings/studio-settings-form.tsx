@@ -150,6 +150,14 @@ export function StudioSettingsForm({ settings }: { settings: Settings }) {
         <h2 className="text-base font-semibold">Mẫu thông báo</h2>
         <div className="mt-3 space-y-3">
           <div>
+            <label className="block text-sm">Kênh gửi đánh giá
+              <select name="reviewChannel" defaultValue={settings["notification.reviewChannel"] || "manual"} className="ml-2 rounded border bg-background p-2">
+                <option value="manual">Nhân viên liên hệ</option><option value="messenger">Messenger tự động</option>
+              </select>
+            </label>
+            <label className="my-3 block text-sm">Số giờ sau khi hoàn tất đơn
+              <Input name="reviewDelayHours" type="number" min="0" max="720" defaultValue={settings["notification.reviewDelayHours"] || "0"} />
+            </label>
             <Label htmlFor="studio-review-template">Yêu cầu đánh giá</Label>
             <Textarea
               id="studio-review-template"

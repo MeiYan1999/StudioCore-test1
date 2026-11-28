@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
-import { and, desc, eq, type SQL } from "drizzle-orm";
+import { and, desc, eq, gte, lte, inArray, ne, type SQL } from "drizzle-orm";
 import type { AppDb } from "../db/client";
-import { branches, campaigns } from "../db/schema";
+import { branches, campaigns, orders } from "../db/schema";
 import type { ActorContext } from "../auth/types";
 import { assertBranchAccess, assertPermission, getBranchScope } from "../auth/permissions";
 import { NotFoundError, ValidationError } from "../errors";
@@ -29,6 +29,7 @@ export type CampaignView = {
   endAt: Date | null;
   status: string;
   notes: string | null;
+  attributedOrders: { id: string; code: string; total: number }[];
 };
 
 function computeMetrics(row: {
@@ -45,7 +46,7 @@ function computeMetrics(row: {
 export function listCampaigns(
   db: AppDb,
   actor: ActorContext,
-  filters: { branchId?: string; status?: string } = {},
+  filters: { branchId?: string; status?: string; from?: string; to?: string } = {},
 ): CampaignView[] {
   assertPermission(actor, "customers.view");
   const scope = getBranchScope(actor);
@@ -56,7 +57,7 @@ export function listCampaigns(
   if (filters.status && (CAMPAIGN_STATUSES as readonly string[]).includes(filters.status)) {
     conditions.push(eq(campaigns.status, filters.status));
   }
-  return db
+  const rows = db
     .select({
       id: campaigns.id,
       name: campaigns.name,
@@ -78,8 +79,23 @@ export function listCampaigns(
     .where(and(...conditions))
     .orderBy(desc(campaigns.createdAt))
     .limit(200)
-    .all()
-    .map((row) => ({ ...row, ...computeMetrics(row) }));
+    .all();
+  const from = filters.from && parseVietnamDateTimeLocal(filters.from + "T00:00:00");
+  const to = filters.to && parseVietnamDateTimeLocal(filters.to + "T23:59:59.999");
+  const linked = rows.length && actor.permissions.includes("orders.view") ? db.select({
+    id: orders.id, code: orders.code, total: orders.total, campaignId: orders.campaignId,
+  }).from(orders).innerJoin(campaigns, eq(campaigns.id, orders.campaignId))
+    .where(and(inArray(campaigns.id, rows.map(row => row.id)), eq(orders.tenantId, actor.tenantId),
+      eq(orders.branchId, campaigns.branchId), ne(orders.status, "cancelled"),
+      from ? gte(orders.createdAt, from) : undefined, to ? lte(orders.createdAt, to) : undefined))
+    .orderBy(desc(orders.createdAt)).all() : [];
+  const grouped = new Map<string, typeof linked>();
+  for (const order of linked) {
+    const group = grouped.get(order.campaignId!) || [];
+    group.push(order);
+    grouped.set(order.campaignId!, group);
+  }
+  return rows.map(row => ({ ...row, ...computeMetrics(row), attributedOrders: grouped.get(row.id) || [] }));
 }
 
 export type CampaignInput = {
@@ -134,6 +150,7 @@ export function saveCampaign(
       .where(and(eq(campaigns.id, input.id), eq(campaigns.tenantId, actor.tenantId)))
       .get();
     if (!existing) throw new NotFoundError("Không tìm thấy chiến dịch.");
+    assertBranchAccess(actor, existing.branchId);
     db.update(campaigns)
       .set({
         name: input.name.trim(),
@@ -189,4 +206,19 @@ export function saveCampaign(
     entityId: id,
   });
   return id;
+}
+
+
+export function attributeOrder(db: AppDb, actor: ActorContext, orderId: string, campaignId: string) {
+  assertPermission(actor, "orders.manage");
+  const order = db.select().from(orders).where(and(eq(orders.id, orderId), eq(orders.tenantId, actor.tenantId))).get();
+  if (!order) throw new NotFoundError("Không tìm thấy đơn.");
+  assertBranchAccess(actor, order.branchId);
+  if (campaignId && !db.select({ id: campaigns.id }).from(campaigns).where(and(eq(campaigns.id, campaignId),
+    eq(campaigns.tenantId, actor.tenantId), eq(campaigns.branchId, order.branchId))).get()) {
+    throw new ValidationError("Chiến dịch không thuộc chi nhánh của đơn.");
+  }
+  db.update(orders).set({ campaignId: campaignId || null, updatedAt: new Date() }).where(eq(orders.id, orderId)).run();
+  writeAudit(db, { tenantId: actor.tenantId, actorId: actor.staffId, entity: "order", entityId: orderId,
+    action: "orders.campaign", metadata: { campaignId } });
 }

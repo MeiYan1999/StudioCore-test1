@@ -117,6 +117,7 @@ export type OrderPaymentView = {
   method: string;
   status: string;
   reference: string | null;
+  sourcePaymentId: string | null;
   paidAt: Date;
   createdAt: Date;
   createdByName: string | null;
@@ -162,6 +163,7 @@ export type OrderDetail = {
   remaining: number;
   notes: string | null;
   cancelReason: string | null;
+  campaignId: string | null;
   contractConfirmedAt: Date | null;
   contractConfirmedBy: string | null;
   createdByName: string | null;
@@ -333,6 +335,7 @@ export function getOrderDetail(
       method: payments.method,
       status: payments.status,
       reference: payments.reference,
+      sourcePaymentId: payments.sourcePaymentId,
       paidAt: payments.paidAt,
       createdAt: payments.createdAt,
       createdByName: staff.name,
@@ -414,6 +417,7 @@ export function getOrderDetail(
     remaining: row.order.remaining,
     notes: row.order.notes,
     cancelReason: row.order.cancelReason,
+    campaignId: row.order.campaignId,
     contractConfirmedAt: row.order.contractConfirmedAt,
     contractConfirmedBy: confirmedBy?.name ?? null,
     createdByName: row.createdByName,
@@ -870,9 +874,10 @@ export function createOrder(
     }
 
     if (input.deposit > 0) {
+      const paymentId = crypto.randomUUID();
       tx.insert(payments)
         .values({
-          id: crypto.randomUUID(),
+          id: paymentId,
           tenantId: actor.tenantId,
           orderId,
           amount: input.deposit,
@@ -884,6 +889,13 @@ export function createOrder(
           createdBy: actor.staffId,
         })
         .run();
+      tx.insert(transactions).values({
+        id: crypto.randomUUID(), tenantId: actor.tenantId, branchId: input.branchId,
+        type: "income", category: "order_payment", amount: input.deposit,
+        orderId, customerId, staffId: actor.staffId, method: input.depositMethod,
+        description: `Thu cọc đơn ${code}`, reference: `COC-${code}`,
+        idempotencyKey: `payment:${paymentId}`, occurredAt: now, createdBy: actor.staffId,
+      }).run();
     }
   });
 
@@ -958,6 +970,10 @@ export function changeOrderStatus(
         createdAt: now,
       })
       .run();
+    if (toStatus === "completed") {
+      accrueCommissionsForOrderSystem(tx, orderId, now);
+      queueReviewRequest(tx, orderId, actor.staffId);
+    }
   });
 
   writeAudit(db, {
@@ -969,10 +985,7 @@ export function changeOrderStatus(
     metadata: { from: order.status, to: toStatus, note: note.trim() },
   });
 
-  if (toStatus === "completed") {
-    accrueCommissionsForOrderSystem(db, orderId, new Date());
-    queueReviewRequest(db, orderId, actor.staffId);
-  }
+
 }
 
 export function canRecordPayment(actor: ActorContext): boolean {
@@ -995,7 +1008,8 @@ export function recordOrderPayment(
     idempotencyKey?: string;
   },
 ): string {
-  const inboxBooking = db.get(sql`SELECT id FROM inbox_bookings WHERE order_id=${orderId} AND tenant_id=${actor.tenantId}`);
+  return db.transaction((tx) => {
+  const inboxBooking = tx.get(sql`SELECT id FROM inbox_bookings WHERE order_id=${orderId} AND tenant_id=${actor.tenantId}`);
   if (inboxBooking && !actor.permissions.includes("finance.manage")) throw new AuthorizationError("Cần quyền xác nhận cọc tài chính.");
   if (!canRecordPayment(actor)) {
     throw new AuthorizationError("Bạn không có quyền ghi nhận thanh toán.");
@@ -1007,7 +1021,7 @@ export function recordOrderPayment(
     throw new ValidationError("Phương thức thanh toán không hợp lệ.");
   }
 
-  const order = db
+  const order = tx
     .select({
       id: orders.id,
       status: orders.status,
@@ -1028,7 +1042,7 @@ export function recordOrderPayment(
     ? `form:${normalizeIdempotencyKey(input.idempotencyKey)}`
     : crypto.randomUUID();
   if (input.idempotencyKey) {
-    const replayed = db
+    const replayed = tx
       .select({ id: payments.id, orderId: payments.orderId })
       .from(payments)
       .where(
@@ -1068,7 +1082,6 @@ export function recordOrderPayment(
   const statusAfter =
     order.status === "new" ? ("deposit_received" as OrderStatus) : order.status;
 
-  db.transaction((tx) => {
     tx.insert(payments)
       .values({
         id: paymentId,
@@ -1131,9 +1144,8 @@ export function recordOrderPayment(
         })
         .run();
     }
-  });
 
-  writeAudit(db, {
+  writeAudit(tx, {
     tenantId: actor.tenantId,
     actorId: actor.staffId,
     action: "orders.payment.record",
@@ -1143,6 +1155,7 @@ export function recordOrderPayment(
   });
 
   return paymentId;
+  }, { behavior: "immediate" });
 }
 
 export function confirmOrderContract(

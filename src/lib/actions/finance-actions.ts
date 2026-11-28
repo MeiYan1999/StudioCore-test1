@@ -10,6 +10,7 @@ import { getActorContext } from "@/lib/auth/session";
 import { getDb } from "@/lib/db/client";
 import { AuthorizationError, NotFoundError, ValidationError } from "@/lib/errors";
 import {
+  reconcileSepayIncome,
   buildVietQrForOrder,
   createExpense,
   createInvoiceForOrder,
@@ -224,6 +225,7 @@ export async function recordRefundAction(
   const actor = await getActorContext();
   if (!actor) return { status: "error", message: "Phiên đăng nhập đã hết hạn." };
   const parsed = refundSchema.safeParse({
+    sourcePaymentId: getFormString(formData, "sourcePaymentId"),
     orderId: getFormString(formData, "orderId"),
     amount: getFormString(formData, "amount"),
     reason: getFormString(formData, "reason"),
@@ -238,6 +240,7 @@ export async function recordRefundAction(
   }
   try {
     recordRefund(getDb(), actor, {
+      sourcePaymentId: parsed.data.sourcePaymentId,
       orderId: parsed.data.orderId,
       amount: parsed.data.amount,
       reason: parsed.data.reason,
@@ -326,4 +329,16 @@ export async function prepareMockPaymentAction(input: {
   } catch (error) {
     return { ok: false, error: errorMessage(error) };
   }
+}
+
+
+export async function reconcileSepayAction(_previous: ActionState, form: FormData): Promise<ActionState> {
+  const actor = await getActorContext();
+  if (!actor) return { status: "error", message: "Phiên đăng nhập đã hết hạn." };
+  try {
+    const id = reconcileSepayIncome(getDb(), actor, getFormString(form, "transactionId"), getFormString(form, "code"));
+    revalidatePath(`/manage/orders/${id}`);
+    revalidatePath("/manage/finance");
+    return { status: "success", message: "Đã khớp khoản thu với đơn." };
+  } catch (error) { return { status: "error", message: errorMessage(error) }; }
 }

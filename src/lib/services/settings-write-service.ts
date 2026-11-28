@@ -59,6 +59,8 @@ export type StudioSettingsInput = {
   saturdayHours: string;
   sundayHours: string;
   reviewTemplate: string;
+  reviewDelayHours?: number;
+  reviewChannel?: string;
   reminderTemplate: string;
 };
 
@@ -75,6 +77,10 @@ export function saveStudioSettings(
   if (input.bankAccountNumber && !/^\d{6,19}$/.test(input.bankAccountNumber)) {
     throw new ValidationError("Số tài khoản phải gồm 6–19 chữ số.");
   }
+  if (input.reviewDelayHours !== undefined && (!Number.isInteger(input.reviewDelayHours) || input.reviewDelayHours < 0 || input.reviewDelayHours > 720)) {
+    throw new ValidationError("Thời gian gửi đánh giá phải từ 0 đến 720 giờ.");
+  }
+  if (input.reviewChannel && !["manual", "messenger"].includes(input.reviewChannel)) throw new ValidationError("Kênh đánh giá không hợp lệ.");
   const workingHours = JSON.stringify({
     monday: input.weekdayHours || "08:00-18:00",
     tuesday: input.weekdayHours || "08:00-18:00",
@@ -106,6 +112,8 @@ export function saveStudioSettings(
     ["notification.reviewTemplate", input.reviewTemplate.trim()],
     ["notification.reminderTemplate", input.reminderTemplate.trim()],
   ];
+  if (input.reviewChannel) entries.push(["notification.reviewChannel", input.reviewChannel]);
+  if (input.reviewDelayHours !== undefined) entries.push(["notification.reviewDelayHours", String(input.reviewDelayHours)]);
   db.transaction((tx) => {
     for (const [key, value] of entries) {
       setTenantSetting(tx, actor.tenantId, key, value);

@@ -110,7 +110,7 @@ export default async function DashboardPage() {
       <PageHeader
         title="Tổng quan"
         description={`Xin chào ${actor.staffName}. Dữ liệu theo phạm vi ${data.scopeLabel.toLowerCase()}.`}
-        actions={<Badge tone="info">{data.activeBranchName}</Badge>}
+        actions={<><Link className="underline" href="/manage/check-in">Chấm công</Link><Badge tone="info">{data.activeBranchName}</Badge></>}
       />
 
       <section aria-label="Chỉ số vận hành" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  type AnySQLiteColumn,
   index,
   integer,
   primaryKey,
@@ -486,6 +487,7 @@ export const orders = sqliteTable(
     branchId: text("branch_id")
       .notNull()
       .references(() => branches.id),
+    campaignId: text("campaign_id").references((): AnySQLiteColumn => campaigns.id),
     code: text("code").notNull(),
     customerId: text("customer_id")
       .notNull()
@@ -519,6 +521,7 @@ export const orders = sqliteTable(
   },
   (table) => [
     uniqueIndex("orders_tenant_code_unique").on(table.tenantId, table.code),
+    index("orders_campaign_period_idx").on(table.tenantId, table.campaignId, table.createdAt),
     index("orders_tenant_branch_idx").on(table.tenantId, table.branchId),
     index("orders_tenant_status_idx").on(table.tenantId, table.status),
     index("orders_tenant_customer_idx").on(table.tenantId, table.customerId),
@@ -592,6 +595,7 @@ export const payments = sqliteTable(
       .default("completed"),
     reference: text("reference"),
     idempotencyKey: text("idempotency_key"),
+    sourcePaymentId: text("source_payment_id").references((): AnySQLiteColumn => payments.id),
     paidAt: integer("paid_at", { mode: "timestamp_ms" }).notNull(),
     createdBy: text("created_by")
       .notNull()
@@ -599,6 +603,7 @@ export const payments = sqliteTable(
     createdAt: createdAtColumn(),
   },
   (table) => [
+    index("payments_source_idx").on(table.sourcePaymentId),
     index("payments_tenant_order_idx").on(table.tenantId, table.orderId),
     uniqueIndex("payments_tenant_idempotency_unique").on(
       table.tenantId,
@@ -768,7 +773,8 @@ export const wardrobeRentals = sqliteTable(
       .references(() => wardrobeItems.id),
     orderId: text("order_id").references(() => orders.id),
     customerId: text("customer_id").references(() => customers.id),
-    checkedOutAt: integer("checked_out_at", { mode: "timestamp_ms" }).notNull(),
+    appointmentId: text("appointment_id").references(() => appointments.id),
+    checkedOutAt: integer("checked_out_at", { mode: "timestamp_ms" }),
     dueAt: integer("due_at", { mode: "timestamp_ms" }).notNull(),
     returnedAt: integer("returned_at", { mode: "timestamp_ms" }),
     conditionOut: text("condition_out").notNull().default("good"),
@@ -1528,6 +1534,8 @@ export const documents = sqliteTable(
       .notNull()
       .references(() => tenants.id),
     branchId: text("branch_id").references(() => branches.id),
+    customerId: text("customer_id").references(() => customers.id),
+    orderId: text("order_id").references(() => orders.id),
     name: text("name").notNull(),
     category: text("category").notNull().default("other"),
     storageKey: text("storage_key"),
@@ -1879,3 +1887,65 @@ export const driveShareFiles = sqliteTable(
 export type DriveDevice = typeof driveDevices.$inferSelect;
 export type DriveShareRow = typeof driveShares.$inferSelect;
 export type DriveShareFileRow = typeof driveShareFiles.$inferSelect;
+
+export const reviewRequests = sqliteTable("review_requests", {
+  orderId: text("order_id").primaryKey().references(() => orders.id),
+  tenantId: text("tenant_id").notNull().references(() => tenants.id),
+  channel: text("channel").notNull(),
+  content: text("content").notNull(),
+  recipient: text("recipient"),
+  dueAt: integer("due_at", { mode: "timestamp_ms" }).notNull(),
+  status: text("status").notNull().default("pending"),
+  error: text("error"),
+  sentAt: integer("sent_at", { mode: "timestamp_ms" }),
+}, t => [index("review_requests_due").on(t.status, t.dueAt)]);
+
+export const pagePosts = sqliteTable("page_posts", {
+  id: text("id").primaryKey(),
+  tenantId: text("tenant_id").notNull().references(() => tenants.id),
+  pageId: text("page_id").notNull().references(() => facebookPages.id),
+  content: text("content").notNull(),
+  publishAt: integer("publish_at", { mode: "timestamp_ms" }).notNull(),
+  status: text("status").notNull().default("draft"),
+  createdBy: text("created_by").notNull().references(() => staff.id),
+  approvedBy: text("approved_by").references(() => staff.id),
+  remoteId: text("remote_id"),
+  error: text("error"),
+  updatedAt: updatedAtColumn(),
+}, t => [index("page_posts_queue").on(t.status, t.publishAt)]);
+
+export const adsAccounts = sqliteTable("ads_accounts", {
+  tenantId: text("tenant_id").notNull().references(() => tenants.id),
+  id: text("id").notNull(),
+  name: text("name").notNull(),
+  currency: text("currency").notNull(),
+  timezone: text("timezone").notNull(),
+  token: text("token").notNull(),
+}, t => [primaryKey({ columns: [t.tenantId, t.id] })]);
+
+export type AdsCampaignMetric = { campaign_id: string; campaign_name: string; spend: string; impressions: string; clicks: string };
+export const adsPeriods = sqliteTable("ads_periods", {
+  id: text("id").primaryKey(),
+  tenantId: text("tenant_id").notNull().references(() => tenants.id),
+  accountId: text("account_id").notNull(),
+  since: text("since").notNull(),
+  until: text("until").notNull(),
+  currency: text("currency").notNull(),
+  timezone: text("timezone").notNull(),
+  rows: text("rows", { mode: "json" }).$type<AdsCampaignMetric[]>().notNull(),
+  syncedAt: updatedAtColumn(),
+}, t => [uniqueIndex("ads_periods_range").on(t.tenantId, t.accountId, t.since, t.until)]);
+
+export const pageAssistants = sqliteTable("page_assistants", {
+  pageId: text("page_id").primaryKey().references(() => facebookPages.id),
+  tenantId: text("tenant_id").notNull().references(() => tenants.id),
+  name: text("name").notNull(),
+  knowledge: text("knowledge",{mode:"json"}).$type<{ question: string; answer: string }[]>().notNull(),
+  enabled: integer("enabled", {mode:"boolean"}).notNull().default(false),
+});
+
+export const assistantReplies = sqliteTable("assistant_replies", {
+  messageId: text("message_id").primaryKey().references(() => messages.id),
+  conversationId: text("conversation_id").notNull().references(() => conversations.id),
+  status: text("status").notNull().default("pending"),
+}, t => [index("assistant_replies_queue").on(t.status)]);

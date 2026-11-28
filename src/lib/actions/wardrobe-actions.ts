@@ -13,7 +13,7 @@ import {
   updateEquipment,
 } from "@/lib/services/equipment-service";
 import {
-  createRental,
+  createRental, resolveReservation,
   createWardrobeItem,
   returnRental,
   updateWardrobeItem,
@@ -288,4 +288,30 @@ export async function updateEquipmentAction(
   } catch (error) {
     return { status: "error", message: errorMessage(error), values };
   }
+}
+
+
+export async function reserveWardrobeAction(_previous: ActionState, form: FormData): Promise<ActionState> {
+  const actor = await getActorContext();
+  if (!actor) return { status: "error", message: "Phiên đăng nhập đã hết hạn." };
+  const id = getFormString(form, "appointmentId");
+  try {
+    if (!id) throw new ValidationError("Chọn lịch cần giữ đồ.");
+    await createRental(getDb(), actor, { wardrobeItemId: getFormString(form, "itemId"), reserveForAppointment: id,
+      orderId: "", dueAt: getFormString(form, "dueAt"), deposit: 0, conditionOut: "good", notes: "" });
+    revalidatePath(`/manage/calendar/${id}`);
+    revalidatePath("/manage/wardrobe/rentals");
+    return { status: "success", message: "Đã giữ trang phục cho lịch." };
+  } catch (error) { return { status: "error", message: errorMessage(error) }; }
+}
+
+export async function resolveReservationAction(_previous: ActionState, form: FormData): Promise<ActionState> {
+  const actor = await getActorContext();
+  if (!actor) return { status: "error", message: "Phiên đăng nhập đã hết hạn." };
+  try {
+    resolveReservation(getDb(), actor, getFormString(form, "id"), getFormString(form, "action") === "release");
+    revalidatePath("/manage/wardrobe/rentals");
+    revalidatePath("/manage/wardrobe/[id]", "page");
+    return { status: "success", message: "Đã xử lý phiếu giữ đồ." };
+  } catch (error) { return { status: "error", message: errorMessage(error) }; }
 }

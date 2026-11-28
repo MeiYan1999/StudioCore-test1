@@ -19,7 +19,7 @@ import { ROLE_LABELS, type Role } from "@/lib/auth/roles";
 import { requireActor } from "@/lib/auth/session";
 import { getDb } from "@/lib/db/client";
 import {
-  listPayrolls,
+  listPayrolls, payrollSources,
   type PayrollView,
 } from "@/lib/services/commission-payroll-service";
 import { formatVnd } from "@/lib/utils";
@@ -49,6 +49,7 @@ export default async function PayrollPage({
   }
   const params = await searchParams;
   const period = params.period || currentPeriod();
+  const sources=payrollSources(getDb(),actor,period);
   const rows = listPayrolls(getDb(), actor, period);
   const canManage = hasPermission(actor.permissions, "payroll.manage");
   const totalNet = rows.reduce((sum, row) => sum + row.net, 0);
@@ -77,22 +78,21 @@ export default async function PayrollPage({
       key: "days",
       header: "Ngày công",
       className: "text-right",
-      cell: (row) => row.workDays,
+      cell: (row) => <details><summary>{row.workDays}</summary>{sources.days.filter(r=>r.staffId===row.staffId).map(r=><p key={r.id}>{r.at.toLocaleString("vi-VN",{timeZone:"Asia/Ho_Chi_Minh"})}</p>)}</details>,
     },
     {
       key: "commission",
       header: "Hoa hồng",
       className: "text-right",
-      cell: (row) => <Money value={row.commissionAmount} />,
+      cell: (row) => <details><summary><Money value={row.commissionAmount} /></summary>{sources.earned.filter(r=>r.payrollId===row.id).map(r=><p key={r.orderId+r.role}><Link href={"/manage/orders/"+r.orderId}>{r.code}</Link> · {ROLE_LABELS[r.role as Role]??r.role} · {formatVnd(r.amount)}</p>)}</details>,
     },
     {
       key: "bonus",
       header: "Thưởng / khấu trừ",
       className: "text-right",
       cell: (row) => (
-        <span className="text-xs text-muted-foreground">
-          +{formatVnd(row.bonus)} / −{formatVnd(row.deduction)}
-        </span>
+        <details className="text-xs text-muted-foreground"><summary>
+          +{formatVnd(row.bonus)} / −{formatVnd(row.deduction)}</summary>{sources.bonuses.filter(b=>b.payrollId===row.id).map((b,i)=><p key={i}>{b.by} · {b.at.toLocaleString("vi-VN",{timeZone:"Asia/Ho_Chi_Minh"})} · {formatVnd(JSON.parse(b.detail).bonus)} thưởng</p>)}</details>
       ),
     },
     {

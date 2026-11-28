@@ -28,6 +28,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { reserveWardrobeAction, resolveReservationAction } from "@/lib/actions/wardrobe-actions";
 import { SubmitButton } from "@/components/shared/submit-button";
 
 function FieldError({ id, message }: { id: string; message?: string }) {
@@ -276,4 +277,26 @@ export function ReturnRentalSheet({ rental }: { rental: RentalView }) {
       </SheetContent>
     </Sheet>
   );
+}
+
+export function ReservationForm({ appointmentId, items, dueAt }: { appointmentId: string; items: { id: string; name: string; size: string }[]; dueAt: string }) {
+  const [state, action] = useActionState(reserveWardrobeAction, initialActionState);
+  return <form action={action} className="my-4 flex flex-wrap items-end gap-3 rounded-lg border p-3">
+    <input type="hidden" name="appointmentId" value={appointmentId} />
+    <label>Trang phục<Select name="itemId" required defaultValue=""><option value="">Chọn món sẵn sàng</option>
+      {items.map(item => <option key={item.id} value={item.id}>{item.name} · {item.size}</option>)}</Select></label>
+    <label>Hạn trả<Input name="dueAt" type="datetime-local" required defaultValue={dueAt} /></label>
+    <SubmitButton pendingLabel="Đang giữ…">Giữ đồ cho lịch</SubmitButton>
+    {state.message && <span role="status">{state.message}</span>}
+  </form>;
+}
+
+export function ReservationControls({ id }: { id: string }) {
+  const [state, action] = useActionState(resolveReservationAction, initialActionState);
+  return <form action={action} className="flex flex-wrap gap-2">
+    <input type="hidden" name="id" value={id} />
+    <Button type="submit" size="sm" name="action" value="checkout">Giao đồ</Button>
+    <Button type="submit" size="sm" variant="outline" name="action" value="release">Nhả giữ</Button>
+    {state.message && <span role="status">{state.message}</span>}
+  </form>;
 }

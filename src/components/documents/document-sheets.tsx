@@ -28,6 +28,13 @@ import {
   DOCUMENT_VISIBILITY_LABELS,
 } from "@/lib/documents/constants";
 
+function DocumentAssociationFields() {
+  return <div className="grid gap-3 sm:grid-cols-2">
+    <label className="text-sm">Mã đơn <Input name="orderCode" placeholder="Nếu gắn với đơn" /></label>
+    <label className="text-sm">Số điện thoại khách <Input name="customerPhone" type="tel" placeholder="Nếu gắn với khách" /></label>
+  </div>;
+}
+
 type BranchOption = { id: string; name: string };
 
 export function DocumentLinkSheet({
@@ -108,6 +115,7 @@ export function DocumentLinkSheet({
             <Label htmlFor="doc-url">Link</Label>
             <Input id="doc-url" name="url" placeholder="https://... hoặc /manage/..." required className="mt-1.5" />
           </div>
+          <DocumentAssociationFields />
           <div>
             <Label htmlFor="doc-notes">Ghi chú</Label>
             <Textarea id="doc-notes" name="notes" rows={2} className="mt-1.5" />
@@ -232,6 +240,7 @@ export function DocumentUploadSheet({
               onChange={(event) => setFile(event.target.files?.[0] ?? null)}
             />
           </div>
+          <DocumentAssociationFields />
           <div>
             <Label htmlFor="upload-doc-notes">Ghi chú</Label>
             <Textarea id="upload-doc-notes" name="notes" rows={2} className="mt-1.5" />

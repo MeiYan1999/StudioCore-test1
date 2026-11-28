@@ -112,7 +112,7 @@ export default async function ReportsPage({
             <Button asChild variant="outline" size="sm">
               <a href={`/manage/reports/tax/print?${exportQuery("tax")}`}>
                 <Printer className="h-4 w-4" aria-hidden />
-                In thuế
+                Sổ hộ kinh doanh
               </a>
             </Button>
             <Button asChild variant="outline" size="sm">
@@ -158,7 +158,7 @@ export default async function ReportsPage({
           icon={<TrendingUp className="h-5 w-5" aria-hidden />}
         />
         <Summary
-          label="Dự kiến"
+          label="Doanh số đơn lập trong kỳ"
           value={formatVnd(revenue.expected)}
           hint={`${revenue.orderCount} đơn`}
           icon={<BarChart3 className="h-5 w-5" aria-hidden />}
@@ -169,13 +169,13 @@ export default async function ReportsPage({
           icon={<Wallet className="h-5 w-5" aria-hidden />}
         />
         <Summary
-          label="Lợi nhuận"
+          label="Chênh lệch thu chi"
           value={formatVnd(revenue.profit)}
-          hint="Thực thu − hoàn − chi"
+          hint="Tiền vào trừ tiền hoàn và chi phí"
           icon={<Percent className="h-5 w-5" aria-hidden />}
         />
         <Summary
-          label="Công nợ"
+          label="Công nợ hiện tại"
           value={formatVnd(debts.total)}
           hint={`${debts.rows.length} đơn`}
           icon={<FileText className="h-5 w-5" aria-hidden />}

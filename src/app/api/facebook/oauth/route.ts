@@ -37,7 +37,7 @@ export async function GET(request: Request) {
       redirect_uri: config.redirect,
       state,
       scope:
-        "pages_show_list,pages_messaging,pages_manage_metadata,pages_read_engagement",
+        "pages_show_list,pages_messaging,pages_manage_metadata,pages_read_engagement" + (new URL(request.url).searchParams.get("publish") === "1" ? ",pages_manage_posts" : ""),
       response_type: "code",
     }).toString();
     return NextResponse.redirect(url);

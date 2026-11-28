@@ -241,7 +241,7 @@ export function book(db: AppDb, input: BookingInput, actor?: ActorContext) {
           tenantId: offer.tenantId,
           staffId: offer.createdBy,
           role: "owner",
-          permissions: ["orders.manage"],
+          permissions: ["orders.manage", "schedule.manage"],
           branches: [{ id: service.branchId, name: "" }],
         } as ActorContext);
       if (

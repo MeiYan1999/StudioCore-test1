@@ -9,6 +9,7 @@ import { getActorContext } from "@/lib/auth/session";
 import { getDb } from "@/lib/db/client";
 import { AuthorizationError, NotFoundError, ValidationError } from "@/lib/errors";
 import {
+  setTaskStatus,
   addTaskComment,
   createTask,
   getTaskDetail,
@@ -16,7 +17,7 @@ import {
   type TaskDetail,
 } from "@/lib/services/task-service";
 import { createLinkDocument } from "@/lib/services/document-service";
-import { saveCampaign } from "@/lib/services/campaign-service";
+import { attributeOrder, saveCampaign } from "@/lib/services/campaign-service";
 import {
   assignConversation,
   createConversation,
@@ -137,6 +138,9 @@ export async function createLinkDocumentAction(
   if (!actor) return { status: "error", message: "Phiên đăng nhập đã hết hạn." };
   try {
     createLinkDocument(getDb(), actor, {
+      orderCode: getFormString(formData, "orderCode"),
+      customerPhone: getFormString(formData, "customerPhone"),
+
       name: getFormString(formData, "name"),
       category: getFormString(formData, "category"),
       url: getFormString(formData, "url"),
@@ -308,4 +312,30 @@ export async function simulateInboundAction(
   } catch (error) {
     return { status: "error", message: errorMessage(error) };
   }
+}
+
+export async function setOrderCampaignAction(form: FormData) {
+  const actor = await getActorContext();
+  if (!actor) throw new AuthorizationError();
+  const id = getFormString(form, "orderId");
+  attributeOrder(getDb(), actor, id, getFormString(form, "campaignId"));
+  revalidatePath(`/manage/orders/${id}`);
+  revalidatePath("/manage/campaigns");
+}
+
+export async function changeTaskStatus(id:string,status:TaskStatus) {
+  const actor=await getActorContext();
+  if (!actor) return "Phiên đăng nhập đã hết hạn.";
+  try {setTaskStatus(getDb(),actor,id,status); revalidatePath("/manage/tasks"); return null;}
+  catch(err) {return errorMessage(err);}
+}
+
+
+export async function confirmReviewForm(form:FormData) {
+  const actor=await getActorContext();
+  if(!actor) throw new AuthorizationError();
+  const id=getFormString(form,"orderId");
+  const {confirmManualReview}=await import("@/lib/services/notification-service");
+  confirmManualReview(getDb(),actor,id);
+  revalidatePath("/manage/orders/"+id);
 }

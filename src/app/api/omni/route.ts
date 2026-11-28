@@ -412,7 +412,7 @@ export async function POST(request: Request) {
         )
           throw new Error("Nhân sự không thuộc chi nhánh.");
         db.update(conversations)
-          .set({ assignedTo: input.staffId })
+          .set({ assignedTo: input.staffId, aiAutoReply: false })
           .where(eq(conversations.id, input.id))
           .run();
       }

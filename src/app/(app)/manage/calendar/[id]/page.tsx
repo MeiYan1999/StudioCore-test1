@@ -27,7 +27,9 @@ import { formatDateKey, getVietnamDateKey } from "@/lib/scheduling/time";
 import { formatDateTime } from "@/lib/utils";
 import { getAppointmentDetail } from "@/lib/services/appointment-service";
 import { listAppointmentEquipment, listEquipment } from "@/lib/services/equipment-service";
-import { listUnreturnedRentalItems } from "@/lib/services/wardrobe-service";
+import { ReservationForm } from "@/components/wardrobe/rental-sheets";
+import { toDateTimeLocalValue } from "@/lib/utils";
+import { listWardrobeItems, listUnreturnedRentalItems } from "@/lib/services/wardrobe-service";
 import { buildGoogleCalendarEventUrl } from "@/lib/services/ical-service";
 import { listOrderOptions, orderAssigneeOptions } from "@/lib/services/order-service";
 import { listRooms } from "@/lib/services/room-service";
@@ -133,6 +135,8 @@ export default async function AppointmentDetailPage({
         }
       />
 
+      {canManage && appointment.status === "scheduled" && <ReservationForm appointmentId={id}
+        dueAt={toDateTimeLocalValue(appointment.endAt)} items={listWardrobeItems(getDb(), actor, {branchId: appointment.branchId, status: "available"})} />}
       {messages.error ? (
         <Alert tone="danger" className="mb-4">{messages.error}</Alert>
       ) : null}

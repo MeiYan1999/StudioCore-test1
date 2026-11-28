@@ -24,6 +24,7 @@ import {
   BudgetSheet,
   ExpenseSheet,
   RefundSheet,
+  MatchSepayForm,
   TransactionSheet,
 } from "@/components/finance/finance-sheets";
 import { hasPermission } from "@/lib/auth/permissions";
@@ -56,6 +57,7 @@ export const metadata = {
 };
 
 type SearchParams = {
+  unmatched?: string;
   q?: string;
   type?: string;
   branchId?: string;
@@ -121,6 +123,7 @@ export default async function FinancePage({
   const db = getDb();
   const page = Math.max(1, Number.parseInt(params.page ?? "1", 10) || 1);
   const filters = {
+    unmatched: params.unmatched,
     q: params.q,
     type: params.type,
     branchId: params.branchId,
@@ -190,6 +193,7 @@ export default async function FinancePage({
         <div className="text-xs text-muted-foreground">
           <p className="font-mono">{row.orderCode ?? "—"}</p>
           <p>{row.customerName ?? row.branchName}</p>
+          {row.unmatchedSepay && canManage && <MatchSepayForm transactionId={row.id} />}
         </div>
       ),
     },
@@ -276,6 +280,7 @@ export default async function FinancePage({
                   period={period}
                 />
                 <RefundSheet orders={orderOptions} />
+                <Button asChild variant="outline" size="sm"><Link href="/manage/finance?unmatched=1">Thu SePay chưa khớp</Link></Button>
               </>
             ) : null}
           </>

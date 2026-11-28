@@ -3,10 +3,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { and, desc, eq, isNull, or, sql, type SQL } from "drizzle-orm";
 import type { AppDb } from "../db/client";
-import { documents } from "../db/schema";
+import { documents, customers, orders } from "../db/schema";
 import type { ActorContext } from "../auth/types";
 import { assertBranchAccess, assertPermission, getBranchScope } from "../auth/permissions";
 import { NotFoundError, ValidationError } from "../errors";
+import { normalizeVietnamesePhone } from "../utils/phone";
 import { writeAudit } from "../audit";
 import { getStorageAdapter, getStorageProvider } from "../adapters/storage";
 import {
@@ -28,6 +29,8 @@ export type DocumentView = {
   version: number;
   notes: string | null;
   uploadedByName: string | null;
+  orderCode: string | null;
+  customerName: string | null;
   createdAt: Date;
 };
 
@@ -53,6 +56,24 @@ function storagePath(key: string): string {
   return full;
 }
 
+type DocumentAssociation = { orderCode?: string; customerPhone?: string; branchId: string; visibility: string };
+
+function documentAssociation(db: AppDb, actor: ActorContext, input: DocumentAssociation) {
+  if (input.visibility === "branch" && !input.branchId) throw new ValidationError("Chọn chi nhánh cho tài liệu.");
+  const order = input.orderCode?.trim() ? db.select().from(orders).where(and(
+    eq(orders.tenantId, actor.tenantId), eq(orders.branchId, input.branchId),
+    eq(orders.code, input.orderCode.trim().toUpperCase()),
+  )).get() : undefined;
+  if (input.orderCode?.trim() && !order) throw new ValidationError("Không tìm thấy đơn ở chi nhánh đã chọn.");
+  const customer = input.customerPhone?.trim() ? db.select().from(customers).where(and(
+    eq(customers.tenantId, actor.tenantId), eq(customers.branchId, input.branchId),
+    eq(customers.phone, normalizeVietnamesePhone(input.customerPhone) ?? ""),
+  )).get() : undefined;
+  if (input.customerPhone?.trim() && (!customer || (order && order.customerId !== customer.id)))
+    throw new ValidationError("Khách hàng không khớp với đơn hoặc chi nhánh.");
+  return { orderId: order?.id ?? null, customerId: order?.customerId ?? customer?.id ?? null };
+}
+
 export function listDocuments(
   db: AppDb,
   actor: ActorContext,
@@ -64,7 +85,7 @@ export function listDocuments(
   const conditions: SQL[] = [eq(documents.tenantId, actor.tenantId)];
   if (scope.mode === "branch") {
     conditions.push(
-      or(isNull(documents.branchId), eq(documents.branchId, scope.branchId)) ??
+      or(and(isNull(documents.branchId), eq(documents.visibility, "internal")), eq(documents.branchId, scope.branchId)) ??
         sql`1=0`,
     );
   }
@@ -73,7 +94,7 @@ export function listDocuments(
   }
   if (filters.q?.trim()) {
     conditions.push(
-      sql`lower(${documents.name}) like ${`%${filters.q.trim().toLowerCase()}%`}`,
+      sql`lower(${documents.name} || ' ' || coalesce(${orders.code}, '') || ' ' || coalesce(${customers.name}, '') || ' ' || coalesce(${customers.phone}, '')) like ${`%${filters.q.trim().toLowerCase()}%`}`,
     );
   }
   return db
@@ -86,10 +107,13 @@ export function listDocuments(
       visibility: documents.visibility,
       version: documents.version,
       notes: documents.notes,
+      orderCode: orders.code, customerName: customers.name,
       uploadedByName: sql<string>`(select name from staff where staff.id = ${documents.uploadedBy})`,
       createdAt: documents.createdAt,
     })
     .from(documents)
+    .leftJoin(orders, eq(documents.orderId, orders.id))
+    .leftJoin(customers, eq(documents.customerId, customers.id))
     .where(and(...conditions))
     .orderBy(desc(documents.createdAt))
     .limit(300)
@@ -106,6 +130,8 @@ export function createLinkDocument(
     visibility: string;
     branchId: string;
     notes: string;
+    orderCode?: string;
+    customerPhone?: string;
   },
 ): string {
   assertPermission(actor, "tasks.manage");
@@ -117,6 +143,7 @@ export function createLinkDocument(
     throw new ValidationError("Phạm vi tài liệu không hợp lệ.");
   }
   if (input.branchId) assertBranchAccess(actor, input.branchId);
+  const association = documentAssociation(db, actor, input);
   const previous = db
     .select({ version: documents.version })
     .from(documents)
@@ -125,6 +152,9 @@ export function createLinkDocument(
         eq(documents.tenantId, actor.tenantId),
         eq(documents.name, input.name.trim()),
         eq(documents.category, input.category || "other"),
+        input.branchId ? eq(documents.branchId, input.branchId) : isNull(documents.branchId),
+        association.orderId ? eq(documents.orderId, association.orderId) : isNull(documents.orderId),
+        association.customerId ? eq(documents.customerId, association.customerId) : isNull(documents.customerId),
       ),
     )
     .orderBy(desc(documents.version))
@@ -135,6 +165,7 @@ export function createLinkDocument(
       id,
       tenantId: actor.tenantId,
       branchId: input.branchId || null,
+      ...association,
       name: input.name.trim(),
       category: input.category || "other",
       url: input.url.trim(),
@@ -163,6 +194,8 @@ export async function createUploadedDocument(
     visibility: string;
     branchId: string;
     notes: string;
+    orderCode?: string;
+    customerPhone?: string;
     filename: string;
     buffer: Buffer;
   },
@@ -177,6 +210,7 @@ export async function createUploadedDocument(
     throw new ValidationError("Phạm vi tài liệu không hợp lệ.");
   }
   if (input.branchId) assertBranchAccess(actor, input.branchId);
+  const association = documentAssociation(db, actor, input);
   const extension = safeExtension(input.filename);
   const key = `${actor.tenantId}/${crypto.randomUUID()}.${extension}`;
   if (getStorageProvider() === "r2") {
@@ -194,6 +228,9 @@ export async function createUploadedDocument(
         eq(documents.tenantId, actor.tenantId),
         eq(documents.name, input.name.trim()),
         eq(documents.category, input.category || "other"),
+        input.branchId ? eq(documents.branchId, input.branchId) : isNull(documents.branchId),
+        association.orderId ? eq(documents.orderId, association.orderId) : isNull(documents.orderId),
+        association.customerId ? eq(documents.customerId, association.customerId) : isNull(documents.customerId),
       ),
     )
     .orderBy(desc(documents.version))
@@ -204,6 +241,7 @@ export async function createUploadedDocument(
       id,
       tenantId: actor.tenantId,
       branchId: input.branchId || null,
+      ...association,
       name: input.name.trim(),
       category: input.category || "other",
       storageKey: key,
@@ -236,6 +274,10 @@ export async function getDocumentFile(
     .where(and(eq(documents.id, documentId), eq(documents.tenantId, actor.tenantId)))
     .get();
   if (!row) throw new NotFoundError("Không tìm thấy tài liệu.");
+  const scope = getBranchScope(actor);
+  if (scope.mode === "none" || (scope.mode === "branch" && (row.branchId ? row.branchId !== scope.branchId : row.visibility !== "internal"))) {
+    throw new NotFoundError("Không tìm thấy tài liệu.");
+  }
   if (row.branchId) assertBranchAccess(actor, row.branchId);
   if (!row.storageKey) {
     throw new ValidationError("Tài liệu này là link, không có file tải.");

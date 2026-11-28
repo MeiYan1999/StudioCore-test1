@@ -2,6 +2,9 @@ import { getStorageAdapter } from "@/lib/adapters/storage";
 import { getActorContext } from "@/lib/auth/session";
 import { attachmentHeader, mimeForFilename } from "@/lib/http/download";
 
+import { and, eq, or } from "drizzle-orm";
+import { albums, photos } from "@/lib/db/schema";
+import { getBranchScope } from "@/lib/auth/permissions";
 import { getDb } from "@/lib/db/client";
 import { isLiveShareDerivative } from "@/lib/services/share-service";
 import {
@@ -33,7 +36,18 @@ export async function GET(
   );
   const isDemo = access === "public" && signedMs === 0;
   if (access === "denied" && isSafeStorageKey(storageKey)) {
-    access = resolveFileAccess(storageKey, await getActorContext());
+    const actor = await getActorContext();
+    access = resolveFileAccess(storageKey, actor);
+    if (access === "private" && actor) {
+      const scope = getBranchScope(actor);
+      const albumId = storageKey.split("/")[1];
+      const photo = scope.mode !== "none" && getDb().select({ id: photos.id }).from(photos)
+        .innerJoin(albums, eq(albums.id, photos.albumId))
+        .where(and(eq(photos.tenantId, actor.tenantId), eq(albums.tenantId, actor.tenantId),
+          eq(photos.albumId, albumId), scope.mode === "branch" ? eq(albums.branchId, scope.branchId) : undefined,
+          or(eq(photos.storageKey, storageKey), eq(photos.previewKey, storageKey), eq(photos.thumbnailKey, storageKey)))).get();
+      if (!photo) access = "denied";
+    }
   }
   if (access === "denied") {
     return new Response("Not found", { status: 404 });

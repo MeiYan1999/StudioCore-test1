@@ -340,3 +340,56 @@ describe("Facebook → booking → deposit", () => {
     process.env = saved;
   });
 });
+
+describe("Fanpage et Ads sandbox", () => {
+  it("duyệt nhiều bài, worker mất phản hồi không đăng lại", async () => {
+    const {draftPosts,approvePosts,publishDuePosts}=await import("@/lib/services/page-marketing-service");
+    const {pagePosts}=await import("@/lib/db/schema");
+    db.update(facebookPages).set({status:"connected",token:seal("fake")}).where(eq(facebookPages.id,"page-test")).run();
+    draftPosts(db,owner,"page-test",["bài một","bài hai"].map(content=>({content,publishAt:new Date(0)})));
+    const ids=db.select().from(pagePosts).all().map(p=>p.id);
+    expect(()=>approvePosts(db,{...owner,role:"receptionist"},ids)).toThrow();
+    approvePosts(db,owner,ids);
+    const fetchMock=vi.spyOn(globalThis,"fetch").mockResolvedValueOnce(Response.json({id:"meta-post"})).mockRejectedValueOnce(new Error("timeout"));
+    try {
+      await publishDuePosts(db);await publishDuePosts(db);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(db.select().from(pagePosts).all().map(p=>p.status).sort()).toEqual(["published","unknown"]);
+    } finally {fetchMock.mockRestore();}
+  });
+  it("Ads conserve le zéro, la devise, le fuseau et la trace de comparaison", async()=>{
+    const {connectAds,syncAds,analyzeAdsPeriod}=await import("@/lib/services/page-marketing-service");
+    const {adsPeriods,aiJobs}=await import("@/lib/db/schema");
+    const fetchMock=vi.spyOn(globalThis,"fetch").mockResolvedValueOnce(Response.json({id:"act_22",name:"Studio",currency:"USD",timezone_name:"America/New_York"}));
+    try {
+      await connectAds(db,owner,"act_22","token-test");
+      expect(db.select().from(adsPeriods).all()).toHaveLength(0);
+      for(const [month,spend] of [["01","0"],["02","12.50"]]){
+        fetchMock.mockResolvedValueOnce(Response.json({data:[{campaign_id:"44",campaign_name:"Cưới",spend,impressions:"100",clicks:"5"}]}));
+        await syncAds(db,owner,"act_22","2026-"+month+"-01","2026-"+month+"-28");
+      }
+      const [previous,current]=db.select().from(adsPeriods).orderBy(adsPeriods.since).all();
+      expect(current).toMatchObject({currency:"USD",timezone:"America/New_York"});
+      expect(analyzeAdsPeriod(db,owner,current.id,"44",previous.id)).toMatch(/12.50 USD.*5.00%.*bằng 0/);
+      expect(()=>analyzeAdsPeriod(db,{...owner,tenantId:"test-other"},current.id,"44")).toThrow();
+      expect(db.select().from(aiJobs).all().find(j=>j.inputRef?.includes(current.id))).toMatchObject({tenantId:owner.tenantId,estimatedCost:0});
+    } finally { fetchMock.mockRestore(); }
+  });
+  it("trả lời từ kiến thức của trang, bàn giao và webhook lặp đều không gửi thêm",async()=>{
+    const {savePageAssistant,deliverAssistantReplies}=await import("@/lib/services/page-marketing-service");
+    const {assistantReplies}=await import("@/lib/db/schema");
+    savePageAssistant(db,owner,"page-test","Lễ tân",[{question:"Địa chỉ?",answer:"Số 12, đường Hoa."}],true);
+    const inbound=(psid:string,text:string,mid:string)=>ingestWebhook(db,{object:"page",entry:[{id:"page-test",messaging:[{sender:{id:psid},timestamp:Date.now(),message:{mid,text}}]}]});
+    const fetchMock=vi.spyOn(globalThis,"fetch").mockResolvedValue(Response.json({message_id:"reply-known"}));
+    try {
+      inbound("qa-known","Địa chỉ?","qa-1");inbound("qa-known","Địa chỉ?","qa-1");
+      inbound("qa-unknown","Còn váy tím?","qa-2");inbound("qa-handoff","Địa chỉ?","qa-3");
+      const handed=db.select().from(facebookThreads).where(eq(facebookThreads.psid,"qa-handoff")).get()!;
+      db.update(conversations).set({assignedTo:owner.staffId,aiAutoReply:false}).where(eq(conversations.id,handed.conversationId)).run();
+      await deliverAssistantReplies(db);await deliverAssistantReplies(db);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(fetchMock.mock.calls[0][1]?.body).toContain("Số 12, đường Hoa.");
+      expect(db.select().from(assistantReplies).all().map(r=>r.status).sort()).toEqual(["cancelled","handoff","sent"]);
+    } finally {fetchMock.mockRestore();}
+  });
+});
